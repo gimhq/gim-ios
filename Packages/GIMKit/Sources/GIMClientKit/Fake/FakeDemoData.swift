@@ -1,23 +1,37 @@
 import Foundation
 
 extension FakeGimClient {
-    public static let demoSelfId: UserId = "user-alex"
-    public static let demoDirectChatId: ChatId = "chat-sofia"
-    public static let demoGroupChatId: ChatId = "chat-crew"
+    public static let demoSelfId = "user-alex"
+    public static let demoDirectChatId = "chat-sofia"
+    public static let demoGroupChatId = "chat-crew"
     public static let demoDirectMessageCount = 150
 
-    /// A signed-in client seeded with 3 peers, a direct chat with `demoDirectMessageCount` messages (images, a file,
-    /// a reply, reactions, an edited and a deleted message) and a group chat. Demo media files are generated under
-    /// `dataDirectory`.
+    /// A client seeded with 3 peers, a direct chat with `demoDirectMessageCount` messages over several days (images,
+    /// a file, a reply, reactions, an edited and a deleted message) and a group chat. Demo media files are generated
+    /// under `dataDirectory`. Sync is stopped until `startSync()`.
+    ///
+    /// - Parameter registered: signed in as Alex Morgan (`demoSelfId`). When `false`, the client starts without a
+    ///   session and seeds the chats around whoever registers.
     public static func demo(
         scheduler: any FakeScheduler = RealDelayFakeScheduler(),
         dataDirectory: String = FakeGimClient.defaultDataDirectory,
         now: @escaping @Sendable () -> Date = { Date() },
-        autoReply: Bool = true
+        calendar: Calendar = .autoupdatingCurrent,
+        autoReply: Bool = true,
+        registered: Bool = true,
+        networkReachable: Bool = true
     ) -> FakeGimClient {
-        FakeGimClient(
-            scheduler: scheduler, dataDirectory: dataDirectory, now: now, autoReply: autoReply,
-            seed: FakeDemoData.seed(dataDirectory: dataDirectory, now: now()))
+        let options = Options(
+            scheduler: scheduler, dataDirectory: dataDirectory, now: now, calendar: calendar, autoReply: autoReply,
+            networkReachable: networkReachable)
+        guard registered else {
+            return FakeGimClient(
+                options: options, seed: Seed(users: FakeDemoData.peers), seedsDemoOnRegister: true)
+        }
+        let me = UserProfile(userId: demoSelfId, handle: "alex", displayName: "Alex Morgan")
+        var seed = FakeDemoData.seed(me: me, dataDirectory: dataDirectory, now: now())
+        seed.session = Session(userId: me.userId, deviceId: "device-1", handle: me.handle, displayName: me.displayName)
+        return FakeGimClient(options: options, seed: seed, seedsDemoOnRegister: false)
     }
 }
 
@@ -28,6 +42,12 @@ enum FakeDemoData {
         "Perfect, see you at the marina.",
         "Haha, true 😄",
         "Can you send me the exact location?",
+    ]
+
+    static let peers = [
+        UserProfile(userId: "user-sofia", handle: "sofia", displayName: "Sofia Marin"),
+        UserProfile(userId: "user-luca", handle: "luca", displayName: "Luca Bianchi"),
+        UserProfile(userId: "user-nikos", handle: "nikos", displayName: "Nikos Papadopoulos"),
     ]
 
     private static let lines = [
@@ -45,14 +65,11 @@ enum FakeDemoData {
         "Absolutely, the water there is unreal.",
     ]
 
-    static func seed(dataDirectory: String, now: Date) -> FakeGimClient.Seed {
-        let me = UserProfile(userId: FakeGimClient.demoSelfId, handle: "alex", displayName: "Alex Morgan")
-        let sofia = UserProfile(userId: "user-sofia", handle: "sofia", displayName: "Sofia Marin")
-        let luca = UserProfile(userId: "user-luca", handle: "luca", displayName: "Luca Bianchi")
-        let nikos = UserProfile(userId: "user-nikos", handle: "nikos", displayName: "Nikos Papadopoulos")
-        let session = Session(
-            userId: me.userId, deviceId: "device-1", handle: me.handle, displayName: me.displayName,
-            serverUrl: "https://demo.gim.invalid")
+    /// Chats and media around `me`; `session` is left unset.
+    static func seed(me: UserProfile, dataDirectory: String, now: Date) -> FakeGimClient.Seed {
+        let (sofia, luca, nikos) = (peers[0], peers[1], peers[2])
+        let nowMs = FakeGimClient.milliseconds(now)
+        let minute: UInt64 = 60_000
 
         let mediaDirectory = URL(fileURLWithPath: dataDirectory).appendingPathComponent("demo-media")
         try? FileManager.default.createDirectory(at: mediaDirectory, withIntermediateDirectories: true)
@@ -62,51 +79,66 @@ enum FakeDemoData {
         let filePath = mediaDirectory.appendingPathComponent("crew-list.txt").path
         let fileData = Data("Crew list\nAlex Morgan - skipper\nSofia Marin - navigator\nLuca Bianchi - cook\n".utf8)
         try? fileData.write(to: URL(fileURLWithPath: filePath))
-        let image = MediaInfo(
-            mediaId: "media-harbour", mime: "image/png", size: UInt64(imageData.count), fileName: "harbour.png",
-            width: 160, height: 120, thumbnailPath: imagePath)
-        let file = MediaInfo(
-            mediaId: "media-crew-list", mime: "text/plain", size: UInt64(fileData.count), fileName: "crew-list.txt")
 
+        var media: [String: FakeGimClient.StoredMedia] = [:]
         var direct = FakeGimClient.StoredChat(
-            id: FakeGimClient.demoDirectChatId, kind: .direct, name: "",
-            createdAt: now.addingTimeInterval(-30 * 86_400), members: [me.userId, sofia.userId])
+            id: FakeGimClient.demoDirectChatId, kind: .direct, name: "", createdAtMs: nowMs - 30 * 1_440 * minute,
+            members: [me.userId, sofia.userId])
         let count = FakeGimClient.demoDirectMessageCount
         for index in 0..<count {
             let isOwn = index % 3 == 0 && index < count - 2
-            let sender = isOwn ? me : sofia
-            var content = MessageContent.text(lines[index % lines.count])
-            switch index {
-            case 60, 140: content = .image(image, caption: index == 140 ? "Sunset over the harbour" : nil)
-            case 141: content = .file(file, caption: "Updated crew list")
-            default: break
+            let messageId = String(format: "msg-sofia-%03d", index)
+            func ref(mime: String, size: Int, thumbnail: Bool) -> MediaRef {
+                MediaRef(
+                    chatId: direct.id, messageId: messageId, mime: mime, size: UInt64(size), hasThumbnail: thumbnail)
             }
-            let message = TimelineMessage(
-                id: String(format: "msg-sofia-%03d", index), chatId: direct.id, senderId: sender.userId,
-                senderName: sender.displayName, isOwn: isOwn,
-                timestamp: now.addingTimeInterval(-Double(count - index) * 41 * 60), content: content,
-                sendState: isOwn ? .read : nil)
-            direct.messages.append(FakeGimClient.StoredMessage(message: message))
+            var content = MessageContent.text(body: lines[index % lines.count])
+            switch index {
+            case 60, 140:
+                content = .image(
+                    media: ref(mime: "image/png", size: imageData.count, thumbnail: true), width: 160, height: 120,
+                    caption: index == 140 ? "Sunset over the harbour" : nil)
+                media[FakeGimClient.mediaKey(chatId: direct.id, messageId: messageId)] = FakeGimClient.StoredMedia(
+                    path: imagePath, thumbnailPath: imagePath)
+            case 141:
+                content = .file(
+                    media: ref(mime: "text/plain", size: fileData.count, thumbnail: false),
+                    fileName: "crew-list.txt", caption: "Updated crew list")
+                media[FakeGimClient.mediaKey(chatId: direct.id, messageId: messageId)] = FakeGimClient.StoredMedia(
+                    path: filePath, thumbnailPath: nil)
+            default:
+                break
+            }
+            let item = MessageItem(
+                messageId: messageId, chatId: direct.id, sender: isOwn ? me : sofia, isOwn: isOwn,
+                sentAtMs: nowMs - UInt64(count - index) * 41 * minute, content: content, replyTo: nil, reactions: [],
+                edited: false, sendState: isOwn ? .read : nil)
+            direct.entries.append(.message(FakeGimClient.StoredMessage(item: item)))
         }
-        direct.messages[143].message.replyTo = ReplyPreview(
-            messageId: direct.messages[141].message.id, senderName: me.displayName, preview: "crew-list.txt")
-        direct.messages[143].message.content = .text("Thanks, I'll print it for the harbour office.")
-        FakeGimClient.setReaction(
-            &direct.messages[144], emoji: "👍", user: sofia.userId, active: true, selfId: me.userId)
-        FakeGimClient.setReaction(&direct.messages[144], emoji: "❤️", user: me.userId, active: true, selfId: me.userId)
-        FakeGimClient.setReaction(
-            &direct.messages[144], emoji: "❤️", user: sofia.userId, active: true, selfId: me.userId)
-        direct.messages[147].message.content = .text("Departure moved to 09:30, the fuel dock opens late.")
-        direct.messages[147].message.editedAt = direct.messages[147].message.timestamp.addingTimeInterval(120)
-        direct.messages[146].message.content = .deleted
-        direct.messages[146].message.sendState = nil
+        mutateMessage(&direct, 143) {
+            $0.item.replyTo = ReplyPreview(
+                messageId: "msg-sofia-141", senderName: me.displayName, text: "File: crew-list.txt")
+            $0.item.content = .text(body: "Thanks, I'll print it for the harbour office.")
+        }
+        mutateMessage(&direct, 144) {
+            FakeGimClient.setReaction(&$0, emoji: "👍", user: sofia.userId, active: true, selfId: me.userId)
+            FakeGimClient.setReaction(&$0, emoji: "❤️", user: me.userId, active: true, selfId: me.userId)
+            FakeGimClient.setReaction(&$0, emoji: "❤️", user: sofia.userId, active: true, selfId: me.userId)
+        }
+        mutateMessage(&direct, 146) {
+            $0.item.content = .deleted
+            $0.item.sendState = nil
+        }
+        mutateMessage(&direct, 147) {
+            $0.item.content = .text(body: "Departure moved to 09:30, the fuel dock opens late.")
+            $0.item.edited = true
+        }
         direct.loadedCount = min(FakeGimClient.initialWindow, count)
         direct.unreadCount = 2
 
         var group = FakeGimClient.StoredChat(
             id: FakeGimClient.demoGroupChatId, kind: .group, name: "Aegean Crew",
-            createdAt: now.addingTimeInterval(-7 * 86_400),
-            members: [me.userId, sofia.userId, luca.userId, nikos.userId])
+            createdAtMs: nowMs - 7 * 1_440 * minute, members: [me.userId, sofia.userId, luca.userId, nikos.userId])
         let groupLines: [(UserProfile, String)] = [
             (luca, "Provisioning list is in the shared folder."),
             (nikos, "I can bring the spare dinghy pump."),
@@ -116,19 +148,26 @@ enum FakeDemoData {
             (nikos, "Me, grilled octopus 🐙"),
         ]
         for (index, entry) in groupLines.enumerated() {
-            let (sender, text) = entry
-            let message = TimelineMessage(
-                id: "msg-crew-\(index)", chatId: group.id, senderId: sender.userId, senderName: sender.displayName,
-                isOwn: sender == me, timestamp: now.addingTimeInterval(-Double(groupLines.count - index) * 600 - 60),
-                content: .text(text), sendState: sender == me ? .read : nil)
-            group.messages.append(FakeGimClient.StoredMessage(message: message))
+            let (sender, body) = entry
+            let item = MessageItem(
+                messageId: "msg-crew-\(index)", chatId: group.id, sender: sender, isOwn: sender == me,
+                sentAtMs: nowMs - UInt64(groupLines.count - index) * 10 * minute - minute,
+                content: .text(body: body), replyTo: nil, reactions: [], edited: false,
+                sendState: sender == me ? .read : nil)
+            group.entries.append(.message(FakeGimClient.StoredMessage(item: item)))
         }
-        group.loadedCount = group.messages.count
+        group.loadedCount = group.entries.count
         group.unreadCount = 3
 
-        return FakeGimClient.Seed(
-            session: session, users: [me, sofia, luca, nikos], chats: [direct, group],
-            media: [image.mediaId: imagePath, file.mediaId: filePath])
+        return FakeGimClient.Seed(users: [me] + peers, chats: [direct, group], media: media)
+    }
+
+    private static func mutateMessage(
+        _ chat: inout FakeGimClient.StoredChat, _ index: Int, _ mutate: (inout FakeGimClient.StoredMessage) -> Void
+    ) {
+        guard var stored = chat.entries[index].message else { return }
+        mutate(&stored)
+        chat.entries[index] = .message(stored)
     }
 }
 

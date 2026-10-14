@@ -1,249 +1,271 @@
 import Foundation
 
-// Native mirror of the gim-core UniFFI records and enums. UniFFI maps ids to `String`.
+// Native mirror of the gim-core UniFFI records and enums (`bindings/gim-ffi/src/types.rs`, `client.rs`,
+// `chat_list.rs`, `timeline.rs`, `error.rs`). Names, labels and field types match the generated `GIMCore.swift`;
+// see docs/gim-core-mapping.md. Ids are opaque strings; timestamps are Unix epoch milliseconds.
 
-public typealias UserId = String
-public typealias DeviceId = String
-public typealias ChatId = String
-public typealias MessageId = String
-public typealias MediaId = String
-
-public struct Session: Sendable, Hashable, Codable {
-    public var userId: UserId
-    public var deviceId: DeviceId
-    public var handle: String
-    public var displayName: String
+public struct ClientConfig: Sendable, Hashable {
+    /// Base URL of gim-server, `http://` or `https://`.
     public var serverUrl: String
 
-    public init(userId: UserId, deviceId: DeviceId, handle: String, displayName: String, serverUrl: String) {
-        self.userId = userId
-        self.deviceId = deviceId
-        self.handle = handle
-        self.displayName = displayName
+    public init(serverUrl: String) {
         self.serverUrl = serverUrl
     }
 }
 
-public enum LoginState: Sendable, Hashable, Codable {
-    case unregistered
-    case registered(Session)
-}
-
-public struct UserProfile: Sendable, Hashable, Codable {
-    public var userId: UserId
+/// The signed-in account on this device.
+public struct Session: Sendable, Hashable {
+    public var userId: String
+    public var deviceId: String
     public var handle: String
     public var displayName: String
-    public var avatarPath: String?
 
-    public init(userId: UserId, handle: String, displayName: String, avatarPath: String? = nil) {
+    public init(userId: String, deviceId: String, handle: String, displayName: String) {
         self.userId = userId
+        self.deviceId = deviceId
         self.handle = handle
         self.displayName = displayName
-        self.avatarPath = avatarPath
     }
 }
 
-public enum ChatKind: String, Sendable, Hashable, Codable {
+/// Public profile of a user.
+public struct UserProfile: Sendable, Hashable {
+    public var userId: String
+    public var handle: String
+    public var displayName: String
+
+    public init(userId: String, handle: String, displayName: String) {
+        self.userId = userId
+        self.handle = handle
+        self.displayName = displayName
+    }
+}
+
+public enum ChatKind: Sendable, Hashable {
     case direct
     case group
 }
 
-public struct ChatSummary: Sendable, Hashable, Codable {
-    public var id: ChatId
+/// One row of the chat list.
+public struct ChatSummary: Sendable, Hashable {
+    public var chatId: String
     public var kind: ChatKind
-    public var title: String
-    public var avatarPath: String?
-    public var lastMessagePreview: String?
-    public var lastMessageSenderName: String?
-    public var lastMessageAt: Date?
+    /// Group name, or the other user's display name for a direct chat.
+    public var name: String
+    public var avatar: MediaRef?
+    public var lastMessage: MessagePreview?
     public var unreadCount: UInt32
+    public var updatedAtMs: UInt64
     public var memberCount: UInt32
 
     public init(
-        id: ChatId,
-        kind: ChatKind,
-        title: String,
-        avatarPath: String? = nil,
-        lastMessagePreview: String? = nil,
-        lastMessageSenderName: String? = nil,
-        lastMessageAt: Date? = nil,
-        unreadCount: UInt32 = 0,
-        memberCount: UInt32
+        chatId: String, kind: ChatKind, name: String, avatar: MediaRef?, lastMessage: MessagePreview?,
+        unreadCount: UInt32, updatedAtMs: UInt64, memberCount: UInt32
     ) {
-        self.id = id
+        self.chatId = chatId
         self.kind = kind
-        self.title = title
-        self.avatarPath = avatarPath
-        self.lastMessagePreview = lastMessagePreview
-        self.lastMessageSenderName = lastMessageSenderName
-        self.lastMessageAt = lastMessageAt
+        self.name = name
+        self.avatar = avatar
+        self.lastMessage = lastMessage
         self.unreadCount = unreadCount
+        self.updatedAtMs = updatedAtMs
         self.memberCount = memberCount
     }
 }
 
-public struct ChatMember: Sendable, Hashable, Codable {
-    public var user: UserProfile
-    public var isSelf: Bool
-
-    public init(user: UserProfile, isSelf: Bool) {
-        self.user = user
-        self.isSelf = isSelf
-    }
-}
-
-public struct ChatDetails: Sendable, Hashable, Codable {
-    public var summary: ChatSummary
-    public var members: [ChatMember]
-
-    public init(summary: ChatSummary, members: [ChatMember]) {
-        self.summary = summary
-        self.members = members
-    }
-}
-
-/// Media metadata. Paths point at files gim-core has already decrypted.
-public struct MediaInfo: Sendable, Hashable, Codable {
-    public var mediaId: MediaId
-    public var mime: String
-    public var size: UInt64
-    public var fileName: String?
-    public var width: UInt32?
-    public var height: UInt32?
-    public var thumbnailPath: String?
-
-    public init(
-        mediaId: MediaId,
-        mime: String,
-        size: UInt64,
-        fileName: String? = nil,
-        width: UInt32? = nil,
-        height: UInt32? = nil,
-        thumbnailPath: String? = nil
-    ) {
-        self.mediaId = mediaId
-        self.mime = mime
-        self.size = size
-        self.fileName = fileName
-        self.width = width
-        self.height = height
-        self.thumbnailPath = thumbnailPath
-    }
-}
-
-public enum MediaKind: String, Sendable, Hashable, Codable {
-    case image
-    case file
-}
-
-public enum MessageContent: Sendable, Hashable, Codable {
-    case text(String)
-    case image(MediaInfo, caption: String?)
-    case file(MediaInfo, caption: String?)
-    case deleted
-    case unsupported(String)
-}
-
-public enum SendState: Sendable, Hashable, Codable {
-    case pending
-    case sent
-    case delivered
-    case read
-    case failed(reason: String)
-}
-
-public struct ReplyPreview: Sendable, Hashable, Codable {
-    public var messageId: MessageId
+/// Last message shown in a chat list row.
+public struct MessagePreview: Sendable, Hashable {
     public var senderName: String
-    public var preview: String
-
-    public init(messageId: MessageId, senderName: String, preview: String) {
-        self.messageId = messageId
-        self.senderName = senderName
-        self.preview = preview
-    }
-}
-
-public struct ReactionGroup: Sendable, Hashable, Codable {
-    public var emoji: String
-    public var count: UInt32
-    public var includesMe: Bool
-
-    public init(emoji: String, count: UInt32, includesMe: Bool) {
-        self.emoji = emoji
-        self.count = count
-        self.includesMe = includesMe
-    }
-}
-
-public struct TimelineMessage: Sendable, Hashable, Codable, Identifiable {
-    /// The outbox client id; stable from the optimistic insert onwards.
-    public var id: MessageId
-    public var chatId: ChatId
-    public var senderId: UserId
-    public var senderName: String
+    /// Plain-text rendering ("Photo", "File: report.pdf" for media).
+    public var text: String
+    public var sentAtMs: UInt64
     public var isOwn: Bool
-    public var timestamp: Date
+
+    public init(senderName: String, text: String, sentAtMs: UInt64, isOwn: Bool) {
+        self.senderName = senderName
+        self.text = text
+        self.sentAtMs = sentAtMs
+        self.isOwn = isOwn
+    }
+}
+
+/// One row of a chat timeline.
+public enum TimelineItem: Sendable, Hashable {
+    case message(item: MessageItem)
+    /// Inserted before the first item of each local calendar day.
+    case dateSeparator(dayStartMs: UInt64)
+    case membershipChange(userName: String, change: MembershipChangeKind, atMs: UInt64)
+}
+
+public enum MembershipChangeKind: Sendable, Hashable {
+    case added
+    case removed
+    case left
+}
+
+public struct MessageItem: Sendable, Hashable {
+    /// Client id of the message; stable from local echo to delivery.
+    public var messageId: String
+    public var chatId: String
+    public var sender: UserProfile
+    public var isOwn: Bool
+    public var sentAtMs: UInt64
     public var content: MessageContent
     public var replyTo: ReplyPreview?
     public var reactions: [ReactionGroup]
-    public var editedAt: Date?
-    /// Only set for own messages.
+    public var edited: Bool
+    /// Delivery state of own messages; `nil` for messages from others.
     public var sendState: SendState?
 
     public init(
-        id: MessageId,
-        chatId: ChatId,
-        senderId: UserId,
-        senderName: String,
-        isOwn: Bool,
-        timestamp: Date,
-        content: MessageContent,
-        replyTo: ReplyPreview? = nil,
-        reactions: [ReactionGroup] = [],
-        editedAt: Date? = nil,
-        sendState: SendState? = nil
+        messageId: String, chatId: String, sender: UserProfile, isOwn: Bool, sentAtMs: UInt64,
+        content: MessageContent, replyTo: ReplyPreview?, reactions: [ReactionGroup], edited: Bool,
+        sendState: SendState?
     ) {
-        self.id = id
+        self.messageId = messageId
         self.chatId = chatId
-        self.senderId = senderId
-        self.senderName = senderName
+        self.sender = sender
         self.isOwn = isOwn
-        self.timestamp = timestamp
+        self.sentAtMs = sentAtMs
         self.content = content
         self.replyTo = replyTo
         self.reactions = reactions
-        self.editedAt = editedAt
+        self.edited = edited
         self.sendState = sendState
     }
 }
 
-/// Chat list change; the list is ordered by `lastMessageAt` descending.
-public enum ChatListDiff: Sendable, Hashable {
-    case reset([ChatSummary])
-    case insert(index: UInt32, ChatSummary)
-    case update(index: UInt32, ChatSummary)
-    case remove(index: UInt32)
+public enum MessageContent: Sendable, Hashable {
+    case text(body: String)
+    case image(media: MediaRef, width: UInt32?, height: UInt32?, caption: String?)
+    case file(media: MediaRef, fileName: String?, caption: String?)
+    /// The sender deleted the message.
+    case deleted
+    /// Content this client version cannot render.
+    case unsupported
 }
 
-/// Timeline change; the timeline is ordered oldest first (index 0 = oldest loaded message).
-public enum TimelineDiff: Sendable, Hashable {
-    case reset([TimelineMessage])
-    case insert(index: UInt32, TimelineMessage)
-    case update(index: UInt32, TimelineMessage)
-    case remove(index: UInt32)
+/// Handle to an encrypted attachment. Pass its ids to `fetchMedia` / `fetchThumbnail`; keys and blob ids never
+/// leave gim-core.
+public struct MediaRef: Sendable, Hashable {
+    public var chatId: String
+    public var messageId: String
+    public var mime: String
+    public var size: UInt64
+    public var hasThumbnail: Bool
+
+    public init(chatId: String, messageId: String, mime: String, size: UInt64, hasThumbnail: Bool) {
+        self.chatId = chatId
+        self.messageId = messageId
+        self.mime = mime
+        self.size = size
+        self.hasThumbnail = hasThumbnail
+    }
 }
 
-public enum ConnectionState: String, Sendable, Hashable, Codable {
+/// Quoted message shown above a reply.
+public struct ReplyPreview: Sendable, Hashable {
+    public var messageId: String
+    public var senderName: String
+    public var text: String
+
+    public init(messageId: String, senderName: String, text: String) {
+        self.messageId = messageId
+        self.senderName = senderName
+        self.text = text
+    }
+}
+
+public struct ReactionGroup: Sendable, Hashable {
+    public var emoji: String
+    public var count: UInt32
+    /// Whether the signed-in user is among the reactors.
+    public var own: Bool
+
+    public init(emoji: String, count: UInt32, own: Bool) {
+        self.emoji = emoji
+        self.count = count
+        self.own = own
+    }
+}
+
+public enum SendState: Sendable, Hashable {
+    /// Queued in the outbox or being uploaded.
+    case pending
+    /// Accepted by the server.
+    case sent
+    /// Delivered to at least one recipient device.
+    case delivered
+    /// Read by at least one recipient.
+    case read
+    /// Gave up; `retrySend` or `cancelSend`.
+    case failed(reason: String)
+}
+
+public enum ConnectionState: Sendable, Hashable {
     case offline
     case connecting
-    case online
+    case connected
+    /// Connected and catching up on missed events.
+    case syncing
 }
 
-public enum GimError: Error, Sendable, Hashable {
-    case unauthorized
-    case notFound
-    case network(String)
-    case invalidInput(String)
-    case `internal`(String)
+/// Incremental change to the chat list, mirroring eyeball-im `VectorDiff`. Apply the diffs of one `onUpdate` call
+/// in order; indices refer to the list as it is after the previous diff of the batch.
+public enum ChatListDiff: Sendable, Hashable {
+    case append(values: [ChatSummary])
+    case clear
+    case pushFront(value: ChatSummary)
+    case pushBack(value: ChatSummary)
+    case popFront
+    case popBack
+    case insert(index: UInt32, value: ChatSummary)
+    case set(index: UInt32, value: ChatSummary)
+    case remove(index: UInt32)
+    case truncate(length: UInt32)
+    case reset(values: [ChatSummary])
+}
+
+/// Incremental change to a timeline, mirroring eyeball-im `VectorDiff`. Same rules as `ChatListDiff`.
+public enum TimelineDiff: Sendable, Hashable {
+    case append(values: [TimelineItem])
+    case clear
+    case pushFront(value: TimelineItem)
+    case pushBack(value: TimelineItem)
+    case popFront
+    case popBack
+    case insert(index: UInt32, value: TimelineItem)
+    case set(index: UInt32, value: TimelineItem)
+    case remove(index: UInt32)
+    case truncate(length: UInt32)
+    case reset(values: [TimelineItem])
+}
+
+/// Error returned by every fallible gim-core call. Case names keep the generated UpperCamelCase spelling.
+// swift-format-ignore: AlwaysUseLowerCamelCase
+public enum GimError: Error, Sendable, Hashable, LocalizedError {
+    /// The server could not be reached or the connection broke.
+    case Network(reason: String)
+    /// The call needs a session; call `register` first.
+    case NotRegistered
+    /// An argument was rejected before anything was sent.
+    case InvalidInput(reason: String)
+    /// The chat, message, user or media does not exist locally or on the server.
+    case NotFound(reason: String)
+    /// MLS or media encryption/decryption failed.
+    case Crypto(reason: String)
+    /// The local database or file system failed.
+    case Storage(reason: String)
+    /// gim-server answered with a non-success HTTP status.
+    case Server(status: UInt16, reason: String)
+    /// The operation was cancelled (sign-out, `stopSync`, `cancelSend`).
+    case Cancelled
+    /// The call is part of the API contract but not implemented yet.
+    case NotImplemented
+    /// A bug or an unexpected failure inside gim-core or a platform callback.
+    case Internal(reason: String)
+
+    public var errorDescription: String? {
+        String(reflecting: self)
+    }
 }
