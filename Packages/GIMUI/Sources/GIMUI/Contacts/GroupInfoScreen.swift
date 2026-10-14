@@ -2,35 +2,49 @@ import GIMClientKit
 import GIMFeatures
 import SwiftUI
 
-/// Chat details and, for groups, member management. Pushed from the chat screen.
+/// Chat details and, for groups, the name, member management and leaving. Pushed from the chat screen.
 public struct GroupInfoScreen: View {
-    @State private var viewModel: GroupInfoViewModel
+    private let onLeft: () -> Void
 
-    public init(client: any GimClientAPI, chatId: ChatId) {
+    @State private var viewModel: GroupInfoViewModel
+    @State private var confirmsLeave = false
+
+    /// - Parameter onLeft: called after the user left the group.
+    public init(client: any GimClientAPI, chatId: String, onLeft: @escaping () -> Void = {}) {
+        self.onLeft = onLeft
         _viewModel = State(initialValue: GroupInfoViewModel(client: client, chatId: chatId))
     }
 
     public var body: some View {
         Form {
-            if let details = viewModel.details {
-                header(details.summary)
-                membersSection(details)
+            if let summary = viewModel.summary {
+                header(summary)
+                if viewModel.isGroup { nameSection }
+                membersSection(summary)
                 if viewModel.canEditMembers { addMemberSection }
-            } else if viewModel.isLoading {
+                if viewModel.isGroup { leaveSection }
+            } else if viewModel.errorMessage == nil {
                 ProgressView().frame(maxWidth: .infinity)
             }
             if let error = viewModel.errorMessage {
                 Section {
                     Text(error).foregroundStyle(.red)
-                    if viewModel.details == nil {
+                    if viewModel.members == nil && !viewModel.membersUnavailable {
                         Button("Try Again") { Task { await viewModel.load() } }
                     }
                 }
             }
         }
-        .navigationTitle(viewModel.details?.summary.kind == .direct ? "Chat Info" : "Group Info")
+        .navigationTitle(viewModel.summary?.kind == .direct ? "Chat Info" : "Group Info")
         .navigationBarTitleDisplayMode(.inline)
-        .task { await viewModel.load() }
+        .task {
+            viewModel.start()
+            await viewModel.load()
+        }
+        .onDisappear { viewModel.stop() }
+        .onChange(of: viewModel.hasLeft) { _, hasLeft in
+            if hasLeft { onLeft() }
+        }
         .confirmationDialog(
             "Remove \(viewModel.pendingRemoval?.user.displayName ?? "member") from the group?",
             isPresented: Binding(
@@ -42,17 +56,22 @@ public struct GroupInfoScreen: View {
                 Task { await viewModel.confirmRemoval() }
             }
         }
+        .confirmationDialog("Leave this group?", isPresented: $confirmsLeave, titleVisibility: .visible) {
+            Button("Leave Group", role: .destructive) {
+                Task { await viewModel.leave() }
+            }
+        }
     }
 
     private func header(_ summary: ChatSummary) -> some View {
         Section {
             VStack(spacing: 8) {
-                AvatarView(id: summary.id, name: summary.title, avatarPath: summary.avatarPath, size: 80)
-                Text(summary.title)
+                AvatarView(id: summary.chatId, name: summary.name, avatarPath: nil, size: 80)
+                Text(summary.name)
                     .font(.title2.weight(.semibold))
                     .multilineTextAlignment(.center)
                 if summary.kind == .group {
-                    Text(summary.memberCount == 1 ? "1 member" : "\(summary.memberCount) members")
+                    Text(Self.memberCountText(summary.memberCount))
                         .foregroundStyle(.secondary)
                 }
             }
@@ -61,21 +80,48 @@ public struct GroupInfoScreen: View {
         }
     }
 
-    private func membersSection(_ details: ChatDetails) -> some View {
-        Section("Members") {
-            ForEach(details.members, id: \.user.userId) { member in
-                HStack {
-                    UserRow(user: member.user)
-                    Spacer()
-                    if member.isSelf {
-                        Text("You").foregroundStyle(.secondary)
+    private var nameSection: some View {
+        Section("Name") {
+            HStack {
+                TextField("Group name", text: $viewModel.editedName)
+                    .submitLabel(.done)
+                    .onSubmit(saveName)
+                if viewModel.isSavingName {
+                    ProgressView()
+                } else {
+                    Button("Save", action: saveName)
+                        .disabled(viewModel.nameToSave == nil)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func membersSection(_ summary: ChatSummary) -> some View {
+        if let members = viewModel.members {
+            Section("Members") {
+                ForEach(members) { member in
+                    HStack {
+                        UserRow(user: member.user)
+                        Spacer()
+                        if member.isSelf {
+                            Text("You").foregroundStyle(.secondary)
+                        }
+                    }
+                    .swipeActions {
+                        if viewModel.canRemoveMembers && !member.isSelf {
+                            Button("Remove", role: .destructive) { viewModel.requestRemoval(member) }
+                        }
                     }
                 }
-                .swipeActions {
-                    if viewModel.canEditMembers && !member.isSelf {
-                        Button("Remove", role: .destructive) { viewModel.requestRemoval(member) }
-                    }
-                }
+            }
+        } else if viewModel.membersUnavailable {
+            Section {
+                Text(Self.memberCountText(summary.memberCount))
+            } header: {
+                Text("Members")
+            } footer: {
+                Text("The member list isn't available in this version yet.")
             }
         }
     }
@@ -98,8 +144,23 @@ public struct GroupInfoScreen: View {
         }
     }
 
+    private var leaveSection: some View {
+        Section {
+            Button("Leave Group", role: .destructive) { confirmsLeave = true }
+                .disabled(viewModel.isLeaving)
+        }
+    }
+
     private func addMember() {
         Task { await viewModel.addMember() }
+    }
+
+    private func saveName() {
+        Task { await viewModel.saveName() }
+    }
+
+    private static func memberCountText(_ count: UInt32) -> String {
+        count == 1 ? "1 member" : "\(count) members"
     }
 }
 

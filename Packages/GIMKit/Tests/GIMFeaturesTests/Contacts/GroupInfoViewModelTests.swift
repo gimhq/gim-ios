@@ -1,105 +1,119 @@
 import Foundation
 import GIMClientKit
-import GIMFeatures
 import XCTest
+
+@testable import GIMFeatures
 
 final class GroupInfoViewModelTests: XCTestCase {
     @MainActor
-    private func loadedGroup() async throws -> (FakeGimClient, GroupInfoViewModel) {
-        let (client, _) = makeDemoClient()
-        let chatId = try await client.createGroupChat(name: "Regatta", members: ["user-sofia", "user-luca"])
+    private func started(_ client: FakeGimClient, chatId: String) async -> GroupInfoViewModel {
         let viewModel = GroupInfoViewModel(client: client, chatId: chatId)
+        viewModel.start()
         await viewModel.load()
-        return (client, viewModel)
+        await eventually { viewModel.summary != nil }
+        return viewModel
     }
 
     @MainActor
-    func testLoadShowsDetails() async throws {
-        let (client, _) = makeDemoClient()
-        let viewModel = GroupInfoViewModel(client: client, chatId: FakeGimClient.demoGroupChatId)
+    private func startedGroup() async throws -> (FakeGimClient, GroupInfoViewModel) {
+        let (client, _) = await connected(makeDemoClient())
+        let chatId = try await client.createGroupChat(name: "Regatta", memberUserIds: ["user-sofia", "user-luca"])
+        return (client, await started(client, chatId: chatId))
+    }
 
-        await viewModel.load()
+    @MainActor
+    private func handles(_ viewModel: GroupInfoViewModel) -> [String]? {
+        viewModel.members?.map(\.user.handle)
+    }
 
-        let details = try XCTUnwrap(viewModel.details)
-        XCTAssertEqual(details.summary.title, "Aegean Crew")
-        XCTAssertEqual(details.members.count, 4)
+    @MainActor
+    func testLoadShowsSummaryAndMembers() async {
+        let (client, _) = await connected(makeDemoClient())
+        let viewModel = await started(client, chatId: FakeGimClient.demoGroupChatId)
+
+        XCTAssertEqual(viewModel.summary?.name, "Aegean Crew")
+        XCTAssertEqual(viewModel.editedName, "Aegean Crew")
+        XCTAssertEqual(handles(viewModel), ["alex", "sofia", "luca", "nikos"])
+        XCTAssertEqual(viewModel.members?.filter(\.isSelf).map(\.user.userId), [FakeGimClient.demoSelfId])
         XCTAssertTrue(viewModel.canEditMembers)
+        XCTAssertTrue(viewModel.canRemoveMembers)
+        XCTAssertFalse(viewModel.membersUnavailable)
         XCTAssertFalse(viewModel.isLoading)
         XCTAssertNil(viewModel.errorMessage)
     }
 
     @MainActor
-    func testDirectChatMembersAreReadOnly() async {
-        let (client, _) = makeDemoClient()
-        let viewModel = GroupInfoViewModel(client: client, chatId: FakeGimClient.demoDirectChatId)
-
-        await viewModel.load()
+    func testDirectChatIsReadOnly() async {
+        let (client, _) = await connected(makeDemoClient())
+        let viewModel = await started(client, chatId: FakeGimClient.demoDirectChatId)
 
         XCTAssertFalse(viewModel.canEditMembers)
+        XCTAssertFalse(viewModel.canRemoveMembers)
+        XCTAssertNil(viewModel.nameToSave)
     }
 
     @MainActor
     func testLoadErrorIsPresented() async {
-        let (client, _) = makeDemoClient()
+        let (client, _) = await connected(makeDemoClient())
         let viewModel = GroupInfoViewModel(client: client, chatId: "missing")
 
         await viewModel.load()
 
-        XCTAssertNil(viewModel.details)
-        XCTAssertEqual(viewModel.errorMessage, ErrorPresenter.message(for: GimError.notFound))
+        XCTAssertNil(viewModel.members)
+        XCTAssertEqual(viewModel.errorMessage, ErrorPresenter.message(for: GimError.NotFound(reason: "chat missing")))
     }
 
     @MainActor
-    func testAddMemberByHandleReloads() async throws {
-        let (_, viewModel) = try await loadedGroup()
-        XCTAssertEqual(viewModel.details?.members.count, 3)
+    func testAddMemberByHandleRequeries() async throws {
+        let (_, viewModel) = try await startedGroup()
+        XCTAssertEqual(viewModel.members?.count, 3)
 
         viewModel.memberHandle = " Nikos "
         await viewModel.addMember()
 
         XCTAssertNil(viewModel.errorMessage)
         XCTAssertEqual(viewModel.memberHandle, "")
-        XCTAssertEqual(viewModel.details?.members.map(\.user.handle), ["alex", "sofia", "luca", "nikos"])
-        XCTAssertEqual(viewModel.details?.summary.memberCount, 4)
+        XCTAssertEqual(handles(viewModel), ["alex", "sofia", "luca", "nikos"])
+        await eventually { viewModel.summary?.memberCount == 4 }
         XCTAssertFalse(viewModel.isUpdatingMembers)
     }
 
     @MainActor
     func testAddUnknownHandleShowsError() async throws {
-        let (_, viewModel) = try await loadedGroup()
+        let (_, viewModel) = try await startedGroup()
 
         viewModel.memberHandle = "nobody"
         await viewModel.addMember()
 
         XCTAssertEqual(viewModel.errorMessage, "No one uses the handle @nobody.")
         XCTAssertEqual(viewModel.memberHandle, "nobody")
-        XCTAssertEqual(viewModel.details?.members.count, 3)
+        XCTAssertEqual(viewModel.members?.count, 3)
     }
 
     @MainActor
     func testRemoveMemberRequiresConfirmation() async throws {
-        let (_, viewModel) = try await loadedGroup()
-        let luca = try XCTUnwrap(viewModel.details?.members.first { $0.user.handle == "luca" })
+        let (_, viewModel) = try await startedGroup()
+        let luca = try XCTUnwrap(viewModel.members?.first { $0.user.handle == "luca" })
 
         viewModel.requestRemoval(luca)
         XCTAssertEqual(viewModel.pendingRemoval, luca)
         viewModel.cancelRemoval()
         XCTAssertNil(viewModel.pendingRemoval)
         await viewModel.confirmRemoval()
-        XCTAssertEqual(viewModel.details?.members.count, 3)
+        XCTAssertEqual(viewModel.members?.count, 3)
 
         viewModel.requestRemoval(luca)
         await viewModel.confirmRemoval()
 
         XCTAssertNil(viewModel.pendingRemoval)
         XCTAssertNil(viewModel.errorMessage)
-        XCTAssertEqual(viewModel.details?.members.map(\.user.handle), ["alex", "sofia"])
+        XCTAssertEqual(handles(viewModel), ["alex", "sofia"])
     }
 
     @MainActor
     func testSelfCannotBeRemoved() async throws {
-        let (_, viewModel) = try await loadedGroup()
-        let me = try XCTUnwrap(viewModel.details?.members.first { $0.isSelf })
+        let (_, viewModel) = try await startedGroup()
+        let me = try XCTUnwrap(viewModel.members?.first { $0.isSelf })
 
         viewModel.requestRemoval(me)
 
@@ -108,13 +122,94 @@ final class GroupInfoViewModelTests: XCTestCase {
 
     @MainActor
     func testRemoveFailureIsPresented() async throws {
-        let (client, viewModel) = try await loadedGroup()
-        let luca = try XCTUnwrap(viewModel.details?.members.first { $0.user.handle == "luca" })
-        try await client.removeMember(viewModel.chatId, user: luca.user.userId)
+        let (client, viewModel) = try await startedGroup()
+        let luca = try XCTUnwrap(viewModel.members?.first { $0.user.handle == "luca" })
+        viewModel.stop()
+        try await client.removeMember(chatId: viewModel.chatId, userId: luca.user.userId)
 
         viewModel.requestRemoval(luca)
         await viewModel.confirmRemoval()
 
-        XCTAssertEqual(viewModel.errorMessage, ErrorPresenter.message(for: GimError.notFound))
+        XCTAssertEqual(
+            viewModel.errorMessage, ErrorPresenter.message(for: GimError.NotFound(reason: "member user-luca")))
     }
+
+    @MainActor
+    func testRequeriesWhenMembershipChangesElsewhere() async throws {
+        let (client, viewModel) = try await startedGroup()
+
+        try await client.addMembers(chatId: viewModel.chatId, userIds: ["user-nikos"])
+        await eventually { viewModel.members?.count == 4 }
+
+        try await client.removeMember(chatId: viewModel.chatId, userId: "user-sofia")
+        await eventually { self.handles(viewModel) == ["alex", "luca", "nikos"] }
+    }
+
+    func testMembershipChangeDetection() {
+        let change = TimelineItem.membershipChange(userName: "Luca", change: .added, atMs: 0)
+        let separator = TimelineItem.dateSeparator(dayStartMs: 0)
+        XCTAssertTrue(GroupInfoViewModel.containsMembershipChange([.pushBack(value: change)]))
+        XCTAssertTrue(GroupInfoViewModel.containsMembershipChange([.append(values: [separator, change])]))
+        XCTAssertTrue(GroupInfoViewModel.containsMembershipChange([.popBack, .insert(index: 0, value: change)]))
+        XCTAssertFalse(GroupInfoViewModel.containsMembershipChange([.pushBack(value: separator), .remove(index: 0)]))
+    }
+
+    @MainActor
+    func testNotImplementedChatMembersFallsBackToMemberCount() async throws {
+        let (client, _) = await connected(makeDemoClient())
+        await client.failChatMembers(with: .NotImplemented)
+        let viewModel = await started(client, chatId: FakeGimClient.demoGroupChatId)
+
+        XCTAssertTrue(viewModel.membersUnavailable)
+        XCTAssertNil(viewModel.members)
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertEqual(viewModel.summary?.memberCount, 4)
+        XCTAssertTrue(viewModel.canEditMembers)
+        XCTAssertFalse(viewModel.canRemoveMembers)
+        viewModel.requestRemoval(GroupInfoViewModel.Member(user: FakeDemoPeers.luca, isSelf: false))
+        XCTAssertNil(viewModel.pendingRemoval)
+
+        // Adding still works; the count follows the chat list.
+        viewModel.memberHandle = "kai"
+        await viewModel.addMember()
+        XCTAssertEqual(viewModel.errorMessage, "No one uses the handle @kai.")
+
+        await client.failChatMembers(with: nil)
+        await viewModel.load()
+        XCTAssertFalse(viewModel.membersUnavailable)
+        XCTAssertEqual(viewModel.members?.count, 4)
+        XCTAssertTrue(viewModel.canRemoveMembers)
+    }
+
+    @MainActor
+    func testRenameGroup() async throws {
+        let (_, viewModel) = try await startedGroup()
+        XCTAssertNil(viewModel.nameToSave)
+
+        viewModel.editedName = "  Autumn Regatta "
+        XCTAssertEqual(viewModel.nameToSave, "Autumn Regatta")
+        await viewModel.saveName()
+
+        await eventually { viewModel.summary?.name == "Autumn Regatta" }
+        XCTAssertNil(viewModel.nameToSave)
+        XCTAssertNil(viewModel.errorMessage)
+    }
+
+    @MainActor
+    func testLeaveGroup() async throws {
+        let (client, viewModel) = try await startedGroup()
+
+        await viewModel.leave()
+
+        XCTAssertTrue(viewModel.hasLeft)
+        XCTAssertNil(viewModel.errorMessage)
+        let list = await first(try await ListenerBridge.chatList(client))
+        var chats: [ChatSummary] = []
+        try DiffApplier.apply(try XCTUnwrap(list), to: &chats)
+        XCTAssertFalse(chats.contains { $0.chatId == viewModel.chatId })
+    }
+}
+
+private enum FakeDemoPeers {
+    static let luca = UserProfile(userId: "user-luca", handle: "luca", displayName: "Luca Bianchi")
 }

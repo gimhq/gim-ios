@@ -5,13 +5,13 @@ import SwiftUI
 /// Finds someone by exact handle and opens a direct chat; links to group creation. Shown inside a navigation stack.
 public struct NewChatScreen: View {
     private let client: any GimClientAPI
-    private let onOpen: (ChatId) -> Void
+    private let onOpen: (String) -> Void
 
     @State private var viewModel: NewChatViewModel
     @Environment(\.dismiss) private var dismiss
 
     /// - Parameter onOpen: called with the direct or group chat that was created.
-    public init(client: any GimClientAPI, onOpen: @escaping (ChatId) -> Void) {
+    public init(client: any GimClientAPI, onOpen: @escaping (String) -> Void) {
         self.client = client
         self.onOpen = onOpen
         _viewModel = State(initialValue: NewChatViewModel(client: client))
@@ -89,7 +89,7 @@ struct UserRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            AvatarView(id: user.userId, name: user.displayName, avatarPath: user.avatarPath, size: 40)
+            AvatarView(id: user.userId, name: user.displayName, avatarPath: nil, size: 40)
             VStack(alignment: .leading) {
                 Text(user.displayName).foregroundStyle(.primary)
                 Text(detail ?? "@\(user.handle)")
