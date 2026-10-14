@@ -60,21 +60,10 @@ private struct SignedInView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            ChatListScreen(client: client) { chatId in
-                path.append(chatId)
-            }
-            .navigationDestination(for: ChatId.self) { chatId in
-                ChatScreen(client: client, chatId: chatId)
-            }
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        showsSettings = true
-                    } label: {
-                        Label("Settings", systemImage: "gearshape")
-                    }
+            ChatListScreen(client: client, onOpen: { path.append($0) }, onOpenSettings: { showsSettings = true })
+                .navigationDestination(for: ChatId.self) { chatId in
+                    ChatScreen(client: client, chatId: chatId)
                 }
-            }
         }
         .sheet(isPresented: $showsSettings) {
             SettingsSheet(session: session, signOut: signOut)
