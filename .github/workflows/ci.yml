@@ -115,9 +115,11 @@ jobs:
           path: ${{ runner.temp }}/results/*.xcresult
           if-no-files-found: ignore
 
+  # The canonical E2E path is scripts/e2e-hub.sh + scripts/mac-gate.sh e2e on the Mac build host. The runner can't start
+  # a gim-hub itself, so this job only runs when the GIM_E2E_HUB_URL repository variable points at a reachable hub.
   ios-e2e:
-    name: iOS E2E (XCUITest + gim-server)
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    name: iOS E2E (XCUITest + gim-hub)
+    if: (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) && vars.GIM_E2E_HUB_URL != ''
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
@@ -127,16 +129,8 @@ jobs:
         with:
           xcode-version: latest-stable
 
-      # ci/fixtures/gim-server/SOURCE.md pins no Bun version; this is the version the fixture was verified with.
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.4.2
-
       - name: Install tools
         run: brew install xcodegen xcbeautify
-
-      - name: Start gim-server
-        run: scripts/start-gim-server.sh start 8080
 
       - name: Generate Xcode project
         run: xcodegen generate
@@ -170,6 +164,8 @@ jobs:
       # application-identifier entitlement, so its Keychain writes fail (errSecMissingEntitlement) and onboarding
       # stops with a storage error. The raw log is kept next to the xcresult; xcbeautify drops failure locations.
       - name: Run XCUITest smoke
+        env:
+          TEST_RUNNER_GIM_E2E_SERVER_URL: ${{ vars.GIM_E2E_HUB_URL }}
         run: |
           set -o pipefail
           mkdir -p "$RUNNER_TEMP/results"
@@ -184,28 +180,24 @@ jobs:
             DEVELOPMENT_TEAM= \
             2>&1 | tee "$RUNNER_TEMP/results/xcodebuild-e2e.log" | xcbeautify
 
-      # MessagingSmokeTests prints one "[e2e-summary] a=pass ..." line from a teardown block, also on failure.
+      # Each test class prints one "[e2e-summary] <class> ..." line from a teardown block, also on failure.
       - name: E2E step summary
         if: always()
         run: |
-          LINE=$(grep -o '\[e2e-summary\].*' "$RUNNER_TEMP/results/xcodebuild-e2e.log" 2>/dev/null | tail -1 || true)
-          if [ -z "$LINE" ]; then
+          LINES=$(grep -o '\[e2e-summary\].*' "$RUNNER_TEMP/results/xcodebuild-e2e.log" 2>/dev/null || true)
+          if [ -z "$LINES" ]; then
             echo "::notice::No [e2e-summary] line in xcodebuild-e2e.log"
             exit 0
           fi
-          echo "$LINE"
+          echo "$LINES"
           {
             echo '### iOS E2E steps'
             echo '```'
-            echo "$LINE"
+            echo "$LINES"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Stop gim-server
-        if: always()
-        run: scripts/start-gim-server.sh stop
-
-      - name: Upload xcresult and server log
+      - name: Upload xcresult and xcodebuild log
         if: failure()
         uses: actions/upload-artifact@v4
         with:
@@ -213,9 +205,7 @@ jobs:
           path: |
             ${{ runner.temp }}/results/*.xcresult
             ${{ runner.temp }}/results/xcodebuild-e2e.log
-            .gim-server/server.log
           if-no-files-found: ignore
-          include-hidden-files: true
 
       - name: Upload xcodebuild log
         if: always()
