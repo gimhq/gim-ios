@@ -72,3 +72,29 @@ The simulator shares the host's loopback, so the test uses `http://127.0.0.1:808
 `TEST_RUNNER_GIM_E2E_SERVER_URL` to use another server. For the app-to-peer photo step, add an image to the simulator
 first (`xcrun simctl addmedia booted GIM/UITests/Fixtures/photo-library-seed.png`); when the system photo picker
 can't be automated the step is skipped with a screenshot attachment. CI runs the same test in the `ios-e2e` job.
+
+## Mac gate
+
+```sh
+scripts/mac-gate.sh build-test [--sha <commit>] [--keep]
+scripts/mac-gate.sh e2e --hub-url <url> [--sha <commit>] [--keep]
+```
+
+Runs from station against the shared Mac build host (`GIM_MAC_HOST`, default `a@100.99.1.8`): ships `git archive` of
+the commit (default `HEAD`, clean tree required) to `~/gim-ci/<id>-<short sha>/` (`GIM_GATE_ID`, default the branch
+name's last component), takes the `~/gim-ci/.lock-xcode` lock and creates a simulator for the run. `build-test` builds
+the app and runs the GIMKit and GIMUI package tests; `e2e` also runs `GIMUITests` against the hub at `<url>`. Logs,
+the `[e2e-summary]` line and zipped xcresult bundles land in `.tmp/mac/<short sha>/`; the last line is the
+`[mac-gate] mode=… build=… kit=… ui=… e2e=…` summary. The Mac work dir is kept on failure or with `--keep`.
+
+## E2E hub
+
+```sh
+url=$(scripts/e2e-hub.sh start | tail -1)   # [--sha <gim-hub commit>] [--port <port>], default port 18080
+scripts/mac-gate.sh e2e --hub-url "$url"
+scripts/e2e-hub.sh stop
+```
+
+Builds `ai-agent/gim-hub:<short sha>` from the gim-hub repo (`GIM_HUB_REPO`, pinned commit in the script or
+`GIM_HUB_SHA`) if missing and runs a fresh standalone hub in Docker. The printed URL is the Docker host as seen from
+the Mac (`GIM_E2E_HUB_HOST`, default `100.99.1.1`); `scripts/e2e-hub.sh url` prints it again.
