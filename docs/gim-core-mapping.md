@@ -3,7 +3,7 @@
 `Packages/GIMKit/Sources/GIMClientKit` mirrors the UniFFI Swift bindings of gim-core so that switching to the real
 `GIMCore.xcframework` is a mechanical swap.
 
-- Mirrored commit: gim-core `7df3f84` (`bindings/gim-ffi/src/`, generated
+- Mirrored commit: gim-core `2d08f38` (`bindings/gim-ffi/src/`, generated
   `bindings/gim-ffi/generated/swift/GIMCore.swift`, contract in `docs/API.md`).
 - Mirror sources: `GimClientAPI.swift` (objects, callback interfaces, hooks, `createClient`) and `Models.swift`
   (records, enums, diffs, errors).
@@ -114,6 +114,9 @@ Renaming a group goes `GroupInfoViewModel.saveName()` → `GimClientAPI.setGroup
 `RealGimClient` → `GIMCore.GimClient.setGroupInfo`.
 
 ## Changes since `e69fcba`
+
+`2d08f38` is a packaging-only change on top of `7df3f84` (the xcframework now links on macOS, fixing
+"ld: LSDA in __eh_frame section not supported"); no API change, the vendored `GIMCore.swift` is byte-identical.
 
 `7df3f84` changes no signature, record, enum or error of the generated bindings; only doc comments and the
 `set_group_info` / `start_sync` UniFFI checksums differ (the vendored xcframework and `GIMCore.swift` must come from
