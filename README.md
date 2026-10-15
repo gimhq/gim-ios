@@ -26,6 +26,11 @@ GIMKit tests also run without Xcode: `swift test --package-path Packages/GIMKit`
 The app uses gim-core by default. Debug builds run against the in-memory `FakeGimClient` instead when launched with
 `-GIMUseFakeCore YES` (scheme → Run → Arguments). Release builds always use gim-core.
 
+## Default server
+
+Onboarding pre-fills the last used server, else the `-GIMDefaultServerURL <url>` launch argument, else the
+`GIM_DEFAULT_SERVER_URL` build setting (Debug: `http://localhost:8080`, Release: empty).
+
 ## Refreshing gim-core
 
 ```sh

@@ -35,6 +35,8 @@ targets:
       properties:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        # Pre-filled server when none was used yet; the `-GIMDefaultServerURL <url>` launch argument overrides it.
+        GIMDefaultServerURL: $(GIM_DEFAULT_SERVER_URL)
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         NSPhotoLibraryUsageDescription: Choose photos to send.
@@ -47,6 +49,11 @@ targets:
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
         TARGETED_DEVICE_FAMILY: "1,2"
+      configs:
+        Debug:
+          GIM_DEFAULT_SERVER_URL: http://localhost:8080
+        Release:
+          GIM_DEFAULT_SERVER_URL: ""
 schemes:
   # Builds and runs the app only. There is no hosted test target: package tests run from each package directory,
   # e.g. `xcodebuild test -scheme GIMUI` in Packages/GIMUI (or `GIMKit-Package` in Packages/GIMKit).
