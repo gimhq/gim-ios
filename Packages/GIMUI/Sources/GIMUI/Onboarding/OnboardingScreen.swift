@@ -2,34 +2,47 @@ import GIMClientKit
 import GIMFeatures
 import SwiftUI
 
-/// Registration form: server address, handle and display name.
+/// Onboarding: the server address and the choice between creating, linking and restoring an identity; after the
+/// identity was created, the recovery code and handle steps.
 public struct OnboardingScreen: View {
     @Bindable private var viewModel: OnboardingViewModel
-    @FocusState private var focusedField: Field?
-
-    private enum Field: Hashable {
-        case serverUrl
-        case handle
-        case displayName
-    }
+    @FocusState private var focusesServerUrl: Bool
 
     public init(viewModel: OnboardingViewModel) {
         self.viewModel = viewModel
     }
 
     public var body: some View {
-        NavigationStack {
+        switch viewModel.stage {
+        case .recoveryCode(let recoveryCode):
+            NavigationStack { RecoveryCodeScreen(viewModel: recoveryCode) }
+        case .claimHandle(let claimHandle):
+            NavigationStack { ClaimHandleScreen(viewModel: claimHandle, allowsSkip: true) }
+        case nil:
+            start
+        }
+    }
+
+    private var start: some View {
+        NavigationStack(path: $viewModel.path) {
             Form {
+                if viewModel.showsLocalStateResetNotice {
+                    Section {
+                        Label("Local history on this device was reset.", systemImage: "info.circle")
+                        Button("Dismiss") { viewModel.dismissLocalStateResetNotice() }
+                    }
+                    .accessibilityIdentifier("onboarding.resetNotice")
+                }
+
                 Section {
                     TextField("https://gim.example.eu", text: $viewModel.serverUrl)
                         .textContentType(.URL)
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                        .focused($focusedField, equals: .serverUrl)
+                        .focused($focusesServerUrl)
                         .accessibilityIdentifier("onboarding.serverUrl")
-                        .submitLabel(.next)
-                        .onSubmit { focusedField = .handle }
+                        .submitLabel(.done)
                     ValidationMessage(text: viewModel.serverUrlError)
                 } header: {
                     Text("Server")
@@ -37,65 +50,56 @@ public struct OnboardingScreen: View {
                     Text("The address of your gim server, for example a machine on your local network.")
                 }
 
-                Section("Profile") {
-                    TextField("Handle", text: $viewModel.handle)
-                        .textContentType(.username)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .focused($focusedField, equals: .handle)
-                        .accessibilityIdentifier("onboarding.handle")
-                        .submitLabel(.next)
-                        .onSubmit { focusedField = .displayName }
-                    ValidationMessage(text: viewModel.handleError)
-
-                    TextField("Display name", text: $viewModel.displayName)
-                        .textContentType(.name)
-                        .focused($focusedField, equals: .displayName)
-                        .accessibilityIdentifier("onboarding.displayName")
-                        .submitLabel(.go)
-                        .onSubmit(submit)
-                    ValidationMessage(text: viewModel.displayNameError)
-                }
-
                 Section {
-                    Button(action: submit) {
+                    Button {
+                        choose(.createIdentity)
+                    } label: {
                         HStack {
                             Spacer()
-                            if viewModel.isSubmitting {
-                                ProgressView()
-                            } else {
-                                Text("Create Account").bold()
-                            }
+                            Text("Create New Identity").bold()
                             Spacer()
                         }
                     }
-                    .disabled(viewModel.isSubmitting)
-                    .accessibilityIdentifier("onboarding.submit")
-                } footer: {
-                    if let error = viewModel.errorMessage {
-                        Text(error).foregroundStyle(.red)
-                    }
+                    .accessibilityIdentifier("onboarding.create")
+                    Button("Link to an Existing Device") { choose(.linkDevice) }
+                        .accessibilityIdentifier("onboarding.link")
+                    Button("Restore from Recovery Code") { choose(.restore) }
+                        .accessibilityIdentifier("onboarding.restore")
                 }
             }
             .scrollDismissesKeyboard(.interactively)
-            .disabled(viewModel.isSubmitting)
             .navigationTitle("Welcome to GIM")
-            .toolbar {
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("Done") { focusedField = nil }
-                }
+            .navigationDestination(for: OnboardingRoute.self) { route in
+                destination(route)
             }
         }
     }
 
-    private func submit() {
-        focusedField = nil
-        Task { await viewModel.submit() }
+    @ViewBuilder
+    private func destination(_ route: OnboardingRoute) -> some View {
+        switch route {
+        case .createIdentity:
+            if let createIdentity = viewModel.createIdentity {
+                CreateIdentityScreen(viewModel: createIdentity)
+            }
+        case .linkDevice:
+            if let context = viewModel.context {
+                LinkThisDeviceScreen(context: context)
+            }
+        case .restore:
+            if let context = viewModel.context {
+                RestoreScreen(context: context)
+            }
+        }
+    }
+
+    private func choose(_ route: OnboardingRoute) {
+        focusesServerUrl = false
+        viewModel.choose(route)
     }
 }
 
-private struct ValidationMessage: View {
+struct ValidationMessage: View {
     let text: String?
 
     var body: some View {

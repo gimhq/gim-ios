@@ -3,7 +3,7 @@
 `Packages/GIMKit/Sources/GIMClientKit` mirrors the UniFFI Swift bindings of gim-core so that switching to the real
 `GIMCore.xcframework` is a mechanical swap.
 
-- Mirrored commit: gim-core `2d08f38` (`bindings/gim-ffi/src/`, generated
+- Mirrored commit: gim-core `3724543` (`bindings/gim-ffi/src/`, generated
   `bindings/gim-ffi/generated/swift/GIMCore.swift`, contract in `docs/API.md`).
 - Mirror sources: `GimClientAPI.swift` (objects, callback interfaces, hooks, `createClient`) and `Models.swift`
   (records, enums, diffs, errors).
@@ -18,7 +18,8 @@ Generated records are `Equatable, Hashable` plus `extension …: Sendable`; the 
 | Mirror | GIMCore | Fields |
 |---|---|---|
 | `ClientConfig` | `ClientConfig` | `serverUrl` |
-| `Session` | `Session` | `userId`, `deviceId`, `handle`, `displayName` |
+| `Session` | `Session` | `userId`, `deviceId`, `handle` (empty until `claimHandle`), `displayName` |
+| `DeviceInfo` | `DeviceInfo` | `deviceId`, `createdAtMs: UInt64` (0 for revoked devices), `isCurrent`, `revoked` |
 | `UserProfile` | `UserProfile` | `userId`, `handle`, `displayName` |
 | `ChatSummary` | `ChatSummary` | `chatId`, `kind`, `name`, `avatar: MediaRef?`, `lastMessage: MessagePreview?`, `unreadCount: UInt32`, `updatedAtMs: UInt64`, `memberCount: UInt32` |
 | `MessagePreview` | `MessagePreview` | `senderName`, `text`, `sentAtMs: UInt64`, `isOwn` |
@@ -39,7 +40,7 @@ Generated records are `Equatable, Hashable` plus `extension …: Sendable`; the 
 | `ConnectionState` | `ConnectionState` | `offline`, `connecting`, `connected`, `syncing` |
 | `ChatListDiff` | `ChatListDiff` | `append(values:)`, `clear`, `pushFront(value:)`, `pushBack(value:)`, `popFront`, `popBack`, `insert(index:value:)`, `set(index:value:)`, `remove(index:)`, `truncate(length:)`, `reset(values:)` |
 | `TimelineDiff` | `TimelineDiff` | same cases as `ChatListDiff`, with `TimelineItem` values |
-| `GimError` | `GimError` | `Network(reason:)`, `NotRegistered`, `InvalidInput(reason:)`, `NotFound(reason:)`, `Crypto(reason:)`, `Storage(reason:)`, `Server(status: UInt16, reason:)`, `Cancelled`, `NotImplemented`, `Internal(reason:)` |
+| `GimError` | `GimError` | `Network(reason:)`, `NotRegistered`, `InvalidInput(reason:)`, `NotFound(reason:)`, `Crypto(reason:)`, `Storage(reason:)`, `Server(status: UInt16, reason:)`, `RetryLater(status: UInt16, retryAfterSecs: UInt64, reason:)`, `Cancelled`, `NotImplemented`, `Internal(reason:)` |
 
 `GimError` keeps the generated UpperCamelCase case names (hence the `swift-format-ignore: AlwaysUseLowerCamelCase`
 on its declaration) and conforms to `Error, Sendable, Hashable, LocalizedError` with
@@ -53,7 +54,7 @@ on its declaration) and conforms to `Error, Sendable, Hashable, LocalizedError` 
 | `TimelineListener` | `TimelineListener` | `onUpdate(diffs: [TimelineDiff])` |
 | `ConnectionStateListener` | `ConnectionStateListener` | `onChange(state: ConnectionState)` |
 | `TypingListener` | `TypingListener` | `onUpdate(userIds: [String])` |
-| `PlatformHooks` | `PlatformHooks` | `secureStoreGet(key:) -> Data?`, `secureStoreSet(key:value:) throws`, `secureStoreDelete(key:)`, `dataDir() -> String`, `isNetworkReachable() -> Bool` |
+| `PlatformHooks` | `PlatformHooks` | `secureStoreGet(key:) throws -> Data?`, `secureStoreSet(key:value:) throws`, `secureStoreDelete(key:)`, `dataDir() -> String`, `isNetworkReachable() -> Bool` |
 
 All are `AnyObject, Sendable` protocols in both. The mirror spells parameter types `any ChatListListener`; the
 generated code writes the bare protocol name, which is the same type.
@@ -64,21 +65,38 @@ generated code writes the bare protocol name, which is the same type.
 |---|---|---|
 | `protocol GimClientAPI` | `protocol GimClientProtocol` / `open class GimClient` | Intentional: ViewModels depend on the protocol so `FakeGimClient` can implement it. |
 | `protocol Timeline` | `open class Timeline: TimelineProtocol` | Intentional: protocol instead of class. `chatId()`, `addListener(listener:) async -> TaskHandle`, `paginateBackwards(count: UInt16) async throws -> Bool`. |
+| `protocol LinkSession` | `open class LinkSession: LinkSessionProtocol` | Intentional: protocol instead of class. `qrString() -> String`. `RealGimClient.waitLink` only accepts the `RealLinkSession` it created. |
+| `protocol PendingApproval` | `open class PendingApproval: PendingApprovalProtocol` | Intentional: protocol instead of class. `deviceId() -> String`, `sas() -> String`. `RealGimClient.confirmApproval` only accepts the `RealPendingApproval` it created. |
 | `final class TaskHandle` | `open class TaskHandle: TaskHandleProtocol` | Intentional: concrete class with `init(onCancel:)`. `cancel()`, `isFinished() -> Bool`; releasing the last reference cancels, like the Rust `Drop`. No `TaskHandleProtocol` mirror. |
-| `createClient(config:hooks:) async throws -> any GimClientAPI` | `createClient(config:hooks:) async throws -> GimClient` | Mirror validates the URL like gim-core (`InvalidInput(reason: "server_url: …")`) and returns an unregistered demo `FakeGimClient` that seeds the demo chats on `register`. |
+| `createClient(config:hooks:) async throws -> any GimClientAPI` | `createClient(config:hooks:) async throws -> GimClient` | Mirror validates the URL like gim-core (`InvalidInput(reason: "server_url: …")`) and returns a demo `FakeGimClient` without a session that seeds the demo chats on `createIdentity`. |
 | — | `coreVersion()`, `ciphersuiteName()` | Not mirrored; nothing uses them yet. |
 | — | `*Impl` classes, `NoHandle`, `uniffi*` | Generated plumbing, not mirrored. |
 
 ## GimClient methods
 
-Every method of `GimClientProtocol` at `7df3f84`, with identical labels, argument types and `async`/`throws`. The
-only return-type differences are `any Timeline` (generated: `Timeline`) and the listener parameter spelling above.
+Every method of `GimClientProtocol` at `3724543`, with identical labels, argument types and `async`/`throws`. The
+only type differences are `any Timeline` / `any LinkSession` / `any PendingApproval` (generated: the classes) and the
+listener parameter spelling above.
 
 | Mirror (`GimClientAPI`) | GIMCore (`GimClientProtocol`) |
 |---|---|
 | `session() async throws -> Session?` | same |
-| `register(handle:displayName:) async throws -> Session` | same |
+| `userId() -> String?` | same (synchronous) |
+| `localStateReset() -> Bool` | same (synchronous) |
 | `signOut() async throws` | same |
+| `createIdentity(displayName:) async throws -> String` | same; returns the recovery code |
+| `restoreFromRecovery(userId:recoveryCode:revokeOthers:) async throws` | same |
+| `startLink(hubs: [String]) throws -> any LinkSession` | `-> LinkSession` (synchronous) |
+| `waitLink(link: any LinkSession) async throws -> String` | `link: LinkSession`; returns the SAS |
+| `confirmLink(accepted:) async throws` | same |
+| `approveLink(qrString:) async throws -> any PendingApproval` | `-> PendingApproval` |
+| `confirmApproval(approval: any PendingApproval, accepted:) async throws` | `approval: PendingApproval` |
+| `devices() async throws -> [DeviceInfo]` | same |
+| `userDevices(userId:) async throws -> [DeviceInfo]` | same |
+| `revokeDevice(deviceId:) async throws` | same |
+| `setDisplayName(name:) async throws` | same |
+| `claimHandle(handle:) async throws` | same |
+| `releaseHandle() async throws` | same |
 | `startSync() async throws` | same |
 | `stopSync() async throws` | same |
 | `setNetworkReachable(reachable: Bool)` | same (synchronous, never throws) |
@@ -100,6 +118,7 @@ only return-type differences are `any Timeline` (generated: `Timeline`) and the 
 | `cancelSend(chatId:messageId:) async throws` | same |
 | `markRead(chatId:upToMessageId:) async throws` | same |
 | `setTyping(chatId:active:) async throws` | same |
+| `stopTyping(chatId:) async throws` | same |
 | `fetchMedia(chatId:messageId:destPath:) async throws -> String` | same |
 | `fetchThumbnail(chatId:messageId:destPath:) async throws -> String?` | same |
 | `chatList(listener:) async throws -> TaskHandle` | same |
@@ -112,6 +131,30 @@ a `TimelineItem.membershipChange` arrives. When a query fails before any list ha
 `ChatSummary.memberCount` (no member list, no removal); a list that loaded before stays on later failures.
 Renaming a group goes `GroupInfoViewModel.saveName()` → `GimClientAPI.setGroupInfo(name:)` →
 `RealGimClient` → `GIMCore.GimClient.setGroupInfo`.
+
+## Changes since `2d08f38`
+
+`3724543` (vendored with `scripts/sync-gim-core.sh --from-dir`) adds identity and devices (gim-core `docs/API.md`,
+"Identity and devices"; `docs/identity.md`, "Device link flow"). Diff of the generated `GIMCore.swift`:
+
+- Removed: `GimClientProtocol.register(handle:displayName:) -> Session`. A new user is `createIdentity(displayName:)`
+  (returns the recovery code) followed by an optional `claimHandle(handle:)`; `Session.handle` is empty until then.
+- Added `GimClientProtocol` methods: `createIdentity`, `restoreFromRecovery`, `startLink` (synchronous `throws`),
+  `waitLink`, `confirmLink`, `approveLink`, `confirmApproval`, `devices`, `userDevices`, `revokeDevice`,
+  `setDisplayName`, `claimHandle`, `releaseHandle`, `stopTyping`, `userId()` and `localStateReset()` (both
+  synchronous, non-throwing).
+- Added objects `LinkSession` (`qrString()`) and `PendingApproval` (`deviceId()`, `sas()`), record `DeviceInfo`.
+- `GimError`: new case `RetryLater(status:retryAfterSecs:reason:)`; no case was renamed or removed. `NotRegistered`
+  now also means "this device was revoked".
+- `PlatformHooks.secureStoreGet(key:)` now `throws`: the app must throw when the keystore can't be read
+  (`KeychainSecureStorage` throws `GimError.Storage` for any `SecItemCopyMatching` status other than
+  `errSecSuccess` / `errSecItemNotFound`) instead of reporting the secret as absent.
+- Doc-only: "gim-server" became "the hub" (`ClientConfig.serverUrl`, `Server`).
+
+App adaptations: onboarding calls `createIdentity` (unless the client already has a user, after a failed claim) then
+`claimHandle`, and discards the recovery code until I2c; a taken handle is now `Server(409)`. `ErrorPresenter` maps
+`RetryLater`. `FakeGimClient` simulates the new calls deterministically (recovery code in the core format, fixed SAS
+`"123 456"`).
 
 ## Changes since `e69fcba`
 

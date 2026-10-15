@@ -10,14 +10,19 @@ public final class KeychainSecureStorage: Sendable {
         self.service = service
     }
 
-    /// `nil` when the key does not exist or the Keychain can't be read.
-    public func secureStoreGet(key: String) -> Data? {
+    /// `nil` when the key does not exist. Throws `GimError.Storage` when the Keychain can't be read (e.g.
+    /// `errSecInteractionNotAllowed` while the device is locked), so gim-core never mistakes the secret for absent.
+    public func secureStoreGet(key: String) throws -> Data? {
         var query = baseQuery(key: key)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
         var result: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess else { return nil }
-        return result as? Data
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        switch status {
+        case errSecSuccess: return result as? Data
+        case errSecItemNotFound: return nil
+        default: throw GimError.Storage(reason: "Keychain read failed with status \(status)")
+        }
     }
 
     /// Throws `GimError.Storage` when the Keychain rejects the write.

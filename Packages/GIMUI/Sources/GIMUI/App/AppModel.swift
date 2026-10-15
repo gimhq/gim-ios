@@ -29,7 +29,8 @@ public final class AppModel {
     public private(set) var session: Session?
     /// Server of the signed-in client.
     public private(set) var serverUrl: String?
-    /// Set when the platform hooks could not be created or the session could not be read while launching.
+    /// Set when the platform hooks, the client (e.g. the keystore is locked) or the session could not be read while
+    /// launching.
     public private(set) var launchError: String?
     public private(set) var onboarding: OnboardingViewModel?
 
@@ -84,7 +85,12 @@ public final class AppModel {
                 return
             }
             let config = ClientConfig(serverUrl: url)
-            guard let client = try? await factory.make(config: config, hooks: hooks) else {
+            let client: any GimClientAPI
+            do {
+                client = try await factory.make(config: config, hooks: hooks)
+            } catch {
+                // The keystore can't be read (e.g. locked): retry instead of onboarding over the existing identity.
+                if let error = error as? GimError, case .Storage = error { throw error }
                 // The stored URL is no longer accepted; let the user fix it.
                 showOnboarding(hooks: hooks, serverUrl: url, client: nil)
                 return
@@ -92,7 +98,8 @@ public final class AppModel {
             if let session = try await client.session() {
                 showReady(client, config: config, session: session)
             } else {
-                showOnboarding(hooks: hooks, serverUrl: url, client: client)
+                showOnboarding(
+                    hooks: hooks, serverUrl: url, client: client, localStateReset: client.localStateReset())
             }
         } catch {
             launchError = ErrorPresenter.message(for: error)
@@ -133,6 +140,12 @@ public final class AppModel {
         return wipeError
     }
 
+    /// Re-reads the session, e.g. after claiming a handle in Settings.
+    public func refreshSession() async {
+        guard let client, let session = try? await client.session(), client === self.client else { return }
+        self.session = session
+    }
+
     private func defaultServerUrl(stored: String?) -> String {
         OnboardingValidation.defaultServerUrl(
             stored: stored, argument: defaults.string(forKey: Self.defaultServerUrlKey), bundled: bundledServerUrl)
@@ -145,9 +158,12 @@ public final class AppModel {
         return hooks
     }
 
-    private func showOnboarding(hooks: any PlatformHooks, serverUrl: String, client: (any GimClientAPI)?) {
-        onboarding = OnboardingViewModel(factory: factory, hooks: hooks, serverUrl: serverUrl, client: client) {
-            [weak self] registration in
+    private func showOnboarding(
+        hooks: any PlatformHooks, serverUrl: String, client: (any GimClientAPI)?, localStateReset: Bool = false
+    ) {
+        onboarding = OnboardingViewModel(
+            factory: factory, hooks: hooks, serverUrl: serverUrl, client: client, localStateReset: localStateReset
+        ) { [weak self] registration in
             self?.showReady(registration.client, config: registration.config, session: registration.session)
         }
         phase = .onboarding

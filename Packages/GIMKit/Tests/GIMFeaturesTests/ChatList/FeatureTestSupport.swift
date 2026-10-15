@@ -47,7 +47,7 @@ final class TestHooks: PlatformHooks, @unchecked Sendable {
         directory = dataDir
     }
 
-    func secureStoreGet(key: String) -> Data? { lock.withLock { values[key] } }
+    func secureStoreGet(key: String) throws -> Data? { lock.withLock { values[key] } }
     func secureStoreSet(key: String, value: Data) throws { lock.withLock { values[key] = value } }
     func secureStoreDelete(key: String) { _ = lock.withLock { values.removeValue(forKey: key) } }
     func dataDir() -> String { directory }

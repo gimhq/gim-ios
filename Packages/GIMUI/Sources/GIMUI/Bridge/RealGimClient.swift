@@ -29,12 +29,76 @@ public final class RealGimClient: GimClientAPI {
         try await bridged { try await core.session().map { GIMClientKit.Session($0) } }
     }
 
-    public func register(handle: String, displayName: String) async throws -> GIMClientKit.Session {
-        try await bridged { try await GIMClientKit.Session(core.register(handle: handle, displayName: displayName)) }
+    public func userId() -> String? {
+        core.userId()
+    }
+
+    public func localStateReset() -> Bool {
+        core.localStateReset()
     }
 
     public func signOut() async throws {
         try await bridged { try await core.signOut() }
+    }
+
+    public func createIdentity(displayName: String) async throws -> String {
+        try await bridged { try await core.createIdentity(displayName: displayName) }
+    }
+
+    public func restoreFromRecovery(userId: String, recoveryCode: String, revokeOthers: Bool) async throws {
+        try await bridged {
+            try await core.restoreFromRecovery(userId: userId, recoveryCode: recoveryCode, revokeOthers: revokeOthers)
+        }
+    }
+
+    public func startLink(hubs: [String]) throws -> any GIMClientKit.LinkSession {
+        try bridgedSync { try RealLinkSession(core.startLink(hubs: hubs)) }
+    }
+
+    public func waitLink(link: any GIMClientKit.LinkSession) async throws -> String {
+        guard let link = link as? RealLinkSession else {
+            throw GIMClientKit.GimError.InvalidInput(reason: "link was not started by this client")
+        }
+        return try await bridged { try await core.waitLink(link: link.core) }
+    }
+
+    public func confirmLink(accepted: Bool) async throws {
+        try await bridged { try await core.confirmLink(accepted: accepted) }
+    }
+
+    public func approveLink(qrString: String) async throws -> any GIMClientKit.PendingApproval {
+        try await bridged { try await RealPendingApproval(core.approveLink(qrString: qrString)) }
+    }
+
+    public func confirmApproval(approval: any GIMClientKit.PendingApproval, accepted: Bool) async throws {
+        guard let approval = approval as? RealPendingApproval else {
+            throw GIMClientKit.GimError.InvalidInput(reason: "approval was not created by this client")
+        }
+        try await bridged { try await core.confirmApproval(approval: approval.core, accepted: accepted) }
+    }
+
+    public func devices() async throws -> [GIMClientKit.DeviceInfo] {
+        try await bridged { try await core.devices().map { GIMClientKit.DeviceInfo($0) } }
+    }
+
+    public func userDevices(userId: String) async throws -> [GIMClientKit.DeviceInfo] {
+        try await bridged { try await core.userDevices(userId: userId).map { GIMClientKit.DeviceInfo($0) } }
+    }
+
+    public func revokeDevice(deviceId: String) async throws {
+        try await bridged { try await core.revokeDevice(deviceId: deviceId) }
+    }
+
+    public func setDisplayName(name: String) async throws {
+        try await bridged { try await core.setDisplayName(name: name) }
+    }
+
+    public func claimHandle(handle: String) async throws {
+        try await bridged { try await core.claimHandle(handle: handle) }
+    }
+
+    public func releaseHandle() async throws {
+        try await bridged { try await core.releaseHandle() }
     }
 
     public func startSync() async throws {
@@ -125,6 +189,10 @@ public final class RealGimClient: GimClientAPI {
         try await bridged { try await core.setTyping(chatId: chatId, active: active) }
     }
 
+    public func stopTyping(chatId: String) async throws {
+        try await bridged { try await core.stopTyping(chatId: chatId) }
+    }
+
     public func fetchMedia(chatId: String, messageId: String, destPath: String) async throws -> String {
         try await bridged { try await core.fetchMedia(chatId: chatId, messageId: messageId, destPath: destPath) }
     }
@@ -185,5 +253,35 @@ final class RealTimeline: GIMClientKit.Timeline {
 
     func paginateBackwards(count: UInt16) async throws -> Bool {
         try await bridged { try await core.paginateBackwards(count: count) }
+    }
+}
+
+/// Adapts gim-core's generated `LinkSession` object to the mirror `LinkSession` protocol.
+final class RealLinkSession: GIMClientKit.LinkSession {
+    let core: GIMCore.LinkSession
+
+    init(_ core: GIMCore.LinkSession) {
+        self.core = core
+    }
+
+    func qrString() -> String {
+        core.qrString()
+    }
+}
+
+/// Adapts gim-core's generated `PendingApproval` object to the mirror `PendingApproval` protocol.
+final class RealPendingApproval: GIMClientKit.PendingApproval {
+    let core: GIMCore.PendingApproval
+
+    init(_ core: GIMCore.PendingApproval) {
+        self.core = core
+    }
+
+    func deviceId() -> String {
+        core.deviceId()
+    }
+
+    func sas() -> String {
+        core.sas()
     }
 }

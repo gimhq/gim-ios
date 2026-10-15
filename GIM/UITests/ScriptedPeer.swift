@@ -17,13 +17,12 @@ final class ScriptedPeer: Sendable {
         self.directory = directory
     }
 
-    /// Registers `handle` on `serverUrl`, starts syncing and follows the chat list.
+    /// Creates an identity on `serverUrl`, claims `handle`, starts syncing and follows the chat list.
     static func register(serverUrl: String, handle: String, displayName: String) async throws -> ScriptedPeer {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("gim-peer-\(UUID().uuidString)")
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let client = try await createClient(
-            config: ClientConfig(serverUrl: serverUrl), hooks: InMemoryPlatformHooks(dataDirectory: directory.path))
-        let session = try await client.register(handle: handle, displayName: displayName)
+        let (client, directory) = try await makeClient(serverUrl: serverUrl)
+        _ = try await client.createIdentity(displayName: displayName)
+        try await client.claimHandle(handle: handle)
+        guard let session = try await client.session() else { throw GimError.NotRegistered }
         try await client.startSync()
         let peer = ScriptedPeer(session: session, client: client, directory: directory)
         peer.chats.handle = try await client.chatList(listener: peer.chats)
@@ -77,6 +76,65 @@ final class ScriptedPeer: Sendable {
     }
 }
 
+/// A fresh gim-core client in the UI test runner that links itself as a new device of the app's user: it plays the
+/// new-device side of gim-core's device link flow (`startLink`, `waitLink`, `confirmLink`) against the app as the
+/// old device.
+final class ScriptedLinkingDevice: Sendable {
+    /// The link code to paste into the app (the QR code's text).
+    let qrString: String
+    private let client: GimClient
+    private let link: LinkSession
+    private let directory: URL
+
+    private init(client: GimClient, link: LinkSession, directory: URL) {
+        self.client = client
+        self.link = link
+        self.directory = directory
+        qrString = link.qrString()
+    }
+
+    /// Starts a link on a new client without a session; the old device may post the bundle to `serverUrl`.
+    static func startLink(serverUrl: String) async throws -> ScriptedLinkingDevice {
+        let (client, directory) = try await makeClient(serverUrl: serverUrl)
+        let link = try client.startLink(hubs: [serverUrl])
+        return ScriptedLinkingDevice(client: client, link: link, directory: directory)
+    }
+
+    /// Waits for the old device's approval, signs in as the new device and returns the SAS to compare.
+    func waitLink() async throws -> String {
+        try await client.waitLink(link: link)
+    }
+
+    func confirmLink(accepted: Bool) async throws {
+        try await client.confirmLink(accepted: accepted)
+    }
+
+    /// The session once `waitLink` signed in.
+    func session() async throws -> Session? {
+        try await client.session()
+    }
+
+    /// The devices of the user this device is linked to.
+    func devices() async throws -> [DeviceInfo] {
+        try await client.devices()
+    }
+
+    /// Stops syncing and removes the data directory.
+    func shutdown() async {
+        try? await client.stopSync()
+        try? FileManager.default.removeItem(at: directory)
+    }
+}
+
+/// A gim-core client with its own temporary data directory and in-memory secrets.
+private func makeClient(serverUrl: String) async throws -> (GimClient, URL) {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent("gim-peer-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let client = try await createClient(
+        config: ClientConfig(serverUrl: serverUrl), hooks: InMemoryPlatformHooks(dataDirectory: directory.path))
+    return (client, directory)
+}
+
 /// Secrets in a dictionary instead of the Keychain; they disappear with the test process.
 private final class InMemoryPlatformHooks: PlatformHooks, @unchecked Sendable {
     private let lock = NSLock()
@@ -87,7 +145,7 @@ private final class InMemoryPlatformHooks: PlatformHooks, @unchecked Sendable {
         self.dataDirectory = dataDirectory
     }
 
-    func secureStoreGet(key: String) -> Data? {
+    func secureStoreGet(key: String) throws -> Data? {
         lock.withLock { secrets[key] }
     }
 
