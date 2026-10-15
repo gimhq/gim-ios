@@ -176,7 +176,7 @@ if [ "$mode" = e2e ] && [ "$build" = ok ]; then
     TEST_RUNNER_GIM_E2E_SERVER_URL=$hub_url run e2e xcodebuild test -project GIM.xcodeproj -scheme GIM \
         -only-testing:GIMUITests -destination "$destination" -derivedDataPath "$derived" \
         -resultBundlePath "$results/GIM-e2e.xcresult" $signing && e2e=ok
-    grep -o "\[e2e-summary\].*" "$out/e2e.log" | tail -1 >"$out/e2e-summary.txt"
+    grep -o "\[e2e-summary\].*" "$out/e2e.log" >"$out/e2e-summary.txt"
     cat "$out/e2e-summary.txt"
 fi
 
