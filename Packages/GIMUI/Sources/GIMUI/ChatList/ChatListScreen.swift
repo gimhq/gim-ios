@@ -41,6 +41,7 @@ public struct ChatListScreen: View {
                     Button(action: onOpenSettings) {
                         Label("Settings", systemImage: "gearshape")
                     }
+                    .accessibilityIdentifier("chatList.settings")
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
@@ -49,6 +50,7 @@ public struct ChatListScreen: View {
                 } label: {
                     Label("New Chat", systemImage: "square.and.pencil")
                 }
+                .accessibilityIdentifier("chatList.newChat")
             }
         }
         .sheet(isPresented: $showsNewChat) {

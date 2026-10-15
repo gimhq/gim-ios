@@ -41,6 +41,18 @@ public final class KeychainSecureStorage: Sendable {
         SecItemDelete(baseQuery(key: key) as CFDictionary)
     }
 
+    /// Deletes every item of this service. Throws `GimError.Storage` when the Keychain rejects the delete.
+    public func deleteAll() throws {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+        ]
+        let status = SecItemDelete(query as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw GimError.Storage(reason: "Keychain delete failed with status \(status)")
+        }
+    }
+
     private func baseQuery(key: String) -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,

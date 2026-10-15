@@ -22,6 +22,35 @@ final class OnboardingValidationTests: XCTestCase {
         XCTAssertEqual(OnboardingValidation.normalizedServerUrl(" https://gim.example.eu// "), "https://gim.example.eu")
     }
 
+    func testDefaultServerUrlPrefersStoredThenArgumentThenBundled() {
+        let stored = "https://gim.example.eu"
+        let argument = "http://127.0.0.1:8080"
+        let bundled = "http://localhost:8080"
+        XCTAssertEqual(
+            OnboardingValidation.defaultServerUrl(stored: stored, argument: argument, bundled: bundled), stored)
+        XCTAssertEqual(
+            OnboardingValidation.defaultServerUrl(stored: nil, argument: argument, bundled: bundled), argument)
+        XCTAssertEqual(OnboardingValidation.defaultServerUrl(stored: nil, argument: nil, bundled: bundled), bundled)
+        XCTAssertEqual(OnboardingValidation.defaultServerUrl(stored: nil, argument: nil, bundled: nil), "")
+    }
+
+    func testDefaultServerUrlSkipsEmptyAndInvalidCandidates() {
+        XCTAssertEqual(
+            OnboardingValidation.defaultServerUrl(stored: "", argument: "  ", bundled: "http://localhost:8080"),
+            "http://localhost:8080")
+        XCTAssertEqual(
+            OnboardingValidation.defaultServerUrl(
+                stored: "gim.example.eu", argument: "ftp://gim.example.eu", bundled: "https://gim.example.eu"),
+            "https://gim.example.eu")
+        XCTAssertEqual(OnboardingValidation.defaultServerUrl(stored: nil, argument: "https://", bundled: "$(X)"), "")
+    }
+
+    func testDefaultServerUrlIsNormalised() {
+        XCTAssertEqual(
+            OnboardingValidation.defaultServerUrl(stored: nil, argument: " https://gim.example.eu/ ", bundled: nil),
+            "https://gim.example.eu")
+    }
+
     func testHandleRules() {
         XCTAssertNil(OnboardingValidation.handleError("sofia_m.2"))
         XCTAssertNil(OnboardingValidation.handleError("  Sofia "))

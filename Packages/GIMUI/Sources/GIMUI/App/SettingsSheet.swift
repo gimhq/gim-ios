@@ -44,6 +44,7 @@ struct SettingsSheet: View {
                         }
                     }
                     .disabled(isSigningOut)
+                    .accessibilityIdentifier("settings.signOut")
                 } footer: {
                     if let errorMessage {
                         Text(errorMessage).foregroundStyle(.red)
