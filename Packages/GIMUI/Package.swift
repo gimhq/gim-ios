@@ -8,7 +8,8 @@ let package = Package(
         .library(name: "GIMUI", targets: ["GIMUI"])
     ],
     dependencies: [
-        .package(path: "../GIMKit")
+        .package(path: "../GIMKit"),
+        .package(path: "../../Vendor/GIMCore"),
     ],
     targets: [
         .target(
@@ -16,6 +17,7 @@ let package = Package(
             dependencies: [
                 .product(name: "GIMClientKit", package: "GIMKit"),
                 .product(name: "GIMFeatures", package: "GIMKit"),
+                .product(name: "GIMCore", package: "GIMCore"),
             ]
         ),
         .testTarget(name: "GIMUITests", dependencies: ["GIMUI"]),
