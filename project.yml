@@ -39,6 +39,7 @@ targets:
         GIMDefaultServerURL: $(GIM_DEFAULT_SERVER_URL)
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
+        NSCameraUsageDescription: Scan the code shown on your new device.
         NSPhotoLibraryUsageDescription: Choose photos to send.
     settings:
       base:
