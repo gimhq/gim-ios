@@ -91,31 +91,44 @@ final class FakeGimClientTests: XCTestCase {
 
     // MARK: - Account
 
-    func testRegisterMovesFromNoSessionToSession() async throws {
+    func testCreateIdentityAndClaimHandleMoveFromNoSessionToSession() async throws {
         let client = FakeGimClient(
             scheduler: scheduler, dataDirectory: try makeTemporaryDirectory(),
             users: [UserProfile(userId: "user-sofia", handle: "sofia", displayName: "Sofia")])
         let initial = try await client.session()
         XCTAssertNil(initial)
+        XCTAssertNil(client.userId())
+        XCTAssertFalse(client.localStateReset())
         await assertThrows(.NotRegistered) { try await client.findUser(handle: "sofia") }
         await assertThrows(.NotRegistered) { try await client.startSync() }
+        await assertThrows(.NotRegistered) { try await client.claimHandle(handle: "kai") }
         await assertThrows(.InvalidInput(reason: "Display name is required")) {
-            try await client.register(handle: "kai", displayName: " ")
-        }
-        await assertThrows(.InvalidInput(reason: "Handle is already taken")) {
-            try await client.register(handle: "Sofia", displayName: "Other")
+            try await client.createIdentity(displayName: " ")
         }
 
-        let session = try await client.register(handle: "Kai", displayName: "Kai")
-        XCTAssertEqual(session, Session(userId: "user-kai", deviceId: "device-1", handle: "kai", displayName: "Kai"))
+        _ = try await client.createIdentity(displayName: " Kai ")
+        let createdValue = try await client.session()
+        let created = try XCTUnwrap(createdValue)
+        XCTAssertEqual(created.handle, "")
+        XCTAssertEqual(created.displayName, "Kai")
+        XCTAssertEqual(client.userId(), created.userId)
+        await assertThrows(.Server(status: 409, reason: "Handle is already taken")) {
+            try await client.claimHandle(handle: "Sofia")
+        }
+        await assertThrows(.InvalidInput(reason: "Handle must not be empty or contain spaces")) {
+            try await client.claimHandle(handle: "k ai")
+        }
+
+        try await client.claimHandle(handle: " Kai ")
         let stored = try await client.session()
-        XCTAssertEqual(stored, session)
+        XCTAssertEqual(
+            stored, Session(userId: created.userId, deviceId: "device-1", handle: "kai", displayName: "Kai"))
         let found = try await client.findUser(handle: "sofia")
         XCTAssertEqual(found?.displayName, "Sofia")
-        let missing = try await client.findUser(handle: "nobody")
-        XCTAssertNil(missing)
-        await assertThrows(.InvalidInput(reason: "This device is already registered")) {
-            try await client.register(handle: "kai2", displayName: "Kai")
+        let me = try await client.findUser(handle: "kai")
+        XCTAssertEqual(me?.userId, created.userId)
+        await assertThrows(.InvalidInput(reason: "This device already has an identity")) {
+            try await client.createIdentity(displayName: "Kai")
         }
     }
 
@@ -124,17 +137,19 @@ final class FakeGimClientTests: XCTestCase {
             scheduler: scheduler, dataDirectory: try makeTemporaryDirectory(), calendar: calendar, registered: false)
         let list = try await subscribeChatList(client)
         XCTAssertEqual(list.items, [])
-        await assertThrows(.InvalidInput(reason: "Handle is already taken")) {
-            try await client.register(handle: "sofia", displayName: "Sofia")
-        }
 
-        let session = try await client.register(handle: "kai", displayName: "Kai Weber")
+        _ = try await client.createIdentity(displayName: "Kai Weber")
+        let sessionValue = try await client.session()
+        let session = try XCTUnwrap(sessionValue)
 
         XCTAssertEqual(list.items.map(\.chatId), [group, direct])
         let members = try await client.chatMembers(chatId: group)
         XCTAssertEqual(members.map(\.userId), [session.userId, "user-sofia", "user-luca", "user-nikos"])
         let (_, timeline) = try await subscribeTimeline(client, group)
         XCTAssertEqual(timeline.messages.filter(\.isOwn).map(\.sender.displayName), ["Kai Weber"])
+        await assertThrows(.Server(status: 409, reason: "Handle is already taken")) {
+            try await client.claimHandle(handle: "sofia")
+        }
     }
 
     func testSignOutClearsListsAndStopsSync() async throws {
@@ -832,7 +847,7 @@ final class MemoryHooks: PlatformHooks, @unchecked Sendable {
         directory = dataDir
     }
 
-    func secureStoreGet(key: String) -> Data? { lock.withLock { values[key] } }
+    func secureStoreGet(key: String) throws -> Data? { lock.withLock { values[key] } }
     func secureStoreSet(key: String, value: Data) throws { lock.withLock { values[key] = value } }
     func secureStoreDelete(key: String) { _ = lock.withLock { values.removeValue(forKey: key) } }
     func dataDir() -> String { directory }

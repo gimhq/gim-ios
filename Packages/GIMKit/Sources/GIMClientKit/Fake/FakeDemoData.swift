@@ -11,7 +11,7 @@ extension FakeGimClient {
     /// under `dataDirectory`. Sync is stopped until `startSync()`.
     ///
     /// - Parameter registered: signed in as Alex Morgan (`demoSelfId`). When `false`, the client starts without a
-    ///   session and seeds the chats around whoever registers.
+    ///   session and seeds the chats around whoever calls `createIdentity` (or links as the demo user).
     public static func demo(
         scheduler: any FakeScheduler = RealDelayFakeScheduler(),
         dataDirectory: String = FakeGimClient.defaultDataDirectory,
@@ -28,7 +28,7 @@ extension FakeGimClient {
             return FakeGimClient(
                 options: options, seed: Seed(users: FakeDemoData.peers), seedsDemoOnRegister: true)
         }
-        let me = UserProfile(userId: demoSelfId, handle: "alex", displayName: "Alex Morgan")
+        let me = FakeDemoData.me
         var seed = FakeDemoData.seed(me: me, dataDirectory: dataDirectory, now: now())
         seed.session = Session(userId: me.userId, deviceId: "device-1", handle: me.handle, displayName: me.displayName)
         return FakeGimClient(options: options, seed: seed, seedsDemoOnRegister: false)
@@ -43,6 +43,9 @@ enum FakeDemoData {
         "Haha, true 😄",
         "Can you send me the exact location?",
     ]
+
+    /// The demo user (`FakeGimClient.demoSelfId`).
+    static let me = UserProfile(userId: FakeGimClient.demoSelfId, handle: "alex", displayName: "Alex Morgan")
 
     static let peers = [
         UserProfile(userId: "user-sofia", handle: "sofia", displayName: "Sofia Marin"),
