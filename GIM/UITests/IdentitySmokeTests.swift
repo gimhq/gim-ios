@@ -169,16 +169,14 @@ final class IdentitySmokeTests: E2ETestCase {
         [XCUIElement.ElementType.textField, .textView].map { NSNumber(value: $0.rawValue) } as NSArray
     }
 
-    /// The user id on a "User ID" row (Settings or Devices): its value text, or the row's combined label.
+    /// The user id on a "User ID" row (Settings or Devices), whose label reads "User ID, <id>".
     @MainActor
     private func shownUserId(_ row: XCUIElement, _ check: String, _ app: XCUIApplication) throws -> String {
         try require(row.waitForExistence(timeout: networkTimeout), "\(check) visible", app)
-        let texts = row.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty && $0 != "User ID" }
-        let userId = texts.first ?? row.label.replacingOccurrences(of: "User ID, ", with: "")
+        let parts = row.label.components(separatedBy: ", ").filter { !$0.isEmpty && $0 != "User ID" }
         try require(
-            !userId.isEmpty && !userId.contains(" "),
-            "\(check): a user id, found texts \(texts) and label \"\(row.label)\"", app)
-        return userId
+            parts.count == 1 && !parts[0].contains(" "), "\(check): one user id in the label \"\(row.label)\"", app)
+        return parts[0]
     }
 
     /// The Devices row of `deviceId`.
