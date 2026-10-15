@@ -54,6 +54,10 @@ final class MessageCell: UICollectionViewCell {
         imageView.isUserInteractionEnabled = true
         imageView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(mediaTapped)))
         imageView.accessibilityTraits = [.image, .button]
+        bodyLabel.accessibilityIdentifier = "timeline.message.text"
+        imageView.accessibilityIdentifier = "timeline.message.image"
+        replyView.accessibilityIdentifier = "timeline.message.reply"
+        statusView.accessibilityIdentifier = "timeline.message.status"
         for view in [replyView, imageView, fileView, statusView] as [UIView] {
             bubbleView.addSubview(view)
         }
@@ -174,6 +178,7 @@ final class MessageCell: UICollectionViewCell {
             label.textAlignment = .center
             label.clipsToBounds = true
             label.layer.cornerRadius = TimelineMetrics.reactionHeight / 2
+            label.accessibilityIdentifier = "timeline.message.reaction"
             contentView.addSubview(label)
             reactionLabels.append(label)
         }

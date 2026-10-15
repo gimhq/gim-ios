@@ -27,6 +27,7 @@ public struct OnboardingScreen: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .focused($focusedField, equals: .serverUrl)
+                        .accessibilityIdentifier("onboarding.serverUrl")
                         .submitLabel(.next)
                         .onSubmit { focusedField = .handle }
                     ValidationMessage(text: viewModel.serverUrlError)
@@ -42,6 +43,7 @@ public struct OnboardingScreen: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .focused($focusedField, equals: .handle)
+                        .accessibilityIdentifier("onboarding.handle")
                         .submitLabel(.next)
                         .onSubmit { focusedField = .displayName }
                     ValidationMessage(text: viewModel.handleError)
@@ -49,6 +51,7 @@ public struct OnboardingScreen: View {
                     TextField("Display name", text: $viewModel.displayName)
                         .textContentType(.name)
                         .focused($focusedField, equals: .displayName)
+                        .accessibilityIdentifier("onboarding.displayName")
                         .submitLabel(.go)
                         .onSubmit(submit)
                     ValidationMessage(text: viewModel.displayNameError)
@@ -67,6 +70,7 @@ public struct OnboardingScreen: View {
                         }
                     }
                     .disabled(viewModel.isSubmitting)
+                    .accessibilityIdentifier("onboarding.submit")
                 } footer: {
                     if let error = viewModel.errorMessage {
                         Text(error).foregroundStyle(.red)

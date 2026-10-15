@@ -119,6 +119,7 @@ public struct ComposerView: View {
             }
             .disabled(!viewModel.canAttach)
             .accessibilityLabel("Attach")
+            .accessibilityIdentifier("composer.attach")
         }
     }
 
@@ -132,6 +133,7 @@ public struct ComposerView: View {
         }
         .disabled(!viewModel.canSend)
         .accessibilityLabel(viewModel.editTarget == nil ? "Send" : "Save Edit")
+        .accessibilityIdentifier("composer.send")
     }
 
     private func send(_ result: Result<URL, any Error>) {

@@ -18,6 +18,7 @@ public struct NewGroupScreen: View {
             Section("Name") {
                 TextField("Group name", text: $viewModel.name)
                     .submitLabel(.next)
+                    .accessibilityIdentifier("newGroup.name")
             }
 
             Section {
@@ -37,11 +38,13 @@ public struct NewGroupScreen: View {
                         .autocorrectionDisabled()
                         .submitLabel(.done)
                         .onSubmit(addMember)
+                        .accessibilityIdentifier("newGroup.memberHandle")
                     if viewModel.isAddingMember {
                         ProgressView()
                     } else {
                         Button("Add", action: addMember)
                             .disabled(viewModel.memberHandle.trimmingCharacters(in: .whitespaces).isEmpty)
+                            .accessibilityIdentifier("newGroup.addMember")
                     }
                 }
             } header: {
@@ -74,6 +77,7 @@ public struct NewGroupScreen: View {
                         }
                     }
                     .disabled(!viewModel.canCreate)
+                    .accessibilityIdentifier("newGroup.create")
                 }
             }
         }
