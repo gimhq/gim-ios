@@ -37,8 +37,9 @@ final class MessagingSmokeTests: XCTestCase {
             }
         }
         addTeardownBlock { await peer.shutdown() }
-        // New groups need at least two members (NewGroupViewModel.minimumMembers); the bystander only fills the second
-        // seat and never acts. Read ticks need just one reader (SendState.read: "read by at least one recipient").
+        // New groups need at least two members (NewGroupViewModel.minimumMembers); the bystander fills the second
+        // seat. Its only action is marking the chat read in step g: gim-core shows Read only once every device of
+        // every other member sent a read receipt (aggregate_receipts), despite SendState.read's "at least one" doc.
         let bystander = try XCTContext.runActivity(named: "step a: bystander registers on \(serverUrl)") { _ in
             try waitForPeer("step a: bystander registers as bystander_\(suffix)", app) {
                 try await ScriptedPeer.register(
@@ -138,12 +139,21 @@ final class MessagingSmokeTests: XCTestCase {
             }
         }
 
-        try XCTContext.runActivity(named: "step g: peer marks read, app shows read ticks") { _ in
-            let lastFromApp = try eventually("step g: peer has the app's messages", app) {
-                try await peer.messages(in: chatId).last { $0.sender.userId != peer.session.userId }
-            }
-            try waitForPeer("step g: peer marks read", app) {
-                try await peer.markRead(chatId: chatId, upToMessageId: lastFromApp.messageId)
+        try XCTContext.runActivity(named: "step g: peer and bystander mark read, app shows read ticks") { _ in
+            // Each reader first waits until it has the app's newest message (the reply), so the read receipt
+            // covers it; gim-core's markRead marks the whole chat read and queues the receipt for sync to send.
+            for reader in [peer, bystander] {
+                let handle = reader.session.handle
+                _ = try eventually("step g: \(handle) has joined the group", app) { reader.chatId(named: groupName) }
+                let target = try eventually("step g: \(handle) has the app's reply", app) {
+                    try await reader.messages(in: chatId).last {
+                        $0.sender.userId != reader.session.userId && $0.text == replyText
+                    }
+                }
+                print("[e2e] step g: \(handle) marks read up to \(target.messageId) (\"\(replyText)\")")
+                try waitForPeer("step g: \(handle) marks read", app) {
+                    try await reader.markRead(chatId: chatId, upToMessageId: target.messageId)
+                }
             }
             // The read marker covers every own message up to the newest, which is on screen after scrolling down.
             // StatusTicksView labels its ticks "Sending", "Sent", "Delivered", "Read" or "Not sent".
@@ -155,7 +165,8 @@ final class MessagingSmokeTests: XCTestCase {
                 read,
                 read
                     ? ""
-                    : "step g: an own message shows Read, found \(statuses.allElementsBoundByIndex.map(\.label))",
+                    : "step g: an own message shows Read, found statuses \(statuses.allElementsBoundByIndex.map(\.label))"
+                        + " for visible messages \(visibleMessageTexts(app))",
                 app)
         }
 
@@ -412,6 +423,12 @@ final class MessagingSmokeTests: XCTestCase {
         let labels = app.staticTexts.allElementsBoundByIndex.map(\.label)
         let errors = labels.filter { $0.hasPrefix("Couldn't") || $0.hasPrefix("Can't") || $0.contains("error") }
         return errors.isEmpty ? "none" : errors.joined(separator: " | ")
+    }
+
+    /// The texts of the timeline bubbles on screen, for failure messages.
+    @MainActor
+    private func visibleMessageTexts(_ app: XCUIApplication) -> [String] {
+        app.staticTexts.matching(identifier: "timeline.message.text").allElementsBoundByIndex.map(\.label)
     }
 
     /// The body label of the timeline bubble showing `text`.
