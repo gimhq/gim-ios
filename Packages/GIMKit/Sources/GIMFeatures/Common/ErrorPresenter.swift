@@ -19,6 +19,8 @@ public enum ErrorPresenter {
             return "Couldn't save data on this device. Check the free storage and try again."
         case .Server(let status, _):
             return "The server couldn't complete the request (error \(status)). Please try again later."
+        case .RetryLater(_, let retryAfterSecs, _):
+            return "The server is busy. Please try again in \(retryAfterSecs) seconds."
         case .Cancelled:
             return "The operation was cancelled."
         case .NotImplemented:

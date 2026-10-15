@@ -22,8 +22,8 @@ public final class AppPlatformHooks: PlatformHooks, PlatformWiping {
         self.reachability = reachability
     }
 
-    public func secureStoreGet(key: String) -> Data? {
-        keychain.secureStoreGet(key: key)
+    public func secureStoreGet(key: String) throws -> Data? {
+        try keychain.secureStoreGet(key: key)
     }
 
     public func secureStoreSet(key: String, value: Data) throws {

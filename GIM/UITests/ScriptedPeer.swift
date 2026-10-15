@@ -17,13 +17,15 @@ final class ScriptedPeer: Sendable {
         self.directory = directory
     }
 
-    /// Registers `handle` on `serverUrl`, starts syncing and follows the chat list.
+    /// Creates an identity on `serverUrl`, claims `handle`, starts syncing and follows the chat list.
     static func register(serverUrl: String, handle: String, displayName: String) async throws -> ScriptedPeer {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("gim-peer-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let client = try await createClient(
             config: ClientConfig(serverUrl: serverUrl), hooks: InMemoryPlatformHooks(dataDirectory: directory.path))
-        let session = try await client.register(handle: handle, displayName: displayName)
+        _ = try await client.createIdentity(displayName: displayName)
+        try await client.claimHandle(handle: handle)
+        guard let session = try await client.session() else { throw GimError.NotRegistered }
         try await client.startSync()
         let peer = ScriptedPeer(session: session, client: client, directory: directory)
         peer.chats.handle = try await client.chatList(listener: peer.chats)
@@ -87,7 +89,7 @@ private final class InMemoryPlatformHooks: PlatformHooks, @unchecked Sendable {
         self.dataDirectory = dataDirectory
     }
 
-    func secureStoreGet(key: String) -> Data? {
+    func secureStoreGet(key: String) throws -> Data? {
         lock.withLock { secrets[key] }
     }
 

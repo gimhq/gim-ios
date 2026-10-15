@@ -23,9 +23,9 @@ public struct RootView: View {
                     OnboardingScreen(viewModel: onboarding)
                 }
             case .ready(let client):
-                SignedInView(client: client, session: model.session, serverUrl: model.serverUrl) {
-                    await model.signOut()
-                }
+                SignedInView(
+                    client: client, session: model.session, serverUrl: model.serverUrl,
+                    refreshSession: { await model.refreshSession() }, signOut: { await model.signOut() })
             }
         }
         .task { await model.start() }
@@ -59,6 +59,7 @@ private struct SignedInView: View {
     let client: any GimClientAPI
     let session: Session?
     let serverUrl: String?
+    let refreshSession: @MainActor () async -> Void
     let signOut: () async -> String?
 
     @State private var path: [String] = []
@@ -73,7 +74,9 @@ private struct SignedInView: View {
                 }
         }
         .sheet(isPresented: $showsSettings) {
-            SettingsSheet(session: session, serverUrl: serverUrl, signOut: signOut)
+            SettingsSheet(
+                client: client, session: session, serverUrl: serverUrl, refreshSession: refreshSession,
+                signOut: signOut)
         }
     }
 }
