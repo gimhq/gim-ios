@@ -3,7 +3,7 @@
 `Packages/GIMKit/Sources/GIMClientKit` mirrors the UniFFI Swift bindings of gim-core so that switching to the real
 `GIMCore.xcframework` is a mechanical swap.
 
-- Mirrored commit: gim-core `e69fcba` (`bindings/gim-ffi/src/`, generated
+- Mirrored commit: gim-core `2d08f38` (`bindings/gim-ffi/src/`, generated
   `bindings/gim-ffi/generated/swift/GIMCore.swift`, contract in `docs/API.md`).
 - Mirror sources: `GimClientAPI.swift` (objects, callback interfaces, hooks, `createClient`) and `Models.swift`
   (records, enums, diffs, errors).
@@ -71,7 +71,7 @@ generated code writes the bare protocol name, which is the same type.
 
 ## GimClient methods
 
-Every method of `GimClientProtocol` at `e69fcba`, with identical labels, argument types and `async`/`throws`. The
+Every method of `GimClientProtocol` at `7df3f84`, with identical labels, argument types and `async`/`throws`. The
 only return-type differences are `any Timeline` (generated: `Timeline`) and the listener parameter spelling above.
 
 | Mirror (`GimClientAPI`) | GIMCore (`GimClientProtocol`) |
@@ -85,11 +85,11 @@ only return-type differences are `any Timeline` (generated: `Timeline`) and the 
 | `findUser(handle:) async throws -> UserProfile?` | same |
 | `createDirectChat(userId:) async throws -> String` | same |
 | `createGroupChat(name:memberUserIds:) async throws -> String` | same |
-| `chatMembers(chatId:) async throws -> [UserProfile]` | same; present in `e69fcba` (body still `NotImplemented`, see below) |
+| `chatMembers(chatId:) async throws -> [UserProfile]` | same |
 | `addMembers(chatId:userIds:) async throws` | same |
 | `removeMember(chatId:userId:) async throws` | same |
 | `leaveChat(chatId:) async throws` | same |
-| `setGroupInfo(chatId:name:avatarFilePath:) async throws` | same |
+| `setGroupInfo(chatId:name:avatarFilePath:) async throws` | same; at least one of `name`/`avatarFilePath` must be set, `InvalidInput` for direct chats |
 | `sendText(chatId:body:replyTo:) async throws -> String` | same |
 | `sendMedia(chatId:filePath:mime:caption:replyTo:) async throws -> String` | same |
 | `editMessage(chatId:messageId:newBody:) async throws` | same |
@@ -108,8 +108,25 @@ only return-type differences are `any Timeline` (generated: `Timeline`) and the 
 | `typing(chatId:listener:) async throws -> TaskHandle` | same |
 
 `chatMembers` has no listener in M1. `GroupInfoViewModel` queries it again when a `ChatListDiff` changes that chat or
-a `TimelineItem.membershipChange` arrives, and falls back to `ChatSummary.memberCount` (no member list, no removal)
-when it throws `GimError.NotImplemented`, which is what `e69fcba` still does.
+a `TimelineItem.membershipChange` arrives. When a query fails before any list has loaded it shows the error with
+`ChatSummary.memberCount` (no member list, no removal); a list that loaded before stays on later failures.
+Renaming a group goes `GroupInfoViewModel.saveName()` → `GimClientAPI.setGroupInfo(name:)` →
+`RealGimClient` → `GIMCore.GimClient.setGroupInfo`.
+
+## Changes since `e69fcba`
+
+`2d08f38` is a packaging-only change on top of `7df3f84` (the xcframework now links on macOS, fixing
+"ld: LSDA in __eh_frame section not supported"); no API change, the vendored `GIMCore.swift` is byte-identical.
+
+`7df3f84` changes no signature, record, enum or error of the generated bindings; only doc comments and the
+`set_group_info` / `start_sync` UniFFI checksums differ (the vendored xcframework and `GIMCore.swift` must come from
+the same build). Behaviour that the app now relies on:
+
+- `chatMembers` is implemented (no `NotImplemented`); names come from the local user directory and resolve later
+  through `ChatListDiff`s and timeline `Set`s.
+- `setGroupInfo` shares the name/avatar with the members; the avatar is encrypted and uploaded before it returns.
+- `startSync` reconnects with backoff and reports `Offline` while waiting; `setNetworkReachable(true)` reconnects and
+  retries the outbox at once.
 
 ## Swap checklist
 
@@ -121,7 +138,6 @@ The mirror is permanent; there is no swap that deletes it.
   `GIMCore.createClient`, `RealGimClient` implements `GimClientAPI` by converting every value 1:1 (`CoreMapping`),
   rethrowing errors as the mirror's `GimError`, and `CoreListeners` adapts the callback interfaces and delivers
   them on the main queue.
-- `FakeGimClient` (through `CoreGimClientFactory`) is the default client in every build.
-- In debug builds the launch argument `-GIMUseRealCore YES` makes `AppModel.defaultFactory()` return
-  `RealGimClientFactory`, so the app runs against the real core.
-- The default flips to the real core after gim-core S11; the fake then remains for previews, demo mode and tests.
+- `RealGimClientFactory` is the default client (`AppModel.defaultFactory()`); release builds always use it.
+- In debug builds the launch argument `-GIMUseFakeCore YES` makes `AppModel.defaultFactory()` return
+  `CoreGimClientFactory` (`FakeGimClient`), the demo mode. The fake also drives previews and tests.
