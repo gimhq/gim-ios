@@ -138,10 +138,6 @@ final class MessagingSmokeTests: XCTestCase {
             }
         }
 
-        try XCTContext.runActivity(named: "step e: app sends a photo from the library") { _ in
-            try sendPhotoIfPickerIsAutomatable(app: app, peer: peer, chatId: chatId)
-        }
-
         try XCTContext.runActivity(named: "step g: peer marks read, app shows read ticks") { _ in
             let lastFromApp = try eventually("step g: peer has the app's messages", app) {
                 try await peer.messages(in: chatId).last { $0.sender.userId != peer.session.userId }
@@ -163,6 +159,12 @@ final class MessagingSmokeTests: XCTestCase {
                 app)
         }
 
+        // Step e runs after g so that a picker problem can never cost the read-tick check; only the photo pick itself
+        // is soft (see sendPhotoIfPickerIsAutomatable), and h still runs afterwards.
+        try XCTContext.runActivity(named: "step e: app sends a photo from the library") { _ in
+            try sendPhotoIfPickerIsAutomatable(app: app, peer: peer, chatId: chatId)
+        }
+
         try XCTContext.runActivity(named: "step h: sign out returns to onboarding") { _ in
             try tap(backButton(app), "step h: back to Chats", app)
             try signOut(app)
@@ -178,47 +180,87 @@ final class MessagingSmokeTests: XCTestCase {
     }
 
     /// Attaches a photo through the system photo picker and checks that the peer receives it. The picker runs out
-    /// of process; when its grid can't be reached the step is recorded and skipped, and the image path stays
-    /// covered by the peer-to-app direction.
+    /// of process and its grid may report no hit point, so nothing here taps without checking existence and
+    /// hittability first (a failed synthesized tap is an XCTest failure). When no photo can be picked, the step is
+    /// recorded and skipped, the picker is dismissed, and the image path stays covered by peer-to-app. Hard
+    /// assertions: the conversation is usable again, and a photo that was picked reaches the peer.
     @MainActor
     private func sendPhotoIfPickerIsAutomatable(app: XCUIApplication, peer: ScriptedPeer, chatId: String) throws {
-        let attach = app.buttons["composer.attach"]
-        guard attach.waitForExistence(timeout: 10) else {
-            return skipPhotoStep("Attach button not found", app)
+        guard tapIfHittable(app.buttons["composer.attach"], timeout: 10) else {
+            return skipPhotoStep("Attach button not hittable", app)
         }
-        attach.tap()
-        let library = menuItem("Photo Library", in: app)
-        guard library.waitForExistence(timeout: 10) else {
-            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)).tap()
-            return skipPhotoStep("Photo Library menu item not found", app)
+        guard tapIfHittable(menuItem("Photo Library", in: app), timeout: 10) else {
+            // Close the menu by tapping the navigation title area, away from any message bubble.
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08)).tap()
+            try requireConversation("step e: conversation usable after closing the attach menu", app)
+            return skipPhotoStep("Photo Library menu item not hittable", app)
         }
-        library.tap()
         let photo = app.images
             .matching(NSPredicate(format: "label BEGINSWITH 'Photo' AND identifier != 'timeline.message.image'"))
             .firstMatch
-        guard photo.waitForExistence(timeout: networkTimeout) else {
-            skipPhotoStep("photo picker grid not reachable", app)
-            let cancel = app.buttons["Cancel"]
-            if cancel.exists {
-                cancel.tap()
+        var picked = false
+        if photo.waitForExistence(timeout: networkTimeout) {
+            // Let the sheet finish presenting before judging hittability.
+            _ = app.buttons["Cancel"].waitForExistence(timeout: 2)
+            if photo.isHittable {
+                photo.tap()
             } else {
-                // Drag the sheet down from its top edge; a swipe in the middle would only scroll the grid.
-                app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1))
-                    .press(
-                        forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.95)))
+                print("[e2e] step e: picker photo not hittable; trying one coordinate tap")
+                photo.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
             }
-            try require(
-                backButton(app).waitForExistence(timeout: 10) && backButton(app).isHittable,
-                "step e: photo picker dismissed after skipping", app)
+            // A single-selection picker closes as soon as a photo is chosen: its grid disappears and the
+            // conversation is in front again.
+            let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: photo)
+            picked = XCTWaiter().wait(for: [gone], timeout: 15) == .completed && conversationIsBack(app, timeout: 5)
+        }
+        guard picked else {
+            skipPhotoStep(
+                photo.exists ? "picker photo could not be selected" : "photo picker grid not reachable", app)
+            dismissPicker(app)
+            try requireConversation("step e: photo picker dismissed after skipping", app)
             return
         }
-        photo.tap()
         _ = try eventually("step e: peer receives the app's photo", app) {
             try await peer.messages(in: chatId).first {
                 guard case .image = $0.content else { return false }
                 return $0.sender.userId != peer.session.userId
             }
         }
+    }
+
+    /// Taps `element` only when it exists within `timeout` and is hittable; never records a failure.
+    @MainActor
+    private func tapIfHittable(_ element: XCUIElement, timeout: TimeInterval) -> Bool {
+        guard element.waitForExistence(timeout: timeout), element.isHittable else { return false }
+        element.tap()
+        return true
+    }
+
+    /// Closes the photo picker with its Cancel button, or by dragging the sheet down from its top edge (a swipe in
+    /// the middle would only scroll the grid).
+    @MainActor
+    private func dismissPicker(_ app: XCUIApplication) {
+        if conversationIsBack(app, timeout: 1) { return }
+        if tapIfHittable(app.buttons["Cancel"], timeout: 2), conversationIsBack(app, timeout: 5) { return }
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1))
+            .press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.95)))
+    }
+
+    /// Whether the conversation is in front again (its back button can be tapped).
+    @MainActor
+    private func conversationIsBack(_ app: XCUIApplication, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            let back = backButton(app)
+            if back.exists && back.isHittable { return true }
+            _ = back.waitForExistence(timeout: 0.5)
+        } while Date() < deadline
+        return false
+    }
+
+    @MainActor
+    private func requireConversation(_ check: String, _ app: XCUIApplication) throws {
+        try require(conversationIsBack(app, timeout: 10), check, app)
     }
 
     /// Fails fast when the server is not reachable from the test runner. An App Transport Security rejection is
