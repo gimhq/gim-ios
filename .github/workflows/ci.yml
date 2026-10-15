@@ -184,6 +184,23 @@ jobs:
             DEVELOPMENT_TEAM= \
             2>&1 | tee "$RUNNER_TEMP/results/xcodebuild-e2e.log" | xcbeautify
 
+      # MessagingSmokeTests prints one "[e2e-summary] a=pass ..." line from a teardown block, also on failure.
+      - name: E2E step summary
+        if: always()
+        run: |
+          LINE=$(grep -o '\[e2e-summary\].*' "$RUNNER_TEMP/results/xcodebuild-e2e.log" 2>/dev/null | tail -1 || true)
+          if [ -z "$LINE" ]; then
+            echo "::notice::No [e2e-summary] line in xcodebuild-e2e.log"
+            exit 0
+          fi
+          echo "$LINE"
+          {
+            echo '### iOS E2E steps'
+            echo '```'
+            echo "$LINE"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Stop gim-server
         if: always()
         run: scripts/start-gim-server.sh stop
@@ -199,3 +216,12 @@ jobs:
             .gim-server/server.log
           if-no-files-found: ignore
           include-hidden-files: true
+
+      - name: Upload xcodebuild log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-e2e-log
+          path: ${{ runner.temp }}/results/xcodebuild-e2e.log
+          if-no-files-found: ignore
+          retention-days: 14

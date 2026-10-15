@@ -15,6 +15,9 @@ final class MessagingSmokeTests: XCTestCase {
     private let serverUrl = ProcessInfo.processInfo.environment["GIM_E2E_SERVER_URL"] ?? "http://127.0.0.1:8080"
     /// For every step that waits on the server or the other client.
     private let networkTimeout: TimeInterval = 30
+    private let summary = StepSummary()
+    /// Why step e skipped the photo pick, for the summary line; nil when the photo was picked.
+    private var photoSkipReason: String?
 
     @MainActor
     func testMessagingWithScriptedPeer() throws {
@@ -25,11 +28,14 @@ final class MessagingSmokeTests: XCTestCase {
         let groupName = "Smoke \(suffix)"
         let app = XCUIApplication()
         print("[e2e] app and peer use server \(serverUrl); app handle \(appHandle)")
+        // Teardown blocks also run after a failure has stopped the test, so the summary line is always printed.
+        addTeardownBlock { [summary] in await summary.report() }
 
         try XCTContext.runActivity(named: "pre-flight: GET \(serverUrl)/healthz") { _ in
             try checkServerHealth(app)
         }
 
+        summary.start("a")
         let peer = try XCTContext.runActivity(named: "step a: peer registers on \(serverUrl)") { _ in
             try waitForPeer("step a: peer registers as peer_\(suffix)", app) {
                 try await ScriptedPeer.register(
@@ -70,7 +76,9 @@ final class MessagingSmokeTests: XCTestCase {
                     : "step a: chat list visible after Create Account (onboarding errors: \(onboardingErrors(app)))",
                 app)
         }
+        summary.finish("a")
 
+        summary.start("b")
         let chatId = try XCTContext.runActivity(named: "step b: app creates group \(groupName)") { _ in
             try tap(app.buttons["chatList.newChat"], "step b: New Chat button", app)
             try tap(app.buttons["newChat.newGroup"], "step b: New Group row", app)
@@ -89,7 +97,9 @@ final class MessagingSmokeTests: XCTestCase {
                 "step b: conversation with composer opened", app)
             return try eventually("step b: peer joins group \(groupName)", app) { peer.chatId(named: groupName) }
         }
+        summary.finish("b")
 
+        summary.start("c")
         let appText = "Hello from the app \(suffix)"
         let appMessage = try XCTContext.runActivity(named: "step c: app sends text, peer receives it") { _ in
             try send(appText, "step c", app)
@@ -97,7 +107,9 @@ final class MessagingSmokeTests: XCTestCase {
                 try await peer.messages(in: chatId).first { $0.text == appText }
             }
         }
+        summary.finish("c")
 
+        summary.start("d")
         // The peer's text comes after its image so that it is the newest bubble, right above the composer, for the
         // long presses in step f.
         let peerText = "Hello from the peer \(suffix)"
@@ -116,7 +128,9 @@ final class MessagingSmokeTests: XCTestCase {
                 "step d: app shows the peer's text", app)
             return id
         }
+        summary.finish("d")
 
+        summary.start("f")
         let replyText = "Reply from the app \(suffix)"
         try XCTContext.runActivity(named: "step f: app replies and reacts, peer sees both") { _ in
             try openMenu(on: messageText(peerText, in: app), "step f: reply menu", app)
@@ -138,7 +152,9 @@ final class MessagingSmokeTests: XCTestCase {
                 }
             }
         }
+        summary.finish("f")
 
+        summary.start("g")
         try XCTContext.runActivity(named: "step g: peer and bystander mark read, app shows read ticks") { _ in
             // Each reader first waits until it has the app's newest message (the reply), so the read receipt
             // covers it; gim-core's markRead marks the whole chat read and queues the receipt for sync to send.
@@ -169,13 +185,17 @@ final class MessagingSmokeTests: XCTestCase {
                         + " for visible messages \(visibleMessageTexts(app))",
                 app)
         }
+        summary.finish("g")
 
+        summary.start("e")
         // Step e runs after g so that a picker problem can never cost the read-tick check; only the photo pick itself
         // is soft (see sendPhotoIfPickerIsAutomatable), and h still runs afterwards.
         try XCTContext.runActivity(named: "step e: app sends a photo from the library") { _ in
             try sendPhotoIfPickerIsAutomatable(app: app, peer: peer, chatId: chatId)
         }
+        summary.finish("e", photoSkipReason.map { "skipped(\($0))" } ?? "picked")
 
+        summary.start("h")
         try XCTContext.runActivity(named: "step h: sign out returns to onboarding") { _ in
             try tap(backButton(app), "step h: back to Chats", app)
             try signOut(app)
@@ -188,6 +208,7 @@ final class MessagingSmokeTests: XCTestCase {
                 "step h: server field pre-filled with \(serverUrl), found \(String(describing: serverField.value))",
                 app)
         }
+        summary.finish("h")
     }
 
     /// Attaches a photo through the system photo picker and checks that the peer receives it. The picker runs out
@@ -300,6 +321,7 @@ final class MessagingSmokeTests: XCTestCase {
     @MainActor
     private func skipPhotoStep(_ reason: String, _ app: XCUIApplication) {
         print("[e2e] step e: \(reason); app-to-peer image skipped")
+        photoSkipReason = reason
         attachDiagnostics("step e: \(reason); app-to-peer image skipped", app)
     }
 
@@ -489,6 +511,35 @@ final class MessagingSmokeTests: XCTestCase {
             try require(false, "\(check): no result within \(Int(timeout ?? networkTimeout)) s", app)
         }
         fatalError("unreachable")
+    }
+}
+
+/// Each step's outcome for the summary line that the ios-e2e CI job greps from the xcodebuild log.
+@MainActor
+private final class StepSummary {
+    /// The steps in the order they run.
+    private static let steps = ["a", "b", "c", "d", "f", "g", "e", "h"]
+    private var results: [String: String] = [:]
+    private var running: String?
+
+    nonisolated init() {}
+
+    func start(_ step: String) { running = step }
+
+    func finish(_ step: String, _ result: String = "pass") {
+        results[step] = result
+        running = nil
+    }
+
+    /// Prints one line, e.g. `[e2e-summary] a=pass b=pass c=pass d=pass f=pass g=pass e=picked h=pass`: a finished
+    /// step is `pass` (step e: `picked` or `skipped(<reason>)`, spaces in the reason replaced by `_`), the step that
+    /// was running when the test stopped is `fail`, and steps never reached are `n/a`.
+    func report() {
+        let fields = Self.steps.map { step in
+            let result = results[step] ?? (step == running ? "fail" : "n/a")
+            return "\(step)=\(result.replacingOccurrences(of: " ", with: "_"))"
+        }
+        print("[e2e-summary] \(fields.joined(separator: " "))")
     }
 }
 
