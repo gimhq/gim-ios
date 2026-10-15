@@ -19,6 +19,9 @@ public final class AppModel {
     }
 
     public static let serverUrlKey = "gim.serverUrl"
+    /// Launch argument (`-GIMDefaultServerURL <url>`) and Info.plist key (`GIM_DEFAULT_SERVER_URL` build setting)
+    /// for the server pre-filled when no server was used yet.
+    public nonisolated static let defaultServerUrlKey = "GIMDefaultServerURL"
     /// Debug builds use the demo client instead of gim-core when launched with `-GIMUseFakeCore YES`.
     public nonisolated static let useFakeCoreKey = "GIMUseFakeCore"
 
@@ -32,6 +35,7 @@ public final class AppModel {
 
     private let factory: any GimClientFactory
     private let defaults: UserDefaults
+    private let bundledServerUrl: String?
     private let makeHooks: @MainActor () throws -> any PlatformHooks
     @ObservationIgnored private var hooks: (any PlatformHooks)?
     @ObservationIgnored private var client: (any GimClientAPI)?
@@ -40,15 +44,18 @@ public final class AppModel {
 
     /// - Parameters:
     ///   - factory: the single swap point between `createClient` and test clients; see `defaultFactory()`.
-    ///   - defaults: remembers the last server URL.
+    ///   - defaults: remembers the last server URL; its argument domain may hold `defaultServerUrlKey`.
+    ///   - bundledServerUrl: the Info.plist `defaultServerUrlKey` value.
     ///   - makeHooks: builds the platform hooks handed to the factory (once per process).
     public init(
         factory: any GimClientFactory = AppModel.defaultFactory(),
         defaults: UserDefaults = .standard,
+        bundledServerUrl: String? = Bundle.main.object(forInfoDictionaryKey: AppModel.defaultServerUrlKey) as? String,
         makeHooks: @escaping @MainActor () throws -> any PlatformHooks = AppModel.defaultHooks
     ) {
         self.factory = factory
         self.defaults = defaults
+        self.bundledServerUrl = bundledServerUrl
         self.makeHooks = makeHooks
     }
 
@@ -73,7 +80,7 @@ public final class AppModel {
         do {
             let hooks = try existingOrNewHooks()
             guard let url = defaults.string(forKey: Self.serverUrlKey) else {
-                showOnboarding(hooks: hooks, serverUrl: "", client: nil)
+                showOnboarding(hooks: hooks, serverUrl: defaultServerUrl(stored: nil), client: nil)
                 return
             }
             let config = ClientConfig(serverUrl: url)
@@ -102,7 +109,8 @@ public final class AppModel {
         await updateSync()
     }
 
-    /// Signs out, drops the client and returns to onboarding. Returns the error text when signing out fails.
+    /// Signs out, wipes the platform keystore and data directory (`PlatformWiping`), drops the client and returns to
+    /// onboarding. Returns the error text when signing out or wiping fails; a failed wipe still returns to onboarding.
     public func signOut() async -> String? {
         guard let client, let hooks else { return nil }
         do {
@@ -110,13 +118,24 @@ public final class AppModel {
         } catch {
             return ErrorPresenter.message(for: error)
         }
+        var wipeError: String?
+        do {
+            try (hooks as? any PlatformWiping)?.wipe()
+        } catch {
+            wipeError = ErrorPresenter.message(for: error)
+        }
         (hooks as? AppPlatformHooks)?.reachability.attach(nil)
         self.client = nil
         isSyncing = false
         session = nil
-        showOnboarding(hooks: hooks, serverUrl: serverUrl ?? "", client: nil)
+        showOnboarding(hooks: hooks, serverUrl: defaultServerUrl(stored: serverUrl), client: nil)
         serverUrl = nil
-        return nil
+        return wipeError
+    }
+
+    private func defaultServerUrl(stored: String?) -> String {
+        OnboardingValidation.defaultServerUrl(
+            stored: stored, argument: defaults.string(forKey: Self.defaultServerUrlKey), bundled: bundledServerUrl)
     }
 
     private func existingOrNewHooks() throws -> any PlatformHooks {
