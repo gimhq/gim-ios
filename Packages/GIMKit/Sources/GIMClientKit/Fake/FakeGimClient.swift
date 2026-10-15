@@ -100,6 +100,8 @@ public actor FakeGimClient: GimClientAPI {
     private var connectionGeneration = 0
     private var sendFailuresRemaining = 0
     private var chatMembersFailure: GimError?
+    private var chatMembersHeld = false
+    private var heldChatMembers: [CheckedContinuation<Void, Never>] = []
     private var outbox: [String] = []
     private var nextId = 1
     private var nextReply = 0
@@ -175,6 +177,23 @@ public actor FakeGimClient: GimClientAPI {
     /// While set, `chatMembers` throws `error` (for example `.NotImplemented`, as gim-core does before it ships).
     public func failChatMembers(with error: GimError?) {
         chatMembersFailure = error
+    }
+
+    /// While held, `chatMembers` takes its snapshot of the members and then waits for `releaseChatMembers(at:)`, so
+    /// tests can finish overlapping queries in any order. Releasing the hold resumes every waiting call.
+    public func holdChatMembers(_ held: Bool) {
+        chatMembersHeld = held
+        guard !held else { return }
+        let waiting = heldChatMembers
+        heldChatMembers = []
+        for continuation in waiting { continuation.resume() }
+    }
+
+    /// Number of `chatMembers` calls waiting while held, oldest first.
+    public var heldChatMembersCount: Int { heldChatMembers.count }
+
+    public func releaseChatMembers(at index: Int) {
+        heldChatMembers.remove(at: index).resume()
     }
 
     /// Applies a reachability change immediately; `setNetworkReachable(reachable:)` does the same asynchronously.
@@ -347,7 +366,11 @@ public actor FakeGimClient: GimClientAPI {
     public func chatMembers(chatId: String) async throws -> [UserProfile] {
         _ = try requireSession()
         if let chatMembersFailure { throw chatMembersFailure }
-        return try existingChat(chatId).members.compactMap { users[$0] }
+        let members = try existingChat(chatId).members.compactMap { users[$0] }
+        if chatMembersHeld {
+            await withCheckedContinuation { heldChatMembers.append($0) }
+        }
+        return members
     }
 
     public func addMembers(chatId: String, userIds: [String]) async throws {

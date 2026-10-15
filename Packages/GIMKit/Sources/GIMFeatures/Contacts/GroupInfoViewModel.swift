@@ -50,6 +50,8 @@ public final class GroupInfoViewModel {
     @ObservationIgnored private var chatList: [ChatSummary] = []
     @ObservationIgnored private var selfUserId: String?
     @ObservationIgnored private var loadGeneration = 0
+    @ObservationIgnored private var appliedGeneration = 0
+    @ObservationIgnored private var activeLoads = 0
     @ObservationIgnored private var listTask: Task<Void, Never>?
     @ObservationIgnored private var timelineTask: Task<Void, Never>?
 
@@ -101,28 +103,42 @@ public final class GroupInfoViewModel {
         timelineTask = nil
     }
 
-    /// Queries the members. Only the newest of overlapping queries is applied.
+    /// Queries the members. Queries may overlap (listener-driven re-queries run alongside the one after a change);
+    /// each result is applied unless a query started later has already been applied, so a slow older query never
+    /// overwrites a newer list and a finished query is not held back by one still running.
     public func load() async {
         loadGeneration += 1
         let generation = loadGeneration
+        activeLoads += 1
         isLoading = true
-        defer { if generation == loadGeneration { isLoading = false } }
+        defer {
+            activeLoads -= 1
+            isLoading = activeLoads > 0
+        }
         do {
             if selfUserId == nil { selfUserId = try await client.session()?.userId }
             let users = try await client.chatMembers(chatId: chatId)
-            guard generation == loadGeneration else { return }
+            guard claimResult(generation) else { return }
             members = users.map { Member(user: $0, isSelf: $0.userId == selfUserId) }
             membersUnavailable = false
             errorMessage = nil
         } catch GimError.NotImplemented {
-            guard generation == loadGeneration else { return }
+            guard claimResult(generation) else { return }
             members = nil
             membersUnavailable = true
             pendingRemoval = nil
         } catch {
-            guard generation == loadGeneration else { return }
+            guard claimResult(generation) else { return }
             errorMessage = ErrorPresenter.message(for: error)
         }
+    }
+
+    /// Whether the result of query `generation` may be applied; records it as the newest applied one.
+    private func claimResult(_ generation: Int) -> Bool {
+        // Leaving removes the chat; queries still in flight would only report it missing.
+        guard generation > appliedGeneration, !isLeaving, !hasLeft else { return false }
+        appliedGeneration = generation
+        return true
     }
 
     /// Looks up `memberHandle` and adds the user.
@@ -189,6 +205,7 @@ public final class GroupInfoViewModel {
             try await client.leaveChat(chatId: chatId)
             stop()
             hasLeft = true
+            errorMessage = nil
         } catch {
             errorMessage = ErrorPresenter.message(for: error)
         }

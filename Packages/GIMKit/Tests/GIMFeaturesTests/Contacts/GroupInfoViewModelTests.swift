@@ -145,6 +145,67 @@ final class GroupInfoViewModelTests: XCTestCase {
         await eventually { self.handles(viewModel) == ["alex", "luca", "nikos"] }
     }
 
+    /// Waits until `count` `chatMembers` calls are held by the fake.
+    @MainActor
+    private func waitForHeldQueries(_ client: FakeGimClient, _ count: Int) async {
+        for _ in 0..<1_000 {
+            if await client.heldChatMembersCount == count { return }
+            try? await Task.sleep(for: .milliseconds(1))
+        }
+        XCTFail("expected \(count) held chatMembers calls")
+    }
+
+    @MainActor
+    func testOverlappingQueriesApplyInStartOrder() async throws {
+        let (client, _) = await connected(makeDemoClient())
+        let chatId = try await client.createGroupChat(name: "Regatta", memberUserIds: ["user-sofia", "user-luca"])
+        // No listeners: this test starts every query itself.
+        let viewModel = GroupInfoViewModel(client: client, chatId: chatId)
+        await client.holdChatMembers(true)
+
+        let stale = Task { await viewModel.load() }
+        await waitForHeldQueries(client, 1)
+        try await client.addMembers(chatId: chatId, userIds: ["user-nikos"])
+        let fresh = Task { await viewModel.load() }
+        await waitForHeldQueries(client, 2)
+        let requery = Task { await viewModel.load() }
+        await waitForHeldQueries(client, 3)
+
+        // A finished query is applied even though a later one (like a listener-driven re-query) is still running.
+        await client.releaseChatMembers(at: 1)
+        await fresh.value
+        XCTAssertEqual(handles(viewModel), ["alex", "sofia", "luca", "nikos"])
+        XCTAssertTrue(viewModel.isLoading)
+
+        // The query that started before the change finishes late and is dropped.
+        await client.releaseChatMembers(at: 0)
+        await stale.value
+        XCTAssertEqual(handles(viewModel), ["alex", "sofia", "luca", "nikos"])
+
+        await client.releaseChatMembers(at: 0)
+        await requery.value
+        XCTAssertEqual(handles(viewModel), ["alex", "sofia", "luca", "nikos"])
+        XCTAssertFalse(viewModel.isLoading)
+    }
+
+    @MainActor
+    func testQueriesFinishingAfterLeavingAreIgnored() async throws {
+        let (client, viewModel) = try await startedGroup()
+        await client.holdChatMembers(true)
+        let inFlight = Task { await viewModel.load() }
+        await waitForHeldQueries(client, 1)
+
+        await viewModel.leave()
+        await client.holdChatMembers(false)
+        await inFlight.value
+        // Re-queries triggered by the leave itself would report the chat as missing.
+        await viewModel.load()
+
+        XCTAssertTrue(viewModel.hasLeft)
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertEqual(viewModel.members?.count, 3)
+    }
+
     func testMembershipChangeDetection() {
         let change = TimelineItem.membershipChange(userName: "Luca", change: .added, atMs: 0)
         let separator = TimelineItem.dateSeparator(dayStartMs: 0)
