@@ -7,3 +7,5 @@ build/
 .DS_Store
 .tmp/
 GIM/Info.plist
+ci/fixtures/gim-server/node_modules/
+.gim-server/

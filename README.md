@@ -35,3 +35,13 @@ scripts/sync-gim-core.sh <gim-core CI run id>
 Downloads the `gim-core-ios-<sha>` artifact with `gh`, verifies its sha256, replaces `Vendor/GIMCore` and writes
 `GIM_CORE_VERSION`. Then compare the generated `Vendor/GIMCore/Sources/GIMCore/GIMCore.swift` with the mirror and
 update `docs/gim-core-mapping.md`.
+
+## Device E2E server
+
+```sh
+scripts/start-gim-server.sh start [port]   # default 8080; prints base URL and log path
+scripts/start-gim-server.sh stop
+```
+
+Runs the vendored gim-server fixture (`ci/fixtures/gim-server`, see its `SOURCE.md`) with bun on 127.0.0.1 and a fresh
+database under `.gim-server/` (override with `GIM_SERVER_RUNTIME_DIR`).
