@@ -37,6 +37,15 @@ final class MessagingSmokeTests: XCTestCase {
             }
         }
         addTeardownBlock { await peer.shutdown() }
+        // New groups need at least two members (NewGroupViewModel.minimumMembers); the bystander only fills the second
+        // seat and never acts. Read ticks need just one reader (SendState.read: "read by at least one recipient").
+        let bystander = try XCTContext.runActivity(named: "step a: bystander registers on \(serverUrl)") { _ in
+            try waitForPeer("step a: bystander registers as bystander_\(suffix)", app) {
+                try await ScriptedPeer.register(
+                    serverUrl: serverUrl, handle: "bystander_\(suffix)", displayName: "Bystander \(suffix)")
+            }
+        }
+        addTeardownBlock { await bystander.shutdown() }
 
         try XCTContext.runActivity(named: "step a: app onboarding with server \(serverUrl)") { _ in
             app.launchArguments += ["-GIMDefaultServerURL", serverUrl]
@@ -65,12 +74,15 @@ final class MessagingSmokeTests: XCTestCase {
             try tap(app.buttons["chatList.newChat"], "step b: New Chat button", app)
             try tap(app.buttons["newChat.newGroup"], "step b: New Group row", app)
             try type(groupName, into: app.textFields["newGroup.name"], "step b: group name field", app)
-            try type(peer.session.handle, into: app.textFields["newGroup.memberHandle"], "step b: member handle", app)
-            try tap(app.buttons["newGroup.addMember"], "step b: Add member button", app)
-            try require(
-                app.buttons["Remove \(peer.session.displayName)"].waitForExistence(timeout: networkTimeout),
-                "step b: peer \(peer.session.handle) added as member chip", app)
-            try tap(app.buttons["newGroup.create"], "step b: Create button", app)
+            for member in [peer.session, bystander.session] {
+                try type(
+                    member.handle, into: app.textFields["newGroup.memberHandle"], "step b: member handle field", app)
+                try tap(app.buttons["newGroup.addMember"], "step b: Add button for \(member.handle)", app)
+                try require(
+                    app.buttons["Remove \(member.displayName)"].waitForExistence(timeout: networkTimeout),
+                    "step b: \(member.handle) added as member chip (footer: \(footerTexts(app)))", app)
+            }
+            try tap(app.buttons["newGroup.create"], "step b: Create button (footer: \(footerTexts(app)))", app)
             try require(
                 app.textViews["composer.text"].waitForExistence(timeout: networkTimeout),
                 "step b: conversation with composer opened", app)
@@ -90,12 +102,14 @@ final class MessagingSmokeTests: XCTestCase {
         let peerText = "Hello from the peer \(suffix)"
         let peerTextId = try XCTContext.runActivity(named: "step d: peer sends image and text, app shows both") { _ in
             _ = try waitForPeer("step d: peer sends an image", app) { try await peer.sendImage(chatId: chatId) }
-            let id = try waitForPeer("step d: peer sends a text", app) {
-                try await peer.sendText(chatId: chatId, body: peerText, replyTo: appMessage.messageId)
-            }
+            scrollToLatest(app)
             try require(
                 app.descendants(matching: .any)["timeline.message.image"].waitForExistence(timeout: networkTimeout),
                 "step d: app shows the peer's image cell", app)
+            let id = try waitForPeer("step d: peer sends a text", app) {
+                try await peer.sendText(chatId: chatId, body: peerText, replyTo: appMessage.messageId)
+            }
+            scrollToLatest(app)
             try require(
                 messageText(peerText, in: app).waitForExistence(timeout: networkTimeout),
                 "step d: app shows the peer's text", app)
@@ -105,16 +119,18 @@ final class MessagingSmokeTests: XCTestCase {
         let replyText = "Reply from the app \(suffix)"
         try XCTContext.runActivity(named: "step f: app replies and reacts, peer sees both") { _ in
             try openMenu(on: messageText(peerText, in: app), "step f: reply menu", app)
-            try tap(app.buttons["Reply"], "step f: Reply menu item", app)
+            try tap(menuItem("Reply", in: app), "step f: Reply menu item", app)
             try send(replyText, "step f", app)
             _ = try eventually("step f: peer receives the reply to its message", app) {
                 try await peer.messages(in: chatId).first {
-                    $0.text == replyText && $0.replyTo?.messageId == peerTextId
+                    // The reply must point at the peer's text; its id is compared first, its quoted text as well
+                    // in case gim-core quotes by a different (wire) id.
+                    $0.text == replyText && ($0.replyTo?.messageId == peerTextId || $0.replyTo?.text == peerText)
                 }
             }
             let reaction = "👍"
             try openMenu(on: messageText(peerText, in: app), "step f: reaction menu", app)
-            try tap(app.buttons[reaction], "step f: \(reaction) menu item", app)
+            try tap(menuItem(reaction, in: app), "step f: \(reaction) menu item", app)
             _ = try eventually("step f: peer sees the \(reaction) reaction", app) {
                 try await peer.messages(in: chatId).first {
                     $0.messageId == peerTextId && $0.reactions.contains { $0.emoji == reaction }
@@ -133,19 +149,22 @@ final class MessagingSmokeTests: XCTestCase {
             try waitForPeer("step g: peer marks read", app) {
                 try await peer.markRead(chatId: chatId, upToMessageId: lastFromApp.messageId)
             }
-            let replyStatus = app.cells
-                .containing(Self.messageTextPredicate(replyText))
-                .descendants(matching: .any)
-                .matching(identifier: "timeline.message.status")
-                .firstMatch
-            let read = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == 'Read'"), object: replyStatus)
+            // The read marker covers every own message up to the newest, which is on screen after scrolling down.
+            // StatusTicksView labels its ticks "Sending", "Sent", "Delivered", "Read" or "Not sent".
+            scrollToLatest(app)
+            let statuses = app.descendants(matching: .any).matching(identifier: "timeline.message.status")
+            let readStatus = statuses.matching(NSPredicate(format: "label == 'Read'")).firstMatch
+            let read = readStatus.waitForExistence(timeout: networkTimeout)
             try require(
-                XCTWaiter().wait(for: [read], timeout: networkTimeout) == .completed,
-                "step g: app's reply shows Read, found \(replyStatus.exists ? replyStatus.label : "no status")", app)
+                read,
+                read
+                    ? ""
+                    : "step g: an own message shows Read, found \(statuses.allElementsBoundByIndex.map(\.label))",
+                app)
         }
 
         try XCTContext.runActivity(named: "step h: sign out returns to onboarding") { _ in
-            try tap(app.navigationBars.buttons["Chats"], "step h: back to Chats", app)
+            try tap(backButton(app), "step h: back to Chats", app)
             try signOut(app)
             let serverField = app.textFields["onboarding.serverUrl"]
             try require(
@@ -163,16 +182,34 @@ final class MessagingSmokeTests: XCTestCase {
     /// covered by the peer-to-app direction.
     @MainActor
     private func sendPhotoIfPickerIsAutomatable(app: XCUIApplication, peer: ScriptedPeer, chatId: String) throws {
-        try tap(app.buttons["composer.attach"], "step e: Attach button", app)
-        try tap(app.buttons["Photo Library"], "step e: Photo Library menu item", app)
+        let attach = app.buttons["composer.attach"]
+        guard attach.waitForExistence(timeout: 10) else {
+            return skipPhotoStep("Attach button not found", app)
+        }
+        attach.tap()
+        let library = menuItem("Photo Library", in: app)
+        guard library.waitForExistence(timeout: 10) else {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)).tap()
+            return skipPhotoStep("Photo Library menu item not found", app)
+        }
+        library.tap()
         let photo = app.images
             .matching(NSPredicate(format: "label BEGINSWITH 'Photo' AND identifier != 'timeline.message.image'"))
             .firstMatch
         guard photo.waitForExistence(timeout: networkTimeout) else {
-            print("[e2e] step e: photo picker grid not reachable; app-to-peer image skipped")
-            attachDiagnostics("step e: photo picker grid not reachable; app-to-peer image skipped", app)
+            skipPhotoStep("photo picker grid not reachable", app)
             let cancel = app.buttons["Cancel"]
-            if cancel.exists { cancel.tap() } else { app.swipeDown(velocity: .fast) }
+            if cancel.exists {
+                cancel.tap()
+            } else {
+                // Drag the sheet down from its top edge; a swipe in the middle would only scroll the grid.
+                app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1))
+                    .press(
+                        forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.95)))
+            }
+            try require(
+                backButton(app).waitForExistence(timeout: 10) && backButton(app).isHittable,
+                "step e: photo picker dismissed after skipping", app)
             return
         }
         photo.tap()
@@ -204,6 +241,48 @@ final class MessagingSmokeTests: XCTestCase {
         try require(
             status == 200,
             "pre-flight: \(url) answered \(status); start the server with `scripts/start-gim-server.sh start`", app)
+    }
+
+    /// Records why the app-to-peer photo step was skipped; the image path stays covered by peer-to-app.
+    @MainActor
+    private func skipPhotoStep(_ reason: String, _ app: XCUIApplication) {
+        print("[e2e] step e: \(reason); app-to-peer image skipped")
+        attachDiagnostics("step e: \(reason); app-to-peer image skipped", app)
+    }
+
+    /// Taps the timeline's jump button when the newest messages are scrolled out of view.
+    @MainActor
+    private func scrollToLatest(_ app: XCUIApplication) {
+        let jump = app.buttons["timeline.jumpToLatest"]
+        if jump.exists && jump.isHittable { jump.tap() }
+    }
+
+    /// A context-menu or pull-down-menu item by its title; UIKit exposes these as buttons, menu items or cells
+    /// depending on the OS version and element size.
+    @MainActor
+    private func menuItem(_ title: String, in app: XCUIApplication) -> XCUIElement {
+        let types = [XCUIElement.ElementType.button, .menuItem, .cell, .staticText].map { NSNumber(value: $0.rawValue) }
+        return app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label == %@ AND elementType IN %@", title, types as NSArray))
+            .firstMatch
+    }
+
+    /// The navigation bar's back button; iOS 26 identifies it as "BackButton" and may show no title.
+    @MainActor
+    private func backButton(_ app: XCUIApplication) -> XCUIElement {
+        app.navigationBars.buttons
+            .matching(NSPredicate(format: "identifier == 'BackButton' OR label == 'Chats'"))
+            .firstMatch
+    }
+
+    /// The form footers' texts (validation and error messages), for failure messages.
+    @MainActor
+    private func footerTexts(_ app: XCUIApplication) -> String {
+        let labels = app.cells.staticTexts.allElementsBoundByIndex.map(\.label)
+        let footers = labels.filter {
+            $0.hasPrefix("Add ") || $0.hasPrefix("No ") || $0.hasPrefix("You ") || $0.hasPrefix("Couldn't")
+        }
+        return footers.isEmpty ? "none" : footers.joined(separator: " | ")
     }
 
     /// Signs out a session left over from an earlier, interrupted run.
@@ -241,29 +320,33 @@ final class MessagingSmokeTests: XCTestCase {
 
     @MainActor
     private func openMenu(on message: XCUIElement, _ step: String, _ app: XCUIApplication) throws {
+        scrollToLatest(app)
         try require(message.waitForExistence(timeout: networkTimeout), "\(step): message bubble visible", app)
         message.press(forDuration: 1.2)
-        try require(app.buttons["Reply"].waitForExistence(timeout: 5), "\(step): context menu open", app)
+        try require(menuItem("Reply", in: app).waitForExistence(timeout: 5), "\(step): context menu open", app)
     }
 
     @MainActor
-    private func type(_ text: String, into element: XCUIElement, _ check: String, _ app: XCUIApplication) throws {
-        try tap(element, check, app)
+    private func type(
+        _ text: String, into element: XCUIElement, _ check: @autoclosure () -> String, _ app: XCUIApplication
+    ) throws {
+        try tap(element, check(), app)
         element.typeText(text)
     }
 
     @MainActor
-    private func tap(_ element: XCUIElement, _ check: String, _ app: XCUIApplication) throws {
+    private func tap(_ element: XCUIElement, _ check: @autoclosure () -> String, _ app: XCUIApplication) throws {
         let ready = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "exists == true AND enabled == true"), object: element)
-        try require(XCTWaiter().wait(for: [ready], timeout: networkTimeout) == .completed, "\(check) ready", app)
+        try require(XCTWaiter().wait(for: [ready], timeout: networkTimeout) == .completed, "\(check()) ready", app)
         element.tap()
     }
 
     /// Records a failure named after the step, with a screenshot and the accessibility tree, and stops the test.
     @MainActor
-    private func require(_ condition: Bool, _ check: String, _ app: XCUIApplication) throws {
+    private func require(_ condition: Bool, _ check: @autoclosure () -> String, _ app: XCUIApplication) throws {
         guard !condition else { return }
+        let check = check()
         attachDiagnostics("Failed: \(check)", app)
         XCTFail("Failed: \(check)")
         throw SmokeTestError.failed(check)

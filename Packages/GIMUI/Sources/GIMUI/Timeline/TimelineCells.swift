@@ -56,6 +56,8 @@ final class MessageCell: UICollectionViewCell {
         imageView.accessibilityTraits = [.image, .button]
         bodyLabel.accessibilityIdentifier = "timeline.message.text"
         imageView.accessibilityIdentifier = "timeline.message.image"
+        // Image views are not accessibility elements by default; the label and traits above need one.
+        imageView.isAccessibilityElement = true
         replyView.accessibilityIdentifier = "timeline.message.reply"
         statusView.accessibilityIdentifier = "timeline.message.status"
         for view in [replyView, imageView, fileView, statusView] as [UIView] {

@@ -281,6 +281,7 @@ public final class TimelineViewController: UIViewController, UICollectionViewDel
         configuration.baseForegroundColor = .label
         jumpButton.configuration = configuration
         jumpButton.accessibilityLabel = "Scroll to the latest message"
+        jumpButton.accessibilityIdentifier = "timeline.jumpToLatest"
         jumpButton.layer.shadowColor = UIColor.black.cgColor
         jumpButton.layer.shadowOpacity = 0.15
         jumpButton.layer.shadowRadius = 4
