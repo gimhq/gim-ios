@@ -25,6 +25,7 @@ public struct NewChatScreen: View {
                 } label: {
                     Label("New Group", systemImage: "person.3")
                 }
+                .accessibilityIdentifier("newChat.newGroup")
             }
             Section {
                 result

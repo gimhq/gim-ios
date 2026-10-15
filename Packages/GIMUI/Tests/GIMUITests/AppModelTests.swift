@@ -7,9 +7,12 @@ import XCTest
 @testable import GIMUI
 
 final class AppModelTests: XCTestCase {
-    private final class MemoryHooks: PlatformHooks, @unchecked Sendable {
+    private final class MemoryHooks: PlatformHooks, PlatformWiping, @unchecked Sendable {
         private let lock = NSLock()
         private var values: [String: Data] = [:]
+        private var wipes = 0
+        /// Thrown by `wipe()` when set.
+        var wipeError: (any Error)?
         private let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).path
 
         func secureStoreGet(key: String) -> Data? { lock.withLock { values[key] } }
@@ -17,15 +20,105 @@ final class AppModelTests: XCTestCase {
         func secureStoreDelete(key: String) { _ = lock.withLock { values.removeValue(forKey: key) } }
         func dataDir() -> String { directory }
         func isNetworkReachable() -> Bool { true }
+
+        var wipeCount: Int { lock.withLock { wipes } }
+
+        func wipe() throws {
+            lock.withLock { wipes += 1 }
+            if let wipeError { throw wipeError }
+        }
+    }
+
+    /// Forwards to a `FakeGimClient`, except that `signOut` always fails.
+    private actor FailingSignOutClient: GimClientAPI {
+        let fake: FakeGimClient
+
+        init(_ fake: FakeGimClient) {
+            self.fake = fake
+        }
+
+        func signOut() async throws { throw GimError.Network(reason: "offline") }
+
+        func session() async throws -> Session? { try await fake.session() }
+        func register(handle: String, displayName: String) async throws -> Session {
+            try await fake.register(handle: handle, displayName: displayName)
+        }
+        func startSync() async throws { try await fake.startSync() }
+        func stopSync() async throws { try await fake.stopSync() }
+        nonisolated func setNetworkReachable(reachable: Bool) { fake.setNetworkReachable(reachable: reachable) }
+        func findUser(handle: String) async throws -> UserProfile? { try await fake.findUser(handle: handle) }
+        func createDirectChat(userId: String) async throws -> String { try await fake.createDirectChat(userId: userId) }
+        func createGroupChat(name: String, memberUserIds: [String]) async throws -> String {
+            try await fake.createGroupChat(name: name, memberUserIds: memberUserIds)
+        }
+        func chatMembers(chatId: String) async throws -> [UserProfile] { try await fake.chatMembers(chatId: chatId) }
+        func addMembers(chatId: String, userIds: [String]) async throws {
+            try await fake.addMembers(chatId: chatId, userIds: userIds)
+        }
+        func removeMember(chatId: String, userId: String) async throws {
+            try await fake.removeMember(chatId: chatId, userId: userId)
+        }
+        func leaveChat(chatId: String) async throws { try await fake.leaveChat(chatId: chatId) }
+        func setGroupInfo(chatId: String, name: String?, avatarFilePath: String?) async throws {
+            try await fake.setGroupInfo(chatId: chatId, name: name, avatarFilePath: avatarFilePath)
+        }
+        func sendText(chatId: String, body: String, replyTo: String?) async throws -> String {
+            try await fake.sendText(chatId: chatId, body: body, replyTo: replyTo)
+        }
+        func sendMedia(
+            chatId: String, filePath: String, mime: String, caption: String?, replyTo: String?
+        ) async throws -> String {
+            try await fake.sendMedia(chatId: chatId, filePath: filePath, mime: mime, caption: caption, replyTo: replyTo)
+        }
+        func editMessage(chatId: String, messageId: String, newBody: String) async throws {
+            try await fake.editMessage(chatId: chatId, messageId: messageId, newBody: newBody)
+        }
+        func deleteMessage(chatId: String, messageId: String) async throws {
+            try await fake.deleteMessage(chatId: chatId, messageId: messageId)
+        }
+        func react(chatId: String, messageId: String, emoji: String) async throws {
+            try await fake.react(chatId: chatId, messageId: messageId, emoji: emoji)
+        }
+        func unreact(chatId: String, messageId: String, emoji: String) async throws {
+            try await fake.unreact(chatId: chatId, messageId: messageId, emoji: emoji)
+        }
+        func retrySend(chatId: String, messageId: String) async throws {
+            try await fake.retrySend(chatId: chatId, messageId: messageId)
+        }
+        func cancelSend(chatId: String, messageId: String) async throws {
+            try await fake.cancelSend(chatId: chatId, messageId: messageId)
+        }
+        func markRead(chatId: String, upToMessageId: String) async throws {
+            try await fake.markRead(chatId: chatId, upToMessageId: upToMessageId)
+        }
+        func setTyping(chatId: String, active: Bool) async throws {
+            try await fake.setTyping(chatId: chatId, active: active)
+        }
+        func fetchMedia(chatId: String, messageId: String, destPath: String) async throws -> String {
+            try await fake.fetchMedia(chatId: chatId, messageId: messageId, destPath: destPath)
+        }
+        func fetchThumbnail(chatId: String, messageId: String, destPath: String) async throws -> String? {
+            try await fake.fetchThumbnail(chatId: chatId, messageId: messageId, destPath: destPath)
+        }
+        func chatList(listener: any ChatListListener) async throws -> TaskHandle {
+            try await fake.chatList(listener: listener)
+        }
+        func timeline(chatId: String) async throws -> any Timeline { try await fake.timeline(chatId: chatId) }
+        func connectionState(listener: any ConnectionStateListener) async throws -> TaskHandle {
+            try await fake.connectionState(listener: listener)
+        }
+        func typing(chatId: String, listener: any TypingListener) async throws -> TaskHandle {
+            try await fake.typing(chatId: chatId, listener: listener)
+        }
     }
 
     /// Returns `clients` in order (the last one repeatedly) and records every config.
     private final class ClientFactory: GimClientFactory, @unchecked Sendable {
         private let lock = NSLock()
         private var recorded: [ClientConfig] = []
-        private let clients: [FakeGimClient]
+        private let clients: [any GimClientAPI]
 
-        init(_ clients: FakeGimClient...) {
+        init(_ clients: any GimClientAPI...) {
             self.clients = clients
         }
 
@@ -48,8 +141,11 @@ final class AppModelTests: XCTestCase {
     }
 
     @MainActor
-    private func makeModel(factory: ClientFactory, defaults: UserDefaults) -> AppModel {
-        AppModel(factory: factory, defaults: defaults) { MemoryHooks() }
+    private func makeModel(
+        factory: ClientFactory, defaults: UserDefaults, bundledServerUrl: String? = nil,
+        hooks: MemoryHooks = MemoryHooks()
+    ) -> AppModel {
+        AppModel(factory: factory, defaults: defaults, bundledServerUrl: bundledServerUrl) { hooks }
     }
 
     func testDefaultFactoryIsTheRealCore() {
@@ -74,6 +170,7 @@ final class AppModelTests: XCTestCase {
         await model.start()
         guard case .onboarding = model.phase else { return XCTFail("expected onboarding, got \(model.phase)") }
         XCTAssertTrue(factory.configs.isEmpty, "no server URL yet, so no client")
+        XCTAssertEqual(model.onboarding?.serverUrl, "")
 
         let onboarding = try XCTUnwrap(model.onboarding)
         onboarding.serverUrl = "http://192.168.1.20:8080"
@@ -145,5 +242,84 @@ final class AppModelTests: XCTestCase {
         await onboarding.submit()
         XCTAssertEqual(factory.configs.count, 2, "a new client is created after signing out")
         guard case .ready = model.phase else { return XCTFail("expected ready, got \(model.phase)") }
+    }
+
+    @MainActor
+    func testFirstLaunchPrefillsTheBundledDefaultServer() async {
+        let model = makeModel(
+            factory: ClientFactory(FakeGimClient()), defaults: makeDefaults(),
+            bundledServerUrl: "http://localhost:8080/")
+        await model.start()
+        XCTAssertEqual(model.onboarding?.serverUrl, "http://localhost:8080")
+    }
+
+    @MainActor
+    func testLaunchArgumentOverridesTheBundledDefaultServer() async {
+        let defaults = makeDefaults()
+        defaults.set("http://127.0.0.1:8080", forKey: AppModel.defaultServerUrlKey)
+        let model = makeModel(
+            factory: ClientFactory(FakeGimClient()), defaults: defaults, bundledServerUrl: "http://localhost:8080")
+        await model.start()
+        XCTAssertEqual(model.onboarding?.serverUrl, "http://127.0.0.1:8080")
+    }
+
+    @MainActor
+    func testStoredServerWinsOverTheDefaults() async {
+        let defaults = makeDefaults()
+        defaults.set("https://gim.example.eu", forKey: AppModel.serverUrlKey)
+        defaults.set("http://127.0.0.1:8080", forKey: AppModel.defaultServerUrlKey)
+        let model = makeModel(
+            factory: ClientFactory(FakeGimClient()), defaults: defaults, bundledServerUrl: "http://localhost:8080")
+        await model.start()
+        XCTAssertEqual(model.onboarding?.serverUrl, "https://gim.example.eu")
+    }
+
+    @MainActor
+    func testSignOutWipesThePlatformOnce() async {
+        let hooks = MemoryHooks()
+        let defaults = makeDefaults()
+        defaults.set("https://gim.example.eu", forKey: AppModel.serverUrlKey)
+        let model = makeModel(
+            factory: ClientFactory(FakeGimClient(session: session), FakeGimClient()), defaults: defaults, hooks: hooks)
+        await model.start()
+
+        let error = await model.signOut()
+
+        XCTAssertNil(error)
+        XCTAssertEqual(hooks.wipeCount, 1)
+        XCTAssertEqual(defaults.string(forKey: AppModel.serverUrlKey), "https://gim.example.eu")
+    }
+
+    @MainActor
+    func testFailedSignOutDoesNotWipe() async {
+        let hooks = MemoryHooks()
+        let defaults = makeDefaults()
+        defaults.set("https://gim.example.eu", forKey: AppModel.serverUrlKey)
+        let client = FailingSignOutClient(FakeGimClient(session: session))
+        let model = makeModel(factory: ClientFactory(client), defaults: defaults, hooks: hooks)
+        await model.start()
+
+        let error = await model.signOut()
+
+        XCTAssertNotNil(error)
+        XCTAssertEqual(hooks.wipeCount, 0)
+        guard case .ready = model.phase else { return XCTFail("expected ready, got \(model.phase)") }
+    }
+
+    @MainActor
+    func testFailedWipeStillReturnsToOnboarding() async {
+        let hooks = MemoryHooks()
+        hooks.wipeError = GimError.Storage(reason: "Keychain delete failed")
+        let defaults = makeDefaults()
+        defaults.set("https://gim.example.eu", forKey: AppModel.serverUrlKey)
+        let model = makeModel(
+            factory: ClientFactory(FakeGimClient(session: session), FakeGimClient()), defaults: defaults, hooks: hooks)
+        await model.start()
+
+        let error = await model.signOut()
+
+        XCTAssertNotNil(error)
+        guard case .onboarding = model.phase else { return XCTFail("expected onboarding, got \(model.phase)") }
+        XCTAssertEqual(model.onboarding?.serverUrl, "https://gim.example.eu")
     }
 }

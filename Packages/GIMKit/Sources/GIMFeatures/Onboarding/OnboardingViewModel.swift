@@ -34,6 +34,15 @@ public enum OnboardingValidation {
         return nil
     }
 
+    /// The initial server field value: the first of the last used server, the launch argument and the bundled
+    /// default that is a valid server URL, normalised; empty when none is.
+    public static func defaultServerUrl(stored: String?, argument: String?, bundled: String?) -> String {
+        for candidate in [stored, argument, bundled] {
+            if let candidate, serverUrlError(candidate) == nil { return normalizedServerUrl(candidate) }
+        }
+        return ""
+    }
+
     /// Returns an error message, or `nil` when the normalised handle matches `^[a-z0-9_.]{3,32}$`.
     public static func handleError(_ raw: String) -> String? {
         let handle = normalizedHandle(raw)
