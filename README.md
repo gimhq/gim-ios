@@ -61,9 +61,12 @@ and sign-out. The peer is a second gim-core client inside the test runner with i
 scripts/start-gim-server.sh start
 xcodegen generate
 xcodebuild test -project GIM.xcodeproj -scheme GIM -only-testing:GIMUITests \
-  -destination 'platform=iOS Simulator,name=iPhone 16' CODE_SIGNING_ALLOWED=NO
+  -destination 'platform=iOS Simulator,name=iPhone 16' CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
 scripts/start-gim-server.sh stop
 ```
+
+Don't pass `CODE_SIGNING_ALLOWED=NO`: the app must be signed (ad hoc is enough) to use the Keychain, otherwise onboarding
+fails with "Couldn't save data on this device". The server log (`.gim-server/server.log`) has one line per request.
 
 The simulator shares the host's loopback, so the test uses `http://127.0.0.1:8080`; set
 `TEST_RUNNER_GIM_E2E_SERVER_URL` to use another server. For the app-to-peer photo step, add an image to the simulator
