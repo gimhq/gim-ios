@@ -52,6 +52,20 @@ final class AppModelTests: XCTestCase {
         AppModel(factory: factory, defaults: defaults) { MemoryHooks() }
     }
 
+    func testDefaultFactoryIsTheRealCore() {
+        XCTAssertTrue(AppModel.defaultFactory(defaults: makeDefaults()) is RealGimClientFactory)
+    }
+
+    func testFakeCoreLaunchArgumentSelectsTheDemoClientInDebugBuilds() {
+        let defaults = makeDefaults()
+        defaults.set(true, forKey: AppModel.useFakeCoreKey)
+        #if DEBUG
+            XCTAssertTrue(AppModel.defaultFactory(defaults: defaults) is CoreGimClientFactory)
+        #else
+            XCTAssertTrue(AppModel.defaultFactory(defaults: defaults) is RealGimClientFactory)
+        #endif
+    }
+
     @MainActor
     func testFirstLaunchShowsOnboardingAndRegistrationShowsReady() async throws {
         let factory = ClientFactory(FakeGimClient())

@@ -29,7 +29,7 @@ public struct GroupInfoScreen: View {
             if let error = viewModel.errorMessage {
                 Section {
                     Text(error).foregroundStyle(.red)
-                    if viewModel.members == nil && !viewModel.membersUnavailable {
+                    if viewModel.members == nil {
                         Button("Try Again") { Task { await viewModel.load() } }
                     }
                 }
@@ -121,7 +121,7 @@ public struct GroupInfoScreen: View {
             } header: {
                 Text("Members")
             } footer: {
-                Text("The member list isn't available in this version yet.")
+                Text("The member list couldn't be loaded.")
             }
         }
     }
