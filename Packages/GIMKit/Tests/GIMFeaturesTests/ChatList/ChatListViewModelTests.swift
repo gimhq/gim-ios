@@ -133,7 +133,21 @@ private final class FailingChatListClient: GimClientAPI {
     private let base = FakeGimClient()
 
     func session() async throws -> Session? { nil }
-    func register(handle: String, displayName: String) async throws -> Session { throw GimError.NotRegistered }
+    func userId() -> String? { nil }
+    func localStateReset() -> Bool { false }
+    func createIdentity(displayName: String) async throws -> String { throw GimError.NotImplemented }
+    func restoreFromRecovery(userId: String, recoveryCode: String, revokeOthers: Bool) async throws {}
+    func startLink(hubs: [String]) throws -> any LinkSession { throw GimError.NotImplemented }
+    func waitLink(link: any LinkSession) async throws -> String { throw GimError.NotImplemented }
+    func confirmLink(accepted: Bool) async throws {}
+    func approveLink(qrString: String) async throws -> any PendingApproval { throw GimError.NotRegistered }
+    func confirmApproval(approval: any PendingApproval, accepted: Bool) async throws {}
+    func devices() async throws -> [DeviceInfo] { throw GimError.NotRegistered }
+    func userDevices(userId: String) async throws -> [DeviceInfo] { throw GimError.NotRegistered }
+    func revokeDevice(deviceId: String) async throws {}
+    func setDisplayName(name: String) async throws {}
+    func claimHandle(handle: String) async throws {}
+    func releaseHandle() async throws {}
     func signOut() async throws {}
     func startSync() async throws {}
     func stopSync() async throws {}
@@ -164,6 +178,7 @@ private final class FailingChatListClient: GimClientAPI {
     func cancelSend(chatId: String, messageId: String) async throws {}
     func markRead(chatId: String, upToMessageId: String) async throws {}
     func setTyping(chatId: String, active: Bool) async throws {}
+    func stopTyping(chatId: String) async throws {}
     func fetchMedia(chatId: String, messageId: String, destPath: String) async throws -> String {
         throw GimError.NotFound(reason: "media")
     }

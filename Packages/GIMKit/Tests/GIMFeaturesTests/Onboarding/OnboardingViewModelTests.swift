@@ -167,7 +167,7 @@ final class OnboardingViewModelTests: XCTestCase {
         XCTAssertTrue(registrations.results.isEmpty)
         XCTAssertEqual(
             viewModel.errorMessage,
-            ErrorPresenter.message(for: GimError.InvalidInput(reason: "Handle is already taken")))
+            ErrorPresenter.message(for: GimError.Server(status: 409, reason: "Handle is already taken")))
         XCTAssertFalse(viewModel.isSubmitting)
         XCTAssertEqual(factory.configs.count, 1)
 

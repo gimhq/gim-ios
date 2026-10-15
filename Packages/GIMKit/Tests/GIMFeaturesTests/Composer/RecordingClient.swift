@@ -88,9 +88,30 @@ actor RecordingClient: GimClientAPI {
     // MARK: - Forwarded
 
     func session() async throws -> Session? { try await fake.session() }
-    func register(handle: String, displayName: String) async throws -> Session {
-        try await fake.register(handle: handle, displayName: displayName)
+    nonisolated func userId() -> String? { fake.userId() }
+    nonisolated func localStateReset() -> Bool { fake.localStateReset() }
+    func createIdentity(displayName: String) async throws -> String {
+        try await fake.createIdentity(displayName: displayName)
     }
+    func restoreFromRecovery(userId: String, recoveryCode: String, revokeOthers: Bool) async throws {
+        try await fake.restoreFromRecovery(userId: userId, recoveryCode: recoveryCode, revokeOthers: revokeOthers)
+    }
+    nonisolated func startLink(hubs: [String]) throws -> any LinkSession { try fake.startLink(hubs: hubs) }
+    func waitLink(link: any LinkSession) async throws -> String { try await fake.waitLink(link: link) }
+    func confirmLink(accepted: Bool) async throws { try await fake.confirmLink(accepted: accepted) }
+    func approveLink(qrString: String) async throws -> any PendingApproval {
+        try await fake.approveLink(qrString: qrString)
+    }
+    func confirmApproval(approval: any PendingApproval, accepted: Bool) async throws {
+        try await fake.confirmApproval(approval: approval, accepted: accepted)
+    }
+    func devices() async throws -> [DeviceInfo] { try await fake.devices() }
+    func userDevices(userId: String) async throws -> [DeviceInfo] { try await fake.userDevices(userId: userId) }
+    func revokeDevice(deviceId: String) async throws { try await fake.revokeDevice(deviceId: deviceId) }
+    func setDisplayName(name: String) async throws { try await fake.setDisplayName(name: name) }
+    func claimHandle(handle: String) async throws { try await fake.claimHandle(handle: handle) }
+    func releaseHandle() async throws { try await fake.releaseHandle() }
+    func stopTyping(chatId: String) async throws { try await fake.stopTyping(chatId: chatId) }
     func signOut() async throws { try await fake.signOut() }
     func startSync() async throws { try await fake.startSync() }
     func stopSync() async throws { try await fake.stopSync() }

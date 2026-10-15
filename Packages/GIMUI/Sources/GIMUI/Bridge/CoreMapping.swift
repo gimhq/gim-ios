@@ -18,6 +18,19 @@ func bridged<T>(_ call: () async throws -> T) async throws -> T {
     }
 }
 
+/// Synchronous `bridged`.
+func bridgedSync<T>(_ call: () throws -> T) throws -> T {
+    do {
+        return try call()
+    } catch let error as GIMCore.GimError {
+        throw GIMClientKit.GimError(error)
+    } catch let error as GIMClientKit.GimError {
+        throw error
+    } catch {
+        throw GIMClientKit.GimError.Internal(reason: String(describing: error))
+    }
+}
+
 extension GIMClientKit.GimError {
     init(_ core: GIMCore.GimError) {
         switch core {
@@ -28,6 +41,8 @@ extension GIMClientKit.GimError {
         case .Crypto(let reason): self = .Crypto(reason: reason)
         case .Storage(let reason): self = .Storage(reason: reason)
         case .Server(let status, let reason): self = .Server(status: status, reason: reason)
+        case .RetryLater(let status, let retryAfterSecs, let reason):
+            self = .RetryLater(status: status, retryAfterSecs: retryAfterSecs, reason: reason)
         case .Cancelled: self = .Cancelled
         case .NotImplemented: self = .NotImplemented
         case .Internal(let reason): self = .Internal(reason: reason)
@@ -46,6 +61,8 @@ extension GIMCore.GimError {
         case .Crypto(let reason): self = .Crypto(reason: reason)
         case .Storage(let reason): self = .Storage(reason: reason)
         case .Server(let status, let reason): self = .Server(status: status, reason: reason)
+        case .RetryLater(let status, let retryAfterSecs, let reason):
+            self = .RetryLater(status: status, retryAfterSecs: retryAfterSecs, reason: reason)
         case .Cancelled: self = .Cancelled
         case .NotImplemented: self = .NotImplemented
         case .Internal(let reason): self = .Internal(reason: reason)
@@ -62,6 +79,13 @@ extension GIMCore.ClientConfig {
 extension GIMClientKit.Session {
     init(_ core: GIMCore.Session) {
         self.init(userId: core.userId, deviceId: core.deviceId, handle: core.handle, displayName: core.displayName)
+    }
+}
+
+extension GIMClientKit.DeviceInfo {
+    init(_ core: GIMCore.DeviceInfo) {
+        self.init(
+            deviceId: core.deviceId, createdAtMs: core.createdAtMs, isCurrent: core.isCurrent, revoked: core.revoked)
     }
 }
 

@@ -150,9 +150,14 @@ public final class OnboardingViewModel {
         let config = ClientConfig(serverUrl: OnboardingValidation.normalizedServerUrl(serverUrl))
         do {
             let client = try await client(for: config)
-            let session = try await client.register(
-                handle: OnboardingValidation.normalizedHandle(handle),
-                displayName: OnboardingValidation.normalizedDisplayName(displayName))
+            // A failed `claimHandle` leaves the identity in place; a retry only claims the handle again.
+            if client.userId() == nil {
+                // TODO(I2c): show the recovery code once instead of discarding it.
+                _ = try await client.createIdentity(
+                    displayName: OnboardingValidation.normalizedDisplayName(displayName))
+            }
+            try await client.claimHandle(handle: OnboardingValidation.normalizedHandle(handle))
+            guard let session = try await client.session() else { throw GimError.NotRegistered }
             onRegistered(Registration(client: client, config: config, session: session))
         } catch {
             errorMessage = ErrorPresenter.message(for: error)
