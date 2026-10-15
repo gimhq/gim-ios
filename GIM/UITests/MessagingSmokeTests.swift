@@ -65,15 +65,33 @@ final class MessagingSmokeTests: XCTestCase {
                 serverField.value as? String == serverUrl,
                 "step a: server field pre-filled with \(serverUrl), found \(String(describing: serverField.value))",
                 app)
-            try type(appHandle, into: app.textFields["onboarding.handle"], "step a: handle field", app)
-            // Return submits the form, like the Create Account button that the keyboard may cover.
-            try type("Alice \(suffix)\n", into: app.textFields["onboarding.displayName"], "step a: display name", app)
+            try tap(app.buttons["onboarding.create"], "step a: Create New Identity button", app)
+            // Return submits the form, like the Create Identity button that the keyboard may cover.
+            try type("Alice \(suffix)\n", into: app.textFields["identity.displayName"], "step a: display name", app)
+            let code = app.descendants(matching: .any)["recovery.code"]
+            try require(
+                code.waitForExistence(timeout: networkTimeout),
+                "step a: recovery code shown (onboarding errors: \(onboardingErrors(app)))", app)
+            let groups = code.label.split(separator: "-").map(String.init)
+            try tap(app.buttons["recovery.continue"], "step a: I Wrote It Down button", app)
+            // The field's placeholder names the requested group: "Group 3".
+            let groupField = app.textFields["recovery.confirmField"]
+            try require(groupField.waitForExistence(timeout: networkTimeout), "step a: group field visible", app)
+            let groupNumber = (groupField.placeholderValue ?? "").split(separator: " ").last.flatMap { Int($0) }
+            guard let groupNumber, groups.indices.contains(groupNumber - 1) else {
+                return try require(
+                    false, "step a: group \(String(describing: groupNumber)) of \(groups.count) recovery groups", app)
+            }
+            try type(groups[groupNumber - 1], into: groupField, "step a: group field", app)
+            try tap(app.buttons["recovery.confirm"], "step a: Confirm button", app)
+            try type(appHandle, into: app.textFields["handle.field"], "step a: handle field", app)
+            try tap(app.buttons["handle.claim"], "step a: Claim Handle button", app)
             let signedIn = app.buttons["chatList.newChat"].waitForExistence(timeout: networkTimeout)
             try require(
                 signedIn,
                 signedIn
                     ? ""
-                    : "step a: chat list visible after Create Account (onboarding errors: \(onboardingErrors(app)))",
+                    : "step a: chat list visible after claiming the handle (onboarding errors: \(onboardingErrors(app)))",
                 app)
         }
         summary.finish("a")
@@ -201,7 +219,7 @@ final class MessagingSmokeTests: XCTestCase {
             try signOut(app)
             let serverField = app.textFields["onboarding.serverUrl"]
             try require(
-                app.textFields["onboarding.handle"].waitForExistence(timeout: networkTimeout),
+                app.buttons["onboarding.create"].waitForExistence(timeout: networkTimeout),
                 "step h: onboarding visible after sign-out", app)
             try require(
                 serverField.value as? String == serverUrl,
@@ -363,16 +381,16 @@ final class MessagingSmokeTests: XCTestCase {
     /// Signs out a session left over from an earlier, interrupted run.
     @MainActor
     private func signOutIfNeeded(_ app: XCUIApplication) throws {
-        let handleField = app.textFields["onboarding.handle"]
+        let createButton = app.buttons["onboarding.create"]
         let settings = app.buttons["chatList.settings"]
         for _ in 0..<Int(networkTimeout) {
-            if handleField.exists { return }
+            if createButton.exists { return }
             if settings.exists {
                 print("[e2e] step a: signing out a leftover session")
                 try signOut(app)
                 return
             }
-            _ = handleField.waitForExistence(timeout: 1)
+            _ = createButton.waitForExistence(timeout: 1)
         }
     }
 

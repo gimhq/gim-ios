@@ -78,7 +78,7 @@ final class OnboardingValidationTests: XCTestCase {
 
 final class OnboardingViewModelTests: XCTestCase {
     @MainActor
-    private final class Registrations {
+    final class Registrations {
         var results: [Registration] = []
     }
 
@@ -86,119 +86,169 @@ final class OnboardingViewModelTests: XCTestCase {
     private func makeViewModel(
         factory: RecordingFactory = RecordingFactory { _ in FakeGimClient() },
         serverUrl: String = "",
-        client: (any GimClientAPI)? = nil
+        client: (any GimClientAPI)? = nil,
+        localStateReset: Bool = false
     ) -> (OnboardingViewModel, Registrations) {
         let registrations = Registrations()
         let viewModel = OnboardingViewModel(
             factory: factory, hooks: TestHooks(dataDir: makeTemporaryDirectory()), serverUrl: serverUrl,
-            client: client
+            client: client, localStateReset: localStateReset, chooseGroup: { $0 - 1 }
         ) { registrations.results.append($0) }
         return (viewModel, registrations)
     }
 
     @MainActor
-    private func fill(_ viewModel: OnboardingViewModel, serverUrl: String, handle: String = "sofia_m") {
-        viewModel.serverUrl = serverUrl
-        viewModel.handle = handle
-        viewModel.displayName = "Sofia Marin"
-    }
-
-    @MainActor
-    func testUntouchedFieldsShowNoErrorsUntilSubmit() async {
+    func testChoosingWithAnInvalidServerShowsTheErrorAndStays() async {
         let factory = RecordingFactory { _ in FakeGimClient() }
-        let (viewModel, registrations) = makeViewModel(factory: factory)
-        XCTAssertNil(viewModel.serverUrlError)
-        XCTAssertNil(viewModel.handleError)
-        XCTAssertNil(viewModel.displayNameError)
-        XCTAssertFalse(viewModel.canSubmit)
+        let (viewModel, _) = makeViewModel(factory: factory)
+        XCTAssertNil(viewModel.serverUrlError, "untouched field")
 
-        await viewModel.submit()
+        viewModel.choose(.createIdentity)
 
         XCTAssertNotNil(viewModel.serverUrlError)
-        XCTAssertNotNil(viewModel.handleError)
-        XCTAssertNotNil(viewModel.displayNameError)
-        XCTAssertTrue(registrations.results.isEmpty)
-        XCTAssertTrue(factory.configs.isEmpty, "no client is created for invalid input")
+        XCTAssertTrue(viewModel.path.isEmpty)
+        XCTAssertNil(viewModel.context)
+        XCTAssertNil(viewModel.createIdentity)
+        XCTAssertTrue(factory.configs.isEmpty)
     }
 
     @MainActor
-    func testTypedInvalidValueShowsInlineError() async {
+    func testTypedInvalidServerShowsInlineError() async {
         let (viewModel, _) = makeViewModel()
-        viewModel.handle = "a!"
-        XCTAssertNotNil(viewModel.handleError)
-        viewModel.handle = "alex"
-        XCTAssertNil(viewModel.handleError)
+        viewModel.serverUrl = "gim.example.eu"
+        XCTAssertNotNil(viewModel.serverUrlError)
+        viewModel.serverUrl = "https://gim.example.eu"
+        XCTAssertNil(viewModel.serverUrlError)
     }
 
     @MainActor
-    func testSubmitCreatesTheClientForTheTypedUrlAndRegisters() async throws {
+    func testChoosingOpensTheRouteForTheNormalisedServer() async {
+        let (viewModel, _) = makeViewModel(serverUrl: " https://gim.example.eu/ ")
+        for route in [OnboardingRoute.linkDevice, .restore, .createIdentity] {
+            viewModel.choose(route)
+            XCTAssertEqual(viewModel.path, [route])
+            XCTAssertEqual(viewModel.context?.config, ClientConfig(serverUrl: "https://gim.example.eu"))
+            XCTAssertEqual(viewModel.createIdentity != nil, route == .createIdentity)
+        }
+    }
+
+    @MainActor
+    func testLocalStateResetNoticeIsShownUntilDismissed() async {
+        let (viewModel, _) = makeViewModel(localStateReset: true)
+        XCTAssertTrue(viewModel.showsLocalStateResetNotice)
+        viewModel.dismissLocalStateResetNotice()
+        XCTAssertFalse(viewModel.showsLocalStateResetNotice)
+
+        let (fresh, _) = makeViewModel()
+        XCTAssertFalse(fresh.showsLocalStateResetNotice)
+    }
+
+    @MainActor
+    func testCreateFlowShowsTheCodeConfirmsItClaimsTheHandleAndRegisters() async throws {
         let client = FakeGimClient()
         let factory = RecordingFactory { _ in client }
-        let (viewModel, registrations) = makeViewModel(factory: factory)
-        viewModel.serverUrl = " https://gim.example.eu/ "
-        viewModel.handle = " Sofia_M "
-        viewModel.displayName = "  Sofia Marin "
-        XCTAssertTrue(viewModel.canSubmit)
+        let (viewModel, registrations) = makeViewModel(factory: factory, serverUrl: "https://gim.example.eu/")
+        viewModel.choose(.createIdentity)
+        let create = try XCTUnwrap(viewModel.createIdentity)
+        create.displayName = "  Sofia Marin "
 
-        await viewModel.submit()
+        await create.submit()
 
         XCTAssertEqual(factory.configs, [ClientConfig(serverUrl: "https://gim.example.eu")])
+        guard case .recoveryCode(let recovery) = viewModel.stage else {
+            return XCTFail("expected the recovery code, got \(String(describing: viewModel.stage))")
+        }
+        XCTAssertEqual(recovery.groups.count, 10)
+        XCTAssertEqual(recovery.confirmationGroupIndex, 9, "chooseGroup picks the last group")
+        recovery.continueToConfirmation()
+        recovery.confirmationInput = recovery.groups[9]
+        recovery.confirm()
+
+        XCTAssertNil(recovery.code, "the code is dropped after confirmation")
+        guard case .claimHandle(let claim) = viewModel.stage else {
+            return XCTFail("expected the handle step, got \(String(describing: viewModel.stage))")
+        }
+        claim.handle = " Sofia_M "
+        await claim.claim()
+
         let result = try XCTUnwrap(registrations.results.first)
         XCTAssertTrue(result.client === client)
         XCTAssertEqual(result.config, ClientConfig(serverUrl: "https://gim.example.eu"))
         XCTAssertEqual(result.session.handle, "sofia_m")
         XCTAssertEqual(result.session.displayName, "Sofia Marin")
-        XCTAssertNil(viewModel.errorMessage)
-        XCTAssertFalse(viewModel.isSubmitting)
         let session = try await client.session()
         XCTAssertEqual(session, result.session)
     }
 
     @MainActor
-    func testFailedSubmitReusesTheClientUntilTheUrlChanges() async {
-        let taken = UserProfile(userId: "user-sofia", handle: "sofia", displayName: "Sofia")
-        let factory = RecordingFactory { _ in FakeGimClient(users: [taken]) }
-        let (viewModel, registrations) = makeViewModel(factory: factory)
-        fill(viewModel, serverUrl: "https://gim.example.eu", handle: "sofia")
+    func testSkippingTheHandleRegistersWithoutOne() async throws {
+        let (viewModel, registrations) = makeViewModel(serverUrl: "https://gim.example.eu")
+        viewModel.choose(.createIdentity)
+        let create = try XCTUnwrap(viewModel.createIdentity)
+        create.displayName = "Sofia"
+        await create.submit()
+        guard case .recoveryCode(let recovery) = viewModel.stage else { return XCTFail("expected the recovery code") }
+        recovery.continueToConfirmation()
+        recovery.confirmationInput = recovery.groups[recovery.confirmationGroupIndex]
+        recovery.confirm()
+        guard case .claimHandle(let claim) = viewModel.stage else { return XCTFail("expected the handle step") }
 
-        await viewModel.submit()
-        await viewModel.submit()
+        await claim.skip()
 
-        XCTAssertTrue(registrations.results.isEmpty)
-        XCTAssertEqual(
-            viewModel.errorMessage,
-            ErrorPresenter.message(for: GimError.Server(status: 409, reason: "Handle is already taken")))
-        XCTAssertFalse(viewModel.isSubmitting)
-        XCTAssertEqual(factory.configs.count, 1)
-
-        viewModel.serverUrl = "https://other.example.eu"
-        await viewModel.submit()
-        XCTAssertEqual(factory.configs.map(\.serverUrl), ["https://gim.example.eu", "https://other.example.eu"])
+        XCTAssertEqual(registrations.results.first?.session.handle, "")
     }
 
     @MainActor
-    func testExistingClientIsUsedForItsUrl() async {
-        let client = FakeGimClient()
+    func testClientWithAnIdentitySkipsTheCodeAndAsksForTheHandle() async throws {
+        let session = Session(userId: "user-sofia", deviceId: "device-1", handle: "", displayName: "Sofia")
+        let client = FakeGimClient(session: session)
         let factory = RecordingFactory { _ in FakeGimClient() }
-        let (viewModel, registrations) = makeViewModel(
-            factory: factory, serverUrl: "https://gim.example.eu", client: client)
-        fill(viewModel, serverUrl: "https://gim.example.eu")
+        let (viewModel, _) = makeViewModel(factory: factory, serverUrl: "https://gim.example.eu", client: client)
+        viewModel.choose(.createIdentity)
+        let create = try XCTUnwrap(viewModel.createIdentity)
+        create.displayName = "Sofia"
 
-        await viewModel.submit()
+        await create.submit()
 
-        XCTAssertTrue(factory.configs.isEmpty)
-        XCTAssertTrue(registrations.results.first?.client === client)
+        XCTAssertTrue(factory.configs.isEmpty, "the existing client is used for its URL")
+        guard case .claimHandle = viewModel.stage else {
+            return XCTFail("expected the handle step, got \(String(describing: viewModel.stage))")
+        }
+        XCTAssertNil(create.errorMessage)
     }
 
     @MainActor
-    func testClientCreationErrorIsPresented() async {
-        let factory = RecordingFactory { _ in throw GimError.InvalidInput(reason: "server_url: missing host") }
-        let (viewModel, registrations) = makeViewModel(factory: factory)
-        fill(viewModel, serverUrl: "https://gim.example.eu")
+    func testContextReusesTheClientUntilDiscardedOrTheUrlChanges() async throws {
+        let factory = RecordingFactory { _ in FakeGimClient() }
+        let (viewModel, _) = makeViewModel(factory: factory, serverUrl: "https://gim.example.eu")
+        viewModel.choose(.linkDevice)
+        let context = try XCTUnwrap(viewModel.context)
+        let first = try await context.client()
+        let again = try await context.client()
+        XCTAssertTrue(first === again)
 
-        await viewModel.submit()
+        context.discardClient()
+        let afterDiscard = try await context.client()
+        XCTAssertFalse(first === afterDiscard)
 
-        XCTAssertTrue(registrations.results.isEmpty)
-        XCTAssertEqual(viewModel.errorMessage, "server_url: missing host")
+        viewModel.path = []
+        viewModel.serverUrl = "https://other.example.eu"
+        viewModel.choose(.restore)
+        _ = try await XCTUnwrap(viewModel.context).client()
+        XCTAssertEqual(
+            factory.configs.map(\.serverUrl),
+            ["https://gim.example.eu", "https://gim.example.eu", "https://other.example.eu"])
+    }
+
+    @MainActor
+    func testContextCompletionRegisters() async throws {
+        let (viewModel, registrations) = makeViewModel(serverUrl: "https://gim.example.eu")
+        viewModel.choose(.restore)
+        let context = try XCTUnwrap(viewModel.context)
+        let session = Session(userId: "user-sofia", deviceId: "device-2", handle: "sofia", displayName: "Sofia")
+
+        context.onRegistered(Registration(client: FakeGimClient(), config: context.config, session: session))
+
+        XCTAssertEqual(registrations.results.map(\.session), [session])
     }
 }
