@@ -19,8 +19,8 @@ public final class AppModel {
     }
 
     public static let serverUrlKey = "gim.serverUrl"
-    /// Debug builds use gim-core instead of the demo client when launched with `-GIMUseRealCore YES`.
-    public nonisolated static let useRealCoreKey = "GIMUseRealCore"
+    /// Debug builds use the demo client instead of gim-core when launched with `-GIMUseFakeCore YES`.
+    public nonisolated static let useFakeCoreKey = "GIMUseFakeCore"
 
     public private(set) var phase: Phase = .launching
     public private(set) var session: Session?
@@ -52,13 +52,13 @@ public final class AppModel {
         self.makeHooks = makeHooks
     }
 
-    /// The demo client (`CoreGimClientFactory`) until gim-core implements the client; in debug builds the
-    /// `useRealCoreKey` launch argument selects `RealGimClientFactory`.
+    /// gim-core (`RealGimClientFactory`); in debug builds the `useFakeCoreKey` launch argument selects the demo
+    /// client (`CoreGimClientFactory`). Release builds always use gim-core.
     public nonisolated static func defaultFactory(defaults: UserDefaults = .standard) -> any GimClientFactory {
         #if DEBUG
-            if defaults.bool(forKey: useRealCoreKey) { return RealGimClientFactory() }
+            if defaults.bool(forKey: useFakeCoreKey) { return CoreGimClientFactory() }
         #endif
-        return CoreGimClientFactory()
+        return RealGimClientFactory()
     }
 
     public static func defaultHooks() throws -> any PlatformHooks {

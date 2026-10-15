@@ -174,7 +174,7 @@ public actor FakeGimClient: GimClientAPI {
         sendFailuresRemaining = count
     }
 
-    /// While set, `chatMembers` throws `error` (for example `.NotImplemented`, as gim-core does before it ships).
+    /// While set, `chatMembers` throws `error` (for example `.Network`).
     public func failChatMembers(with error: GimError?) {
         chatMembersFailure = error
     }
@@ -415,6 +415,9 @@ public actor FakeGimClient: GimClientAPI {
     public func setGroupInfo(chatId: String, name: String?, avatarFilePath: String?) async throws {
         _ = try requireSession()
         var chat = try existingGroup(chatId, "Only groups have a name and avatar")
+        guard name != nil || avatarFilePath != nil else {
+            throw GimError.InvalidInput(reason: "Set a name or an avatar")
+        }
         if let name {
             let name = name.trimmingCharacters(in: .whitespaces)
             guard !name.isEmpty else { throw GimError.InvalidInput(reason: "Group name is required") }
