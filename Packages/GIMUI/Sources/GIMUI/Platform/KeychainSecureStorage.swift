@@ -2,52 +2,43 @@ import Foundation
 import GIMClientKit
 import Security
 
-public struct KeychainError: Error, Hashable {
-    public let status: OSStatus
-}
-
-/// `SecureStorage` backed by generic-password Keychain items that never leave this device.
-public final class KeychainSecureStorage: SecureStorage {
+/// The secure store half of `PlatformHooks`: generic-password Keychain items that never leave this device.
+public final class KeychainSecureStorage: Sendable {
     private let service: String
 
     public init(service: String = "im.g.apps") {
         self.service = service
     }
 
-    public func get(key: String) throws -> Data? {
+    /// `nil` when the key does not exist or the Keychain can't be read.
+    public func secureStoreGet(key: String) -> Data? {
         var query = baseQuery(key: key)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
         var result: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-        switch status {
-        case errSecSuccess: return result as? Data
-        case errSecItemNotFound: return nil
-        default: throw KeychainError(status: status)
-        }
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess else { return nil }
+        return result as? Data
     }
 
-    public func set(key: String, value: Data) throws {
+    /// Throws `GimError.Storage` when the Keychain rejects the write.
+    public func secureStoreSet(key: String, value: Data) throws {
         let attributes: [String: Any] = [
             kSecValueData as String: value,
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
         ]
-        let status = SecItemUpdate(baseQuery(key: key) as CFDictionary, attributes as CFDictionary)
-        switch status {
-        case errSecSuccess:
-            return
-        case errSecItemNotFound:
+        var status = SecItemUpdate(baseQuery(key: key) as CFDictionary, attributes as CFDictionary)
+        if status == errSecItemNotFound {
             let query = baseQuery(key: key).merging(attributes) { _, new in new }
-            let addStatus = SecItemAdd(query as CFDictionary, nil)
-            guard addStatus == errSecSuccess else { throw KeychainError(status: addStatus) }
-        default:
-            throw KeychainError(status: status)
+            status = SecItemAdd(query as CFDictionary, nil)
+        }
+        guard status == errSecSuccess else {
+            throw GimError.Storage(reason: "Keychain write failed with status \(status)")
         }
     }
 
-    public func delete(key: String) throws {
-        let status = SecItemDelete(baseQuery(key: key) as CFDictionary)
-        guard status == errSecSuccess || status == errSecItemNotFound else { throw KeychainError(status: status) }
+    /// A missing key is not an error.
+    public func secureStoreDelete(key: String) {
+        SecItemDelete(baseQuery(key: key) as CFDictionary)
     }
 
     private func baseQuery(key: String) -> [String: Any] {

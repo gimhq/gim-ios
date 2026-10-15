@@ -104,5 +104,8 @@ private struct ValidationMessage: View {
 }
 
 #Preview {
-    OnboardingScreen(viewModel: OnboardingViewModel(client: FakeGimClient()) { _ in })
+    OnboardingScreen(
+        viewModel: OnboardingViewModel(
+            factory: CoreGimClientFactory(), hooks: AppPlatformHooks(dataDirectory: NSTemporaryDirectory())
+        ) { _ in })
 }

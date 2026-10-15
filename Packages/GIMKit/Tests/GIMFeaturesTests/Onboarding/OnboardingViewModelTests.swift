@@ -50,19 +50,34 @@ final class OnboardingValidationTests: XCTestCase {
 final class OnboardingViewModelTests: XCTestCase {
     @MainActor
     private final class Registrations {
-        var sessions: [Session] = []
+        var results: [Registration] = []
     }
 
     @MainActor
-    private func makeViewModel(client: FakeGimClient = FakeGimClient()) -> (OnboardingViewModel, Registrations) {
+    private func makeViewModel(
+        factory: RecordingFactory = RecordingFactory { _ in FakeGimClient() },
+        serverUrl: String = "",
+        client: (any GimClientAPI)? = nil
+    ) -> (OnboardingViewModel, Registrations) {
         let registrations = Registrations()
-        let viewModel = OnboardingViewModel(client: client) { registrations.sessions.append($0) }
+        let viewModel = OnboardingViewModel(
+            factory: factory, hooks: TestHooks(dataDir: makeTemporaryDirectory()), serverUrl: serverUrl,
+            client: client
+        ) { registrations.results.append($0) }
         return (viewModel, registrations)
     }
 
     @MainActor
+    private func fill(_ viewModel: OnboardingViewModel, serverUrl: String, handle: String = "sofia_m") {
+        viewModel.serverUrl = serverUrl
+        viewModel.handle = handle
+        viewModel.displayName = "Sofia Marin"
+    }
+
+    @MainActor
     func testUntouchedFieldsShowNoErrorsUntilSubmit() async {
-        let (viewModel, registrations) = makeViewModel()
+        let factory = RecordingFactory { _ in FakeGimClient() }
+        let (viewModel, registrations) = makeViewModel(factory: factory)
         XCTAssertNil(viewModel.serverUrlError)
         XCTAssertNil(viewModel.handleError)
         XCTAssertNil(viewModel.displayNameError)
@@ -73,7 +88,8 @@ final class OnboardingViewModelTests: XCTestCase {
         XCTAssertNotNil(viewModel.serverUrlError)
         XCTAssertNotNil(viewModel.handleError)
         XCTAssertNotNil(viewModel.displayNameError)
-        XCTAssertTrue(registrations.sessions.isEmpty)
+        XCTAssertTrue(registrations.results.isEmpty)
+        XCTAssertTrue(factory.configs.isEmpty, "no client is created for invalid input")
     }
 
     @MainActor
@@ -86,9 +102,10 @@ final class OnboardingViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testSubmitRegistersNormalisedValues() async throws {
+    func testSubmitCreatesTheClientForTheTypedUrlAndRegisters() async throws {
         let client = FakeGimClient()
-        let (viewModel, registrations) = makeViewModel(client: client)
+        let factory = RecordingFactory { _ in client }
+        let (viewModel, registrations) = makeViewModel(factory: factory)
         viewModel.serverUrl = " https://gim.example.eu/ "
         viewModel.handle = " Sofia_M "
         viewModel.displayName = "  Sofia Marin "
@@ -96,29 +113,63 @@ final class OnboardingViewModelTests: XCTestCase {
 
         await viewModel.submit()
 
-        let session = try XCTUnwrap(registrations.sessions.first)
-        XCTAssertEqual(session.serverUrl, "https://gim.example.eu")
-        XCTAssertEqual(session.handle, "sofia_m")
-        XCTAssertEqual(session.displayName, "Sofia Marin")
+        XCTAssertEqual(factory.configs, [ClientConfig(serverUrl: "https://gim.example.eu")])
+        let result = try XCTUnwrap(registrations.results.first)
+        XCTAssertTrue(result.client === client)
+        XCTAssertEqual(result.config, ClientConfig(serverUrl: "https://gim.example.eu"))
+        XCTAssertEqual(result.session.handle, "sofia_m")
+        XCTAssertEqual(result.session.displayName, "Sofia Marin")
         XCTAssertNil(viewModel.errorMessage)
         XCTAssertFalse(viewModel.isSubmitting)
-        let state = try await client.loginState()
-        XCTAssertEqual(state, .registered(session))
+        let session = try await client.session()
+        XCTAssertEqual(session, result.session)
     }
 
     @MainActor
-    func testSubmitFailureShowsPresentedError() async {
+    func testFailedSubmitReusesTheClientUntilTheUrlChanges() async {
         let taken = UserProfile(userId: "user-sofia", handle: "sofia", displayName: "Sofia")
-        let (viewModel, registrations) = makeViewModel(client: FakeGimClient(users: [taken]))
-        viewModel.serverUrl = "https://gim.example.eu"
-        viewModel.handle = "sofia"
-        viewModel.displayName = "Sofia"
+        let factory = RecordingFactory { _ in FakeGimClient(users: [taken]) }
+        let (viewModel, registrations) = makeViewModel(factory: factory)
+        fill(viewModel, serverUrl: "https://gim.example.eu", handle: "sofia")
+
+        await viewModel.submit()
+        await viewModel.submit()
+
+        XCTAssertTrue(registrations.results.isEmpty)
+        XCTAssertEqual(
+            viewModel.errorMessage,
+            ErrorPresenter.message(for: GimError.InvalidInput(reason: "Handle is already taken")))
+        XCTAssertFalse(viewModel.isSubmitting)
+        XCTAssertEqual(factory.configs.count, 1)
+
+        viewModel.serverUrl = "https://other.example.eu"
+        await viewModel.submit()
+        XCTAssertEqual(factory.configs.map(\.serverUrl), ["https://gim.example.eu", "https://other.example.eu"])
+    }
+
+    @MainActor
+    func testExistingClientIsUsedForItsUrl() async {
+        let client = FakeGimClient()
+        let factory = RecordingFactory { _ in FakeGimClient() }
+        let (viewModel, registrations) = makeViewModel(
+            factory: factory, serverUrl: "https://gim.example.eu", client: client)
+        fill(viewModel, serverUrl: "https://gim.example.eu")
 
         await viewModel.submit()
 
-        XCTAssertTrue(registrations.sessions.isEmpty)
-        XCTAssertEqual(
-            viewModel.errorMessage, ErrorPresenter.message(for: GimError.invalidInput("Handle is already taken")))
-        XCTAssertFalse(viewModel.isSubmitting)
+        XCTAssertTrue(factory.configs.isEmpty)
+        XCTAssertTrue(registrations.results.first?.client === client)
+    }
+
+    @MainActor
+    func testClientCreationErrorIsPresented() async {
+        let factory = RecordingFactory { _ in throw GimError.InvalidInput(reason: "server_url: missing host") }
+        let (viewModel, registrations) = makeViewModel(factory: factory)
+        fill(viewModel, serverUrl: "https://gim.example.eu")
+
+        await viewModel.submit()
+
+        XCTAssertTrue(registrations.results.isEmpty)
+        XCTAssertEqual(viewModel.errorMessage, "server_url: missing host")
     }
 }

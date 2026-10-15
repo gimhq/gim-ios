@@ -29,17 +29,24 @@ final class Recorder<Event: Sendable>: @unchecked Sendable {
 }
 
 extension Recorder: ChatListListener where Event == [ChatListDiff] {
-    func onDiffs(_ diffs: [ChatListDiff]) { record(diffs) }
+    func onUpdate(diffs: [ChatListDiff]) { record(diffs) }
 
     /// The list obtained by applying every recorded diff in order.
     var items: [ChatSummary] {
         var items: [ChatSummary] = []
         for diff in allEvents.joined() {
             switch diff {
-            case .reset(let all): items = all
-            case .insert(let index, let item): items.insert(item, at: Int(index))
-            case .update(let index, let item): items[Int(index)] = item
+            case .append(let values): items += values
+            case .clear: items = []
+            case .pushFront(let value): items.insert(value, at: 0)
+            case .pushBack(let value): items.append(value)
+            case .popFront: items.removeFirst()
+            case .popBack: items.removeLast()
+            case .insert(let index, let value): items.insert(value, at: Int(index))
+            case .set(let index, let value): items[Int(index)] = value
             case .remove(let index): items.remove(at: Int(index))
+            case .truncate(let length): items.removeSubrange(Int(length)...)
+            case .reset(let values): items = values
             }
         }
         return items
@@ -47,29 +54,40 @@ extension Recorder: ChatListListener where Event == [ChatListDiff] {
 }
 
 extension Recorder: TimelineListener where Event == [TimelineDiff] {
-    func onDiffs(_ diffs: [TimelineDiff]) { record(diffs) }
+    func onUpdate(diffs: [TimelineDiff]) { record(diffs) }
 
-    var items: [TimelineMessage] {
-        var items: [TimelineMessage] = []
+    var items: [TimelineItem] {
+        var items: [TimelineItem] = []
         for diff in allEvents.joined() {
             switch diff {
-            case .reset(let all): items = all
-            case .insert(let index, let item): items.insert(item, at: Int(index))
-            case .update(let index, let item): items[Int(index)] = item
+            case .append(let values): items += values
+            case .clear: items = []
+            case .pushFront(let value): items.insert(value, at: 0)
+            case .pushBack(let value): items.append(value)
+            case .popFront: items.removeFirst()
+            case .popBack: items.removeLast()
+            case .insert(let index, let value): items.insert(value, at: Int(index))
+            case .set(let index, let value): items[Int(index)] = value
             case .remove(let index): items.remove(at: Int(index))
+            case .truncate(let length): items.removeSubrange(Int(length)...)
+            case .reset(let values): items = values
             }
         }
         return items
     }
+
+    /// The message items, without date separators and membership changes.
+    var messages: [MessageItem] {
+        items.compactMap { if case .message(let item) = $0 { item } else { nil } }
+    }
 }
 
-extension Recorder: ConnectionListener where Event == ConnectionState {
-    func onState(_ state: ConnectionState) { record(state) }
+extension Recorder: ConnectionStateListener where Event == ConnectionState {
+    func onChange(state: ConnectionState) { record(state) }
 }
 
 extension Recorder: TypingListener where Event == [String] {
-    /// Records the handles of the typing users.
-    func onTyping(chatId: ChatId, users: [UserProfile]) { record(users.map(\.handle)) }
+    func onUpdate(userIds: [String]) { record(userIds) }
 }
 
 /// A settable clock for `FakeGimClient(now:)`.
@@ -94,6 +112,17 @@ extension XCTestCase {
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         addTeardownBlock { try? FileManager.default.removeItem(at: url) }
         return url.path
+    }
+
+    /// Polls `condition` until it holds; fails after about a second.
+    func eventually(
+        file: StaticString = #filePath, line: UInt = #line, _ condition: @Sendable () async -> Bool
+    ) async {
+        for _ in 0..<1_000 {
+            if await condition() { return }
+            try? await Task.sleep(for: .milliseconds(1))
+        }
+        XCTFail("condition not met", file: file, line: line)
     }
 
     func assertThrows<T>(

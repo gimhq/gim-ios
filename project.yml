@@ -13,6 +13,8 @@ packages:
     path: Packages/GIMKit
   GIMUI:
     path: Packages/GIMUI
+  GIMCore:
+    path: Vendor/GIMCore
 targets:
   GIM:
     type: application
