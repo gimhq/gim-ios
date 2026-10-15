@@ -113,12 +113,15 @@ when it throws `GimError.NotImplemented`, which is what `e69fcba` still does.
 
 ## Swap checklist
 
-1. Add `GIMCore.xcframework` and `import GIMCore` in GIMClientKit; delete `Models.swift` and the mirror declarations in
-   `GimClientAPI.swift`, keeping `GimClientFactory` and `CoreGimClientFactory`.
-2. Add `public typealias GimClientAPI = GimClientProtocol` (or rename the uses).
-3. Replace `any Timeline` with `Timeline` in the ViewModels and `ListenerBridge`.
-4. `FakeGimClient`: return a `FakeTimeline: Timeline` subclass and a `TaskHandle` subclass, both created with
-   `init(noHandle: .init())` and overriding the methods. The subclass handle must cancel in its own `deinit`, since
-   the generated `deinit` does nothing for handle-less objects. `setNetworkReachable` stays `nonisolated`.
-5. `GIMUI` needs no changes: `AppPlatformHooks` already implements `PlatformHooks`, and `AppModel` creates clients
-   through `CoreGimClientFactory`.
+The mirror is permanent; there is no swap that deletes it.
+
+- GIMClientKit keeps `GimClientAPI`, the models and `FakeGimClient`. GIMKit never imports `GIMCore`, so the
+  ViewModels and their tests stay on Linux.
+- `Packages/GIMUI/Sources/GIMUI/Bridge` maps `GIMCore` to the mirror: `RealGimClientFactory` calls
+  `GIMCore.createClient`, `RealGimClient` implements `GimClientAPI` by converting every value 1:1 (`CoreMapping`),
+  rethrowing errors as the mirror's `GimError`, and `CoreListeners` adapts the callback interfaces and delivers
+  them on the main queue.
+- `FakeGimClient` (through `CoreGimClientFactory`) is the default client in every build.
+- In debug builds the launch argument `-GIMUseRealCore YES` makes `AppModel.defaultFactory()` return
+  `RealGimClientFactory`, so the app runs against the real core.
+- The default flips to the real core after gim-core S11; the fake then remains for previews, demo mode and tests.

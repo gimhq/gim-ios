@@ -3,24 +3,39 @@ import GIMFeatures
 import SwiftUI
 import UIKit
 
+/// What a message menu can do on the chat screen besides calling the client.
+@MainActor
+public struct MessageMenuContext {
+    public let timeline: TimelineViewModel
+    /// Makes the message the composer's reply target.
+    public let reply: (MessageItem) -> Void
+    /// Puts the composer into edit mode for the message.
+    public let edit: (MessageItem) -> Void
+}
+
 /// One chat: the timeline, the chat name with who is typing, group info for groups, and a bottom slot for the
 /// composer.
 public struct ChatScreen<Composer: View>: View {
     private let client: any GimClientAPI
-    private let contextMenuProvider: ((MessageItem) -> UIMenu?)?
-    private let composer: (TimelineViewModel, Binding<MessageItem?>) -> Composer
+    private let contextMenuProvider: ((MessageItem, MessageMenuContext) -> UIMenu?)?
+    private let composer: (TimelineViewModel, Binding<MessageItem?>, Binding<MessageItem?>) -> Composer
 
     @State private var viewModel: TimelineViewModel
     /// Set by the timeline's Reply action; the composer shows and clears it.
     @State private var replyingTo: MessageItem?
+    /// Set by the menu's Edit action; the composer edits it and clears it.
+    @State private var editing: MessageItem?
     @Environment(\.dismiss) private var dismiss
 
     /// - Parameters:
-    ///   - contextMenuProvider: replaces the timeline's default long-press menu.
-    ///   - composer: placed in the bottom safe area, given the timeline and the message being replied to.
+    ///   - contextMenuProvider: replaces the timeline's default long-press menu; the context starts a reply or an
+    ///     edit.
+    ///   - composer: placed in the bottom safe area, given the timeline, the message being replied to and the
+    ///     message being edited.
     public init(
-        client: any GimClientAPI, chatId: String, contextMenuProvider: ((MessageItem) -> UIMenu?)? = nil,
-        @ViewBuilder composer: @escaping (TimelineViewModel, Binding<MessageItem?>) -> Composer
+        client: any GimClientAPI, chatId: String,
+        contextMenuProvider: ((MessageItem, MessageMenuContext) -> UIMenu?)? = nil,
+        @ViewBuilder composer: @escaping (TimelineViewModel, Binding<MessageItem?>, Binding<MessageItem?>) -> Composer
     ) {
         self.client = client
         self.contextMenuProvider = contextMenuProvider
@@ -30,10 +45,11 @@ public struct ChatScreen<Composer: View>: View {
 
     public var body: some View {
         TimelineRepresentable(
-            viewModel: viewModel, onReply: { replyingTo = $0 }, contextMenuProvider: contextMenuProvider
+            viewModel: viewModel, onReply: { menuContext.reply($0) },
+            contextMenuProvider: contextMenuProvider.map { provider in { [menuContext] in provider($0, menuContext) } }
         )
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            composer(viewModel, $replyingTo)
+            composer(viewModel, $replyingTo, $editing)
         }
         .navigationTitle(viewModel.title)
         .navigationBarTitleDisplayMode(.inline)
@@ -79,10 +95,28 @@ public struct ChatScreen<Composer: View>: View {
     }
 }
 
+extension ChatScreen {
+    /// Reply and edit exclude each other.
+    private var menuContext: MessageMenuContext {
+        let replyingTo = $replyingTo
+        let editing = $editing
+        return MessageMenuContext(
+            timeline: viewModel,
+            reply: { message in
+                editing.wrappedValue = nil
+                replyingTo.wrappedValue = message
+            },
+            edit: { message in
+                replyingTo.wrappedValue = nil
+                editing.wrappedValue = message
+            })
+    }
+}
+
 extension ChatScreen where Composer == EmptyView {
     /// The chat without a composer.
     public init(client: any GimClientAPI, chatId: String) {
-        self.init(client: client, chatId: chatId) { _, _ in EmptyView() }
+        self.init(client: client, chatId: chatId) { _, _, _ in EmptyView() }
     }
 }
 

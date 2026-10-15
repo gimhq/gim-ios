@@ -1,4 +1,5 @@
 import GIMClientKit
+import GIMFeatures
 import SwiftUI
 
 /// Top-level view: launch progress, onboarding, or the signed-in navigation stack.
@@ -61,13 +62,14 @@ private struct SignedInView: View {
     let signOut: () async -> String?
 
     @State private var path: [String] = []
+    @State private var drafts = ComposerDrafts()
     @State private var showsSettings = false
 
     var body: some View {
         NavigationStack(path: $path) {
             ChatListScreen(client: client, onOpen: { path.append($0) }, onOpenSettings: { showsSettings = true })
                 .navigationDestination(for: String.self) { chatId in
-                    ChatScreen(client: client, chatId: chatId)
+                    ConversationScreen(client: client, chatId: chatId, drafts: drafts)
                 }
         }
         .sheet(isPresented: $showsSettings) {
