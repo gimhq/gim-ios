@@ -8,7 +8,7 @@ import Observation
 @Observable
 public final class ChatListViewModel {
     public private(set) var rows: [ChatRow] = []
-    public private(set) var connectionState: ConnectionState = .online
+    public private(set) var connectionState: ConnectionState = .offline
     /// True until the first chat list arrives.
     public private(set) var isLoading = true
     /// Set when subscribing failed.
@@ -45,7 +45,7 @@ public final class ChatListViewModel {
         }
         connectionTask = Task { [weak self] in
             do {
-                for await state in try await ListenerBridge.connection(client) {
+                for await state in try await ListenerBridge.connectionState(client) {
                     self?.connectionState = state
                 }
             } catch {
@@ -71,15 +71,7 @@ public final class ChatListViewModel {
     private func apply(_ diffs: [ChatListDiff]) {
         isLoading = false
         let formatter = dateFormatter
-        let rowDiffs = diffs.map { diff -> RowDiff in
-            let row = { ChatRow(summary: $0, dateFormatter: formatter) }
-            return switch diff.operation {
-            case .reset(let items): RowDiff(operation: .reset(items.map(row)))
-            case .insert(let index, let item): RowDiff(operation: .insert(index, row(item)))
-            case .update(let index, let item): RowDiff(operation: .update(index, row(item)))
-            case .remove(let index): RowDiff(operation: .remove(index))
-            }
-        }
+        let rowDiffs = diffs.map { $0.vectorDiff.map { ChatRow(summary: $0, dateFormatter: formatter) } }
         do {
             try DiffApplier.apply(rowDiffs, to: &rows)
         } catch {
@@ -92,8 +84,4 @@ public final class ChatListViewModel {
         isLoading = false
         errorMessage = ErrorPresenter.message(for: error)
     }
-}
-
-private struct RowDiff: ListDiff {
-    let operation: ListOperation<ChatRow>
 }

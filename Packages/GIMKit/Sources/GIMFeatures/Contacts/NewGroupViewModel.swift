@@ -47,7 +47,7 @@ public final class NewGroupViewModel {
                 memberError = "No one uses the handle @\(handle)."
                 return
             }
-            if case .registered(let session) = try await client.loginState(), session.userId == user.userId {
+            if try await client.session()?.userId == user.userId {
                 memberError = "You are added to your groups automatically."
                 return
             }
@@ -58,19 +58,19 @@ public final class NewGroupViewModel {
         }
     }
 
-    public func removeMember(_ userId: UserId) {
+    public func removeMember(_ userId: String) {
         members.removeAll { $0.userId == userId }
     }
 
     /// Creates the group. Returns `nil` when the form is invalid or creation failed.
-    public func create() async -> ChatId? {
+    public func create() async -> String? {
         guard canCreate else { return nil }
         isCreating = true
         errorMessage = nil
         defer { isCreating = false }
         do {
             return try await client.createGroupChat(
-                name: name.trimmingCharacters(in: .whitespacesAndNewlines), members: members.map(\.userId))
+                name: name.trimmingCharacters(in: .whitespacesAndNewlines), memberUserIds: members.map(\.userId))
         } catch {
             errorMessage = ErrorPresenter.message(for: error)
             return nil
