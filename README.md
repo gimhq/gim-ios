@@ -50,3 +50,22 @@ scripts/start-gim-server.sh stop
 
 Runs the vendored gim-server fixture (`ci/fixtures/gim-server`, see its `SOURCE.md`) with bun on 127.0.0.1 and a fresh
 database under `.gim-server/` (override with `GIM_SERVER_RUNTIME_DIR`).
+
+## Device E2E test
+
+`GIMUITests` (`GIM/UITests`, run by the `GIM` scheme's test action) drives the app in the iOS simulator against that
+server: onboarding, group creation with a scripted peer, text and images both ways, a reply, a reaction, read ticks
+and sign-out. The peer is a second gim-core client inside the test runner with its own temporary data directory.
+
+```sh
+scripts/start-gim-server.sh start
+xcodegen generate
+xcodebuild test -project GIM.xcodeproj -scheme GIM -only-testing:GIMUITests \
+  -destination 'platform=iOS Simulator,name=iPhone 16' CODE_SIGNING_ALLOWED=NO
+scripts/start-gim-server.sh stop
+```
+
+The simulator shares the host's loopback, so the test uses `http://127.0.0.1:8080`; set
+`TEST_RUNNER_GIM_E2E_SERVER_URL` to use another server. For the app-to-peer photo step, add an image to the simulator
+first (`xcrun simctl addmedia booted GIM/UITests/Fixtures/photo-library-seed.png`); when the system photo picker
+can't be automated the step is skipped with a screenshot attachment. CI runs the same test in the `ios-e2e` job.

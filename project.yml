@@ -54,14 +54,36 @@ targets:
           GIM_DEFAULT_SERVER_URL: http://localhost:8080
         Release:
           GIM_DEFAULT_SERVER_URL: ""
+  # Device E2E smoke test: drives the app against a running gim-server (scripts/start-gim-server.sh) with a
+  # scripted gim-core peer in the test runner. See README.md.
+  GIMUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: GIM/UITests
+        excludes:
+          - Fixtures
+    dependencies:
+      - target: GIM
+      - package: GIMCore
+        product: GIMCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: im.g.apps.uitests
+        GENERATE_INFOPLIST_FILE: YES
 schemes:
-  # Builds and runs the app only. There is no hosted test target: package tests run from each package directory,
-  # e.g. `xcodebuild test -scheme GIMUI` in Packages/GIMUI (or `GIMKit-Package` in Packages/GIMKit).
+  # Builds and runs the app; `test` runs the E2E smoke test, which needs gim-server on 127.0.0.1:8080. Package tests
+  # run from each package directory, e.g. `xcodebuild test -scheme GIMUI` in Packages/GIMUI (or `GIMKit-Package` in
+  # Packages/GIMKit).
   GIM:
     build:
       targets:
         GIM: all
     run:
       config: Debug
+    test:
+      config: Debug
+      targets:
+        - GIMUITests
     archive:
       config: Release
