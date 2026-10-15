@@ -29,19 +29,26 @@ final class AppModelTests: XCTestCase {
         }
     }
 
-    /// Forwards to a `FakeGimClient`, except that `signOut` always fails.
-    private actor FailingSignOutClient: GimClientAPI {
+    /// Forwards to a `FakeGimClient`, except that `signOut` can fail and `localStateReset` is configurable.
+    private actor StubClient: GimClientAPI {
         let fake: FakeGimClient
+        let signOutError: GimError?
+        let reportsLocalStateReset: Bool
 
-        init(_ fake: FakeGimClient) {
+        init(_ fake: FakeGimClient, signOutError: GimError? = nil, localStateReset: Bool = false) {
             self.fake = fake
+            self.signOutError = signOutError
+            reportsLocalStateReset = localStateReset
         }
 
-        func signOut() async throws { throw GimError.Network(reason: "offline") }
+        func signOut() async throws {
+            if let signOutError { throw signOutError }
+            try await fake.signOut()
+        }
 
         func session() async throws -> Session? { try await fake.session() }
         nonisolated func userId() -> String? { fake.userId() }
-        nonisolated func localStateReset() -> Bool { fake.localStateReset() }
+        nonisolated func localStateReset() -> Bool { reportsLocalStateReset }
         func createIdentity(displayName: String) async throws -> String {
             try await fake.createIdentity(displayName: displayName)
         }
@@ -133,11 +140,13 @@ final class AppModelTests: XCTestCase {
         }
     }
 
-    /// Returns `clients` in order (the last one repeatedly) and records every config.
+    /// Returns `clients` in order (the last one repeatedly) and records every config; throws `error` while set.
     private final class ClientFactory: GimClientFactory, @unchecked Sendable {
         private let lock = NSLock()
         private var recorded: [ClientConfig] = []
+        private var made = 0
         private let clients: [any GimClientAPI]
+        private var failure: (any Error)?
 
         init(_ clients: any GimClientAPI...) {
             self.clients = clients
@@ -145,10 +154,17 @@ final class AppModelTests: XCTestCase {
 
         var configs: [ClientConfig] { lock.withLock { recorded } }
 
+        var error: (any Error)? {
+            get { lock.withLock { failure } }
+            set { lock.withLock { failure = newValue } }
+        }
+
         func make(config: ClientConfig, hooks: any PlatformHooks) async throws -> any GimClientAPI {
-            lock.withLock {
+            try lock.withLock {
                 recorded.append(config)
-                return clients[min(recorded.count, clients.count) - 1]
+                if let failure { throw failure }
+                made += 1
+                return clients[min(made, clients.count) - 1]
             }
         }
     }
@@ -167,6 +183,26 @@ final class AppModelTests: XCTestCase {
         hooks: MemoryHooks = MemoryHooks()
     ) -> AppModel {
         AppModel(factory: factory, defaults: defaults, bundledServerUrl: bundledServerUrl) { hooks }
+    }
+
+    /// Runs the create flow: display name, recovery code confirmation and handle `alex`.
+    @MainActor
+    private func register(_ onboarding: OnboardingViewModel) async throws {
+        onboarding.choose(.createIdentity)
+        let create = try XCTUnwrap(onboarding.createIdentity)
+        create.displayName = "Alex"
+        await create.submit()
+        guard case .recoveryCode(let recovery) = onboarding.stage else {
+            return XCTFail("expected the recovery code, got \(String(describing: onboarding.stage))")
+        }
+        recovery.continueToConfirmation()
+        recovery.confirmationInput = recovery.groups[recovery.confirmationGroupIndex]
+        recovery.confirm()
+        guard case .claimHandle(let claim) = onboarding.stage else {
+            return XCTFail("expected the handle step, got \(String(describing: onboarding.stage))")
+        }
+        claim.handle = "alex"
+        await claim.claim()
     }
 
     func testDefaultFactoryIsTheRealCore() {
@@ -195,9 +231,7 @@ final class AppModelTests: XCTestCase {
 
         let onboarding = try XCTUnwrap(model.onboarding)
         onboarding.serverUrl = "http://192.168.1.20:8080"
-        onboarding.handle = "alex"
-        onboarding.displayName = "Alex"
-        await onboarding.submit()
+        try await register(onboarding)
 
         guard case .ready = model.phase else { return XCTFail("expected ready, got \(model.phase)") }
         XCTAssertEqual(factory.configs, [ClientConfig(serverUrl: "http://192.168.1.20:8080")])
@@ -258,9 +292,7 @@ final class AppModelTests: XCTestCase {
         guard case .onboarding = model.phase else { return XCTFail("expected onboarding, got \(model.phase)") }
         let onboarding = try XCTUnwrap(model.onboarding)
         XCTAssertEqual(onboarding.serverUrl, "https://gim.example.eu")
-        onboarding.handle = "alex"
-        onboarding.displayName = "Alex"
-        await onboarding.submit()
+        try await register(onboarding)
         XCTAssertEqual(factory.configs.count, 2, "a new client is created after signing out")
         guard case .ready = model.phase else { return XCTFail("expected ready, got \(model.phase)") }
     }
@@ -316,7 +348,7 @@ final class AppModelTests: XCTestCase {
         let hooks = MemoryHooks()
         let defaults = makeDefaults()
         defaults.set("https://gim.example.eu", forKey: AppModel.serverUrlKey)
-        let client = FailingSignOutClient(FakeGimClient(session: session))
+        let client = StubClient(FakeGimClient(session: session), signOutError: .Network(reason: "offline"))
         let model = makeModel(factory: ClientFactory(client), defaults: defaults, hooks: hooks)
         await model.start()
 
@@ -342,5 +374,88 @@ final class AppModelTests: XCTestCase {
         XCTAssertNotNil(error)
         guard case .onboarding = model.phase else { return XCTFail("expected onboarding, got \(model.phase)") }
         XCTAssertEqual(model.onboarding?.serverUrl, "https://gim.example.eu")
+    }
+
+    @MainActor
+    func testLocalStateResetShowsOnboardingWithANotice() async throws {
+        let client = StubClient(FakeGimClient(), localStateReset: true)
+        let defaults = makeDefaults()
+        defaults.set("https://gim.example.eu", forKey: AppModel.serverUrlKey)
+        let model = makeModel(factory: ClientFactory(client), defaults: defaults)
+
+        await model.start()
+
+        guard case .onboarding = model.phase else { return XCTFail("expected onboarding, got \(model.phase)") }
+        let onboarding = try XCTUnwrap(model.onboarding)
+        XCTAssertTrue(onboarding.showsLocalStateResetNotice)
+        XCTAssertEqual(onboarding.serverUrl, "https://gim.example.eu")
+        onboarding.dismissLocalStateResetNotice()
+        XCTAssertFalse(onboarding.showsLocalStateResetNotice)
+    }
+
+    @MainActor
+    func testOnboardingWithoutResetShowsNoNotice() async throws {
+        let defaults = makeDefaults()
+        defaults.set("https://gim.example.eu", forKey: AppModel.serverUrlKey)
+        let model = makeModel(factory: ClientFactory(FakeGimClient()), defaults: defaults)
+
+        await model.start()
+
+        XCTAssertEqual(model.onboarding?.showsLocalStateResetNotice, false)
+    }
+
+    @MainActor
+    func testUnreadableKeystoreShowsALaunchErrorAndRetriesWithoutWiping() async {
+        let hooks = MemoryHooks()
+        let factory = ClientFactory(FakeGimClient(session: session))
+        factory.error = GimError.Storage(reason: "Keychain read failed with status -25308")
+        let defaults = makeDefaults()
+        defaults.set("https://gim.example.eu", forKey: AppModel.serverUrlKey)
+        let model = makeModel(factory: factory, defaults: defaults, hooks: hooks)
+
+        await model.start()
+
+        guard case .launching = model.phase else { return XCTFail("expected launching, got \(model.phase)") }
+        XCTAssertNotNil(model.launchError)
+        XCTAssertNil(model.onboarding)
+        XCTAssertEqual(hooks.wipeCount, 0)
+        XCTAssertEqual(defaults.string(forKey: AppModel.serverUrlKey), "https://gim.example.eu")
+
+        factory.error = nil
+        await model.start()
+
+        XCTAssertNil(model.launchError)
+        guard case .ready = model.phase else { return XCTFail("expected ready, got \(model.phase)") }
+        XCTAssertEqual(model.session, session)
+    }
+
+    @MainActor
+    func testRejectedStoredServerStillShowsOnboarding() async {
+        let factory = ClientFactory(FakeGimClient())
+        factory.error = GimError.InvalidInput(reason: "server_url: missing host")
+        let defaults = makeDefaults()
+        defaults.set("https://gim.example.eu", forKey: AppModel.serverUrlKey)
+        let model = makeModel(factory: factory, defaults: defaults)
+
+        await model.start()
+
+        guard case .onboarding = model.phase else { return XCTFail("expected onboarding, got \(model.phase)") }
+        XCTAssertNil(model.launchError)
+    }
+
+    @MainActor
+    func testRefreshSessionPicksUpAClaimedHandle() async throws {
+        let unnamed = Session(userId: "user-alex", deviceId: "device-1", handle: "", displayName: "Alex")
+        let client = FakeGimClient(session: unnamed)
+        let defaults = makeDefaults()
+        defaults.set("https://gim.example.eu", forKey: AppModel.serverUrlKey)
+        let model = makeModel(factory: ClientFactory(client), defaults: defaults)
+        await model.start()
+        XCTAssertEqual(model.session?.handle, "")
+
+        try await client.claimHandle(handle: "alex")
+        await model.refreshSession()
+
+        XCTAssertEqual(model.session?.handle, "alex")
     }
 }
