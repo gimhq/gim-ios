@@ -1,21 +1,11 @@
 import GIMCore
 import XCTest
 
-/// End-to-end smoke test against a running gim-server (`scripts/start-gim-server.sh start`): the app and a
-/// `ScriptedPeer` register, create a group and exchange text, images, a reply, a reaction and a read marker; then
-/// the app signs out.
-///
-/// The server defaults to `http://127.0.0.1:8080`, which the simulator shares with the host; override it with
-/// `TEST_RUNNER_GIM_E2E_SERVER_URL=<url> xcodebuild test …`.
-///
-/// The test is synchronous so that `continueAfterFailure = false` stops it at the first failed check; the peer's
-/// async calls run in detached tasks that the test waits for (`waitForPeer`). Every check names its step, and a
-/// failure attaches a screenshot and the app's accessibility tree.
-final class MessagingSmokeTests: XCTestCase {
-    private let serverUrl = ProcessInfo.processInfo.environment["GIM_E2E_SERVER_URL"] ?? "http://127.0.0.1:8080"
-    /// For every step that waits on the server or the other client.
-    private let networkTimeout: TimeInterval = 30
-    private let summary = StepSummary()
+/// End-to-end smoke test against a running gim-hub (`scripts/e2e-hub.sh start`): the app and two `ScriptedPeer`s
+/// register, the app creates a group and exchanges text, images, a reply, a reaction and a read marker; then the app
+/// signs out. See `E2ETestCase` for the hub URL.
+final class MessagingSmokeTests: E2ETestCase {
+    private let summary = StepSummary("MessagingSmokeTests", steps: ["a", "b", "c", "d", "f", "g", "e", "h"])
     /// Why step e skipped the photo pick, for the summary line; nil when the photo was picked.
     private var photoSkipReason: String?
 
@@ -55,44 +45,8 @@ final class MessagingSmokeTests: XCTestCase {
         addTeardownBlock { await bystander.shutdown() }
 
         try XCTContext.runActivity(named: "step a: app onboarding with server \(serverUrl)") { _ in
-            app.launchArguments += ["-GIMDefaultServerURL", serverUrl]
-            app.launch()
-            try signOutIfNeeded(app)
-            let serverField = app.textFields["onboarding.serverUrl"]
-            try require(
-                serverField.waitForExistence(timeout: networkTimeout), "step a: onboarding server field visible", app)
-            try require(
-                serverField.value as? String == serverUrl,
-                "step a: server field pre-filled with \(serverUrl), found \(String(describing: serverField.value))",
-                app)
-            try tap(app.buttons["onboarding.create"], "step a: Create New Identity button", app)
-            // Return submits the form, like the Create Identity button that the keyboard may cover.
-            try type("Alice \(suffix)\n", into: app.textFields["identity.displayName"], "step a: display name", app)
-            let code = app.descendants(matching: .any)["recovery.code"]
-            try require(
-                code.waitForExistence(timeout: networkTimeout),
-                "step a: recovery code shown (onboarding errors: \(onboardingErrors(app)))", app)
-            let groups = code.label.split(separator: "-").map(String.init)
-            try tap(app.buttons["recovery.continue"], "step a: I Wrote It Down button", app)
-            // The field's placeholder names the requested group: "Group 3".
-            let groupField = app.textFields["recovery.confirmField"]
-            try require(groupField.waitForExistence(timeout: networkTimeout), "step a: group field visible", app)
-            let groupNumber = (groupField.placeholderValue ?? "").split(separator: " ").last.flatMap { Int($0) }
-            guard let groupNumber, groups.indices.contains(groupNumber - 1) else {
-                return try require(
-                    false, "step a: group \(String(describing: groupNumber)) of \(groups.count) recovery groups", app)
-            }
-            try type(groups[groupNumber - 1], into: groupField, "step a: group field", app)
-            try tap(app.buttons["recovery.confirm"], "step a: Confirm button", app)
-            try type(appHandle, into: app.textFields["handle.field"], "step a: handle field", app)
-            try tap(app.buttons["handle.claim"], "step a: Claim Handle button", app)
-            let signedIn = app.buttons["chatList.newChat"].waitForExistence(timeout: networkTimeout)
-            try require(
-                signedIn,
-                signedIn
-                    ? ""
-                    : "step a: chat list visible after claiming the handle (onboarding errors: \(onboardingErrors(app)))",
-                app)
+            try launchToOnboarding(app, "step a")
+            try createIdentity(displayName: "Alice \(suffix)", handle: appHandle, "step a", app)
         }
         summary.finish("a")
 
@@ -313,28 +267,6 @@ final class MessagingSmokeTests: XCTestCase {
         try require(conversationIsBack(app, timeout: 10), check, app)
     }
 
-    /// Fails fast when the server is not reachable from the test runner. An App Transport Security rejection is
-    /// only logged: the runner has no ATS exception, and the peer's registration checks the server anyway.
-    @MainActor
-    private func checkServerHealth(_ app: XCUIApplication) throws {
-        let url = URL(string: "\(serverUrl)/healthz")!
-        let status = try waitForPeer("pre-flight: GET \(url)", app) { () async throws -> Int in
-            do {
-                let (_, response) = try await URLSession.shared.data(from: url)
-                return (response as? HTTPURLResponse)?.statusCode ?? -1
-            } catch let error as URLError where error.code == .appTransportSecurityRequiresSecureConnection {
-                return 0
-            }
-        }
-        if status == 0 {
-            print("[e2e] pre-flight: ATS blocked \(url) in the test runner; relying on the peer registration")
-            return
-        }
-        try require(
-            status == 200,
-            "pre-flight: \(url) answered \(status); start the server with `scripts/start-gim-server.sh start`", app)
-    }
-
     /// Records why the app-to-peer photo step was skipped; the image path stays covered by peer-to-app.
     @MainActor
     private func skipPhotoStep(_ reason: String, _ app: XCUIApplication) {
@@ -360,14 +292,6 @@ final class MessagingSmokeTests: XCTestCase {
             .firstMatch
     }
 
-    /// The navigation bar's back button; iOS 26 identifies it as "BackButton" and may show no title.
-    @MainActor
-    private func backButton(_ app: XCUIApplication) -> XCUIElement {
-        app.navigationBars.buttons
-            .matching(NSPredicate(format: "identifier == 'BackButton' OR label == 'Chats'"))
-            .firstMatch
-    }
-
     /// The form footers' texts (validation and error messages), for failure messages.
     @MainActor
     private func footerTexts(_ app: XCUIApplication) -> String {
@@ -376,33 +300,6 @@ final class MessagingSmokeTests: XCTestCase {
             $0.hasPrefix("Add ") || $0.hasPrefix("No ") || $0.hasPrefix("You ") || $0.hasPrefix("Couldn't")
         }
         return footers.isEmpty ? "none" : footers.joined(separator: " | ")
-    }
-
-    /// Signs out a session left over from an earlier, interrupted run.
-    @MainActor
-    private func signOutIfNeeded(_ app: XCUIApplication) throws {
-        let createButton = app.buttons["onboarding.create"]
-        let settings = app.buttons["chatList.settings"]
-        for _ in 0..<Int(networkTimeout) {
-            if createButton.exists { return }
-            if settings.exists {
-                print("[e2e] step a: signing out a leftover session")
-                try signOut(app)
-                return
-            }
-            _ = createButton.waitForExistence(timeout: 1)
-        }
-    }
-
-    @MainActor
-    private func signOut(_ app: XCUIApplication) throws {
-        try tap(app.buttons["chatList.settings"], "sign-out: Settings button", app)
-        try tap(app.buttons["settings.signOut"], "sign-out: Sign Out button", app)
-        // The confirmation dialog's button has the same title.
-        let confirm = app.buttons
-            .matching(NSPredicate(format: "label == 'Sign Out' AND identifier != 'settings.signOut'"))
-            .firstMatch
-        try tap(confirm, "sign-out: confirmation button", app)
     }
 
     @MainActor
@@ -419,52 +316,6 @@ final class MessagingSmokeTests: XCTestCase {
         try require(menuItem("Reply", in: app).waitForExistence(timeout: 5), "\(step): context menu open", app)
     }
 
-    @MainActor
-    private func type(
-        _ text: String, into element: XCUIElement, _ check: @autoclosure () -> String, _ app: XCUIApplication
-    ) throws {
-        try tap(element, check(), app)
-        element.typeText(text)
-    }
-
-    @MainActor
-    private func tap(_ element: XCUIElement, _ check: @autoclosure () -> String, _ app: XCUIApplication) throws {
-        let ready = XCTNSPredicateExpectation(
-            predicate: NSPredicate(format: "exists == true AND enabled == true"), object: element)
-        try require(XCTWaiter().wait(for: [ready], timeout: networkTimeout) == .completed, "\(check()) ready", app)
-        element.tap()
-    }
-
-    /// Records a failure named after the step, with a screenshot and the accessibility tree, and stops the test.
-    @MainActor
-    private func require(_ condition: Bool, _ check: @autoclosure () -> String, _ app: XCUIApplication) throws {
-        guard !condition else { return }
-        let check = check()
-        attachDiagnostics("Failed: \(check)", app)
-        XCTFail("Failed: \(check)")
-        throw SmokeTestError.failed(check)
-    }
-
-    @MainActor
-    private func attachDiagnostics(_ name: String, _ app: XCUIApplication) {
-        let screenshot = XCTAttachment(screenshot: app.screenshot())
-        screenshot.name = "\(name) (screenshot)"
-        screenshot.lifetime = .keepAlways
-        add(screenshot)
-        let tree = XCTAttachment(string: app.debugDescription)
-        tree.name = "\(name) (accessibility tree)"
-        tree.lifetime = .keepAlways
-        add(tree)
-    }
-
-    /// The red error texts of the onboarding form, if any.
-    @MainActor
-    private func onboardingErrors(_ app: XCUIApplication) -> String {
-        let labels = app.staticTexts.allElementsBoundByIndex.map(\.label)
-        let errors = labels.filter { $0.hasPrefix("Couldn't") || $0.hasPrefix("Can't") || $0.contains("error") }
-        return errors.isEmpty ? "none" : errors.joined(separator: " | ")
-    }
-
     /// The texts of the timeline bubbles on screen, for failure messages.
     @MainActor
     private func visibleMessageTexts(_ app: XCUIApplication) -> [String] {
@@ -479,107 +330,6 @@ final class MessagingSmokeTests: XCTestCase {
 
     private static func messageTextPredicate(_ text: String) -> NSPredicate {
         NSPredicate(format: "identifier == 'timeline.message.text' AND label == %@", text)
-    }
-
-    /// Polls `probe` every 250 ms until it returns a value, for state of the scripted peer that has no UI to wait on.
-    @MainActor
-    private func eventually<T: Sendable>(
-        _ check: String, _ app: XCUIApplication, _ probe: @escaping @Sendable () async throws -> T?
-    ) throws -> T {
-        let timeout = networkTimeout
-        let value = try waitForPeer(check, app, timeout: timeout + 5) { () async throws -> T? in
-            let deadline = Date().addingTimeInterval(timeout)
-            while Date() < deadline {
-                if let value = try await probe() { return value }
-                try await Task.sleep(for: .milliseconds(250))
-            }
-            return nil
-        }
-        guard let value else {
-            try require(false, "\(check) within \(Int(timeout)) s", app)
-            fatalError("unreachable")
-        }
-        return value
-    }
-
-    /// Runs one async peer operation and waits for it on the main thread, failing the step when it throws or
-    /// doesn't finish in time.
-    @MainActor
-    private func waitForPeer<T: Sendable>(
-        _ check: String, _ app: XCUIApplication, timeout: TimeInterval? = nil,
-        _ operation: @escaping @Sendable () async throws -> T
-    ) throws -> T {
-        let outcome = OutcomeBox<T>()
-        let done = XCTestExpectation(description: check)
-        Task.detached {
-            do {
-                outcome.set(.success(try await operation()))
-            } catch {
-                outcome.set(.failure(error))
-            }
-            done.fulfill()
-        }
-        let waited = XCTWaiter().wait(for: [done], timeout: timeout ?? networkTimeout)
-        switch (waited, outcome.value) {
-        case (.completed, .success(let value)?):
-            return value
-        case (.completed, .failure(let error)?):
-            try require(false, "\(check): \(error)", app)
-        default:
-            try require(false, "\(check): no result within \(Int(timeout ?? networkTimeout)) s", app)
-        }
-        fatalError("unreachable")
-    }
-}
-
-/// Each step's outcome for the summary line that the ios-e2e CI job greps from the xcodebuild log.
-@MainActor
-private final class StepSummary {
-    /// The steps in the order they run.
-    private static let steps = ["a", "b", "c", "d", "f", "g", "e", "h"]
-    private var results: [String: String] = [:]
-    private var running: String?
-
-    nonisolated init() {}
-
-    func start(_ step: String) { running = step }
-
-    func finish(_ step: String, _ result: String = "pass") {
-        results[step] = result
-        running = nil
-    }
-
-    /// Prints one line, e.g. `[e2e-summary] a=pass b=pass c=pass d=pass f=pass g=pass e=picked h=pass`: a finished
-    /// step is `pass` (step e: `picked` or `skipped(<reason>)`, spaces in the reason replaced by `_`), the step that
-    /// was running when the test stopped is `fail`, and steps never reached are `n/a`.
-    func report() {
-        let fields = Self.steps.map { step in
-            let result = results[step] ?? (step == running ? "fail" : "n/a")
-            return "\(step)=\(result.replacingOccurrences(of: " ", with: "_"))"
-        }
-        print("[e2e-summary] \(fields.joined(separator: " "))")
-    }
-}
-
-/// The result of a detached peer operation, handed back to the waiting test.
-private final class OutcomeBox<T: Sendable>: @unchecked Sendable {
-    private let lock = NSLock()
-    private var outcome: Result<T, any Error>?
-
-    var value: Result<T, any Error>? { lock.withLock { outcome } }
-
-    func set(_ outcome: Result<T, any Error>) {
-        lock.withLock { self.outcome = outcome }
-    }
-}
-
-private enum SmokeTestError: Error, CustomStringConvertible {
-    case failed(String)
-
-    var description: String {
-        switch self {
-        case .failed(let check): "Failed: \(check)"
-        }
     }
 }
 
