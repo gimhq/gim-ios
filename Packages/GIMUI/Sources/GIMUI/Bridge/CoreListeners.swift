@@ -95,18 +95,12 @@ final class CorePlatformHooks: GIMCore.PlatformHooks {
         self.hooks = hooks
     }
 
-    func secureStoreGet(key: String) -> Data? {
-        hooks.secureStoreGet(key: key)
+    func secureStoreGet(key: String) throws -> Data? {
+        try storageCall { try hooks.secureStoreGet(key: key) }
     }
 
     func secureStoreSet(key: String, value: Data) throws {
-        do {
-            try hooks.secureStoreSet(key: key, value: value)
-        } catch let error as GIMClientKit.GimError {
-            throw GIMCore.GimError(error)
-        } catch {
-            throw GIMCore.GimError.Storage(reason: String(describing: error))
-        }
+        try storageCall { try hooks.secureStoreSet(key: key, value: value) }
     }
 
     func secureStoreDelete(key: String) {
@@ -119,5 +113,16 @@ final class CorePlatformHooks: GIMCore.PlatformHooks {
 
     func isNetworkReachable() -> Bool {
         hooks.isNetworkReachable()
+    }
+
+    /// Rethrows a keystore hook's errors as gim-core `GimError`s; anything else becomes `Storage`.
+    private func storageCall<T>(_ call: () throws -> T) throws -> T {
+        do {
+            return try call()
+        } catch let error as GIMClientKit.GimError {
+            throw GIMCore.GimError(error)
+        } catch {
+            throw GIMCore.GimError.Storage(reason: String(describing: error))
+        }
     }
 }

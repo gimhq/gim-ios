@@ -5,7 +5,7 @@ import Foundation
 // see docs/gim-core-mapping.md. Ids are opaque strings; timestamps are Unix epoch milliseconds.
 
 public struct ClientConfig: Sendable, Hashable {
-    /// Base URL of gim-server, `http://` or `https://`.
+    /// Base URL of the hub, `http://` or `https://`.
     public var serverUrl: String
 
     public init(serverUrl: String) {
@@ -17,6 +17,7 @@ public struct ClientConfig: Sendable, Hashable {
 public struct Session: Sendable, Hashable {
     public var userId: String
     public var deviceId: String
+    /// Empty until `claimHandle`.
     public var handle: String
     public var displayName: String
 
@@ -38,6 +39,23 @@ public struct UserProfile: Sendable, Hashable {
         self.userId = userId
         self.handle = handle
         self.displayName = displayName
+    }
+}
+
+/// A device of a user, from the user's signed DeviceList.
+public struct DeviceInfo: Sendable, Hashable {
+    public var deviceId: String
+    /// When the device was certified; 0 for revoked devices.
+    public var createdAtMs: UInt64
+    /// This client's device.
+    public var isCurrent: Bool
+    public var revoked: Bool
+
+    public init(deviceId: String, createdAtMs: UInt64, isCurrent: Bool, revoked: Bool) {
+        self.deviceId = deviceId
+        self.createdAtMs = createdAtMs
+        self.isCurrent = isCurrent
+        self.revoked = revoked
     }
 }
 
@@ -246,7 +264,8 @@ public enum TimelineDiff: Sendable, Hashable {
 public enum GimError: Error, Sendable, Hashable, LocalizedError {
     /// The server could not be reached or the connection broke.
     case Network(reason: String)
-    /// The call needs a session; call `register` first.
+    /// The call needs a session: create an identity, restore one or link this device first. Also returned after
+    /// `signOut` and once the hub reports this device as revoked.
     case NotRegistered
     /// An argument was rejected before anything was sent.
     case InvalidInput(reason: String)
@@ -256,8 +275,11 @@ public enum GimError: Error, Sendable, Hashable, LocalizedError {
     case Crypto(reason: String)
     /// The local database or file system failed.
     case Storage(reason: String)
-    /// gim-server answered with a non-success HTTP status.
+    /// The hub answered with a non-success HTTP status.
     case Server(status: UInt16, reason: String)
+    /// The hub is throttling the call (HTTP 429) or a remote hub is unavailable (HTTP 503) and gim-core's bounded
+    /// retries are used up; try again after `retryAfterSecs`.
+    case RetryLater(status: UInt16, retryAfterSecs: UInt64, reason: String)
     /// The operation was cancelled (sign-out, `stopSync`, `cancelSend`).
     case Cancelled
     /// The call is part of the API contract but not implemented yet.

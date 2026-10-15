@@ -18,6 +18,10 @@ final class ErrorPresenterTests: XCTestCase {
                 .Server(status: 503, reason: "unavailable"),
                 "The server couldn't complete the request (error 503). Please try again later."
             ),
+            (
+                .RetryLater(status: 429, retryAfterSecs: 30, reason: "rate_limited"),
+                "The server is busy. Please try again in 30 seconds."
+            ),
             (.Cancelled, "The operation was cancelled."),
             (.NotImplemented, "This isn't available in this version yet."),
             (.Internal(reason: "sqlite busy"), "Something went wrong. Please try again."),
