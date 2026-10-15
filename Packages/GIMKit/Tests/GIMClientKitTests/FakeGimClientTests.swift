@@ -659,8 +659,8 @@ final class FakeGimClientTests: XCTestCase {
 
     func testChatMembersFailureInjection() async throws {
         let client = try await makeDemo()
-        await client.failChatMembers(with: .NotImplemented)
-        await assertThrows(.NotImplemented) { try await client.chatMembers(chatId: self.group) }
+        await client.failChatMembers(with: .Network(reason: "offline"))
+        await assertThrows(.Network(reason: "offline")) { try await client.chatMembers(chatId: self.group) }
         await client.failChatMembers(with: nil)
         let members = try await client.chatMembers(chatId: direct)
         XCTAssertEqual(members.map(\.userId), [FakeGimClient.demoSelfId, "user-sofia"])
@@ -704,6 +704,9 @@ final class FakeGimClientTests: XCTestCase {
 
         await assertThrows(.InvalidInput(reason: "Group name is required")) {
             try await client.setGroupInfo(chatId: self.group, name: " ", avatarFilePath: nil)
+        }
+        await assertThrows(.InvalidInput(reason: "Set a name or an avatar")) {
+            try await client.setGroupInfo(chatId: self.group, name: nil, avatarFilePath: nil)
         }
         await assertThrows(.InvalidInput(reason: "Only groups have a name and avatar")) {
             try await client.setGroupInfo(chatId: self.direct, name: "Sofia", avatarFilePath: nil)

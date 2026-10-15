@@ -1119,7 +1119,9 @@ public protocol GimClientProtocol: AnyObject, Sendable {
     func session() async throws  -> Session?
     
     /**
-     * Updates the group name and/or avatar; `None` leaves a field unchanged.
+     * Updates the group name and/or avatar and shares them with the
+     * members; `None` leaves a field unchanged. The avatar file is
+     * encrypted and uploaded before this returns.
      */
     func setGroupInfo(chatId: String, name: String?, avatarFilePath: String?) async throws 
     
@@ -1136,7 +1138,8 @@ public protocol GimClientProtocol: AnyObject, Sendable {
     func signOut() async throws 
     
     /**
-     * Starts the background sync loop and outbox sender.
+     * Starts the background sync loop (WebSocket stream with a long-poll
+     * fallback, reconnecting with backoff) and the outbox sender.
      */
     func startSync() async throws 
     
@@ -1602,7 +1605,9 @@ open func session()async throws  -> Session?  {
 }
     
     /**
-     * Updates the group name and/or avatar; `None` leaves a field unchanged.
+     * Updates the group name and/or avatar and shares them with the
+     * members; `None` leaves a field unchanged. The avatar file is
+     * encrypted and uploaded before this returns.
      */
 open func setGroupInfo(chatId: String, name: String?, avatarFilePath: String?)async throws   {
     return
@@ -1668,7 +1673,8 @@ open func signOut()async throws   {
 }
     
     /**
-     * Starts the background sync loop and outbox sender.
+     * Starts the background sync loop (WebSocket stream with a long-poll
+     * fallback, reconnecting with backoff) and the outbox sender.
      */
 open func startSync()async throws   {
     return
@@ -5159,7 +5165,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_gim_core_checksum_method_gimclient_session() != 61969) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_gim_core_checksum_method_gimclient_set_group_info() != 45190) {
+    if (uniffi_gim_core_checksum_method_gimclient_set_group_info() != 58408) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_gim_core_checksum_method_gimclient_set_network_reachable() != 23325) {
@@ -5171,7 +5177,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_gim_core_checksum_method_gimclient_sign_out() != 6926) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_gim_core_checksum_method_gimclient_start_sync() != 54283) {
+    if (uniffi_gim_core_checksum_method_gimclient_start_sync() != 1762) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_gim_core_checksum_method_gimclient_stop_sync() != 2971) {

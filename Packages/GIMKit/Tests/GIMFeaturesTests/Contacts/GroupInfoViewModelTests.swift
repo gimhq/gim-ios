@@ -60,6 +60,7 @@ final class GroupInfoViewModelTests: XCTestCase {
         await viewModel.load()
 
         XCTAssertNil(viewModel.members)
+        XCTAssertTrue(viewModel.membersUnavailable)
         XCTAssertEqual(viewModel.errorMessage, ErrorPresenter.message(for: GimError.NotFound(reason: "chat missing")))
     }
 
@@ -216,14 +217,15 @@ final class GroupInfoViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testNotImplementedChatMembersFallsBackToMemberCount() async throws {
+    func testChatMembersErrorFallsBackToMemberCount() async throws {
         let (client, _) = await connected(makeDemoClient())
-        await client.failChatMembers(with: .NotImplemented)
+        let error = GimError.Network(reason: "offline")
+        await client.failChatMembers(with: error)
         let viewModel = await started(client, chatId: FakeGimClient.demoGroupChatId)
 
         XCTAssertTrue(viewModel.membersUnavailable)
         XCTAssertNil(viewModel.members)
-        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertEqual(viewModel.errorMessage, ErrorPresenter.message(for: error))
         XCTAssertEqual(viewModel.summary?.memberCount, 4)
         XCTAssertTrue(viewModel.canEditMembers)
         XCTAssertFalse(viewModel.canRemoveMembers)
@@ -239,6 +241,21 @@ final class GroupInfoViewModelTests: XCTestCase {
         await viewModel.load()
         XCTAssertFalse(viewModel.membersUnavailable)
         XCTAssertEqual(viewModel.members?.count, 4)
+        XCTAssertTrue(viewModel.canRemoveMembers)
+    }
+
+    @MainActor
+    func testChatMembersErrorKeepsTheLoadedList() async throws {
+        let (client, _) = await connected(makeDemoClient())
+        let viewModel = await started(client, chatId: FakeGimClient.demoGroupChatId)
+        let error = GimError.Network(reason: "offline")
+        await client.failChatMembers(with: error)
+
+        await viewModel.load()
+
+        XCTAssertFalse(viewModel.membersUnavailable)
+        XCTAssertEqual(handles(viewModel), ["alex", "sofia", "luca", "nikos"])
+        XCTAssertEqual(viewModel.errorMessage, ErrorPresenter.message(for: error))
         XCTAssertTrue(viewModel.canRemoveMembers)
     }
 

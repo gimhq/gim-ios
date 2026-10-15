@@ -5,8 +5,8 @@ import Observation
 /// Shows a chat's details and manages a group: members, name and leaving.
 ///
 /// gim-core has no members listener, so the member list is queried with `chatMembers` and queried again when the
-/// chat list updates this chat or a membership change arrives in its timeline. When the gim-core build does not
-/// implement `chatMembers` yet (`GimError.NotImplemented`), only the member count from the chat summary is shown.
+/// chat list updates this chat or a membership change arrives in its timeline. When `chatMembers` fails before any
+/// list has loaded, the error is shown together with the member count from the chat summary.
 @MainActor
 @Observable
 public final class GroupInfoViewModel {
@@ -27,7 +27,7 @@ public final class GroupInfoViewModel {
     public private(set) var summary: ChatSummary?
     /// `nil` until loaded, and while `membersUnavailable`.
     public private(set) var members: [Member]?
-    /// `chatMembers` is not implemented by this gim-core build: show `summary.memberCount` without a list.
+    /// `chatMembers` failed and no list has loaded yet: show `summary.memberCount` without a list.
     public private(set) var membersUnavailable = false
     public private(set) var isLoading = false
     /// Error from the last load or change.
@@ -122,13 +122,10 @@ public final class GroupInfoViewModel {
             members = users.map { Member(user: $0, isSelf: $0.userId == selfUserId) }
             membersUnavailable = false
             errorMessage = nil
-        } catch GimError.NotImplemented {
-            guard claimResult(generation) else { return }
-            members = nil
-            membersUnavailable = true
-            pendingRemoval = nil
         } catch {
             guard claimResult(generation) else { return }
+            // A list that loaded before stays; it is only stale until the next query.
+            if members == nil { membersUnavailable = true }
             errorMessage = ErrorPresenter.message(for: error)
         }
     }
