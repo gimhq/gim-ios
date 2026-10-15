@@ -35,10 +35,12 @@ Onboarding pre-fills the last used server, else the `-GIMDefaultServerURL <url>`
 
 ```sh
 scripts/sync-gim-core.sh <gim-core CI run id>
+scripts/sync-gim-core.sh --from-dir <dir> --core-sha <gim-core sha>
 ```
 
-Downloads the `gim-core-ios-<sha>` artifact with `gh`, verifies its sha256, replaces `Vendor/GIMCore` and writes
-`GIM_CORE_VERSION`. Then compare the generated `Vendor/GIMCore/Sources/GIMCore/GIMCore.swift` with the mirror and
+Downloads the `gim-core-ios-<sha>` artifact with `gh` (or takes a local directory with the same layout, e.g. a build
+made from that gim-core commit), verifies its sha256, replaces `Vendor/GIMCore` and writes `GIM_CORE_VERSION`
+(`<core version>+<short sha>`). Then compare the generated `Vendor/GIMCore/Sources/GIMCore/GIMCore.swift` with the mirror and
 update `docs/gim-core-mapping.md`.
 
 ## Device E2E server

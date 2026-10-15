@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 /// In-memory `GimClientAPI` for previews, demo mode and tests.
 ///
@@ -8,6 +9,10 @@ import Foundation
 /// day (in `calendar`). Sync only runs between `startSync()` and `stopSync()`; own messages wait in the outbox until
 /// the client is connected. Delayed behaviour (connecting, send state progression, peer typing and replies) runs
 /// through `FakeScheduler`.
+///
+/// Identity: `createIdentity` returns a deterministic recovery code that `restoreFromRecovery` accepts after
+/// `signOut`; the device link runs on one client per side (`startLink`/`waitLink`/`confirmLink` signs in as the demo
+/// user, `approveLink`/`confirmApproval` adds a device) with the fixed SAS `fakeSas`.
 public actor FakeGimClient: GimClientAPI {
     struct Reaction: Sendable {
         var emoji: String
@@ -82,12 +87,31 @@ public actor FakeGimClient: GimClientAPI {
     /// Number of newest timeline entries exposed before `paginateBackwards` is called.
     public static let initialWindow = 50
     public static let failureReason = "Simulated network failure"
+    /// The SAS of every simulated device link.
+    public static let fakeSas = "123 456"
+    /// The other device of a client created with a session.
+    public static let fakeOtherDeviceId = "device-tablet"
+    static let linkQrPrefix = "gim-link:fake:"
 
     private let options: Options
     private let seedsDemoOnRegister: Bool
     private let reachabilityUpdates: AsyncStream<Bool>.Continuation
 
-    private var session: Session?
+    private var session: Session? {
+        didSet { sessionUserId.withLock { $0 = session?.userId } }
+    }
+    /// `session?.userId` for the synchronous `userId()`.
+    private let sessionUserId = Mutex<String?>(nil)
+    /// Hub-side state that survives `signOut`: each user's DeviceList (`isCurrent` false) and recovery code
+    /// (normalized).
+    private var deviceLists: [String: [DeviceInfo]] = [:]
+    private var recoveryCodes: [String: String] = [:]
+    private var createdIdentities = 0
+    /// Links started by `startLink`, by QR string, and whether `waitLink` consumed them.
+    private let startedLinks = Mutex<[String: Bool]>([:])
+    private var awaitingLinkConfirmation = false
+    /// Devices approved with `approveLink` and not yet confirmed.
+    private var pendingApprovals: Set<String> = []
     private var users: [String: UserProfile] = [:]
     private var chats: [String: StoredChat] = [:]
     private var media: [String: StoredMedia] = [:]
@@ -116,7 +140,8 @@ public actor FakeGimClient: GimClientAPI {
     ///   - autoReply: peers type and reply in direct chats after each own send.
     ///   - networkReachable: initial reachability, as `PlatformHooks.isNetworkReachable()` reports it.
     ///   - users: directory of users `findUser` can return.
-    ///   - session: the signed-in user (added to the directory), or `nil` before `register`.
+    ///   - session: the signed-in user (added to the directory, with a second device `fakeOtherDeviceId`), or `nil`
+    ///     before `createIdentity`.
     public init(
         scheduler: any FakeScheduler = ImmediateFakeScheduler(),
         dataDirectory: String = FakeGimClient.defaultDataDirectory,
@@ -146,6 +171,16 @@ public actor FakeGimClient: GimClientAPI {
         reachabilityUpdates = continuation
         networkReachable = options.networkReachable
         session = seed.session
+        sessionUserId.withLock { $0 = seed.session?.userId }
+        if let session = seed.session {
+            let nowMs = Self.milliseconds(options.now())
+            let day: UInt64 = 86_400_000
+            deviceLists[session.userId] = [
+                DeviceInfo(deviceId: session.deviceId, createdAtMs: nowMs - 30 * day, isCurrent: false, revoked: false),
+                DeviceInfo(
+                    deviceId: Self.fakeOtherDeviceId, createdAtMs: nowMs - 7 * day, isCurrent: false, revoked: false),
+            ]
+        }
         users = Dictionary(seed.users.map { ($0.userId, $0) }, uniquingKeysWith: { _, last in last })
         chats = Dictionary(uniqueKeysWithValues: seed.chats.map { ($0.id, $0) })
         media = seed.media
@@ -231,36 +266,19 @@ public actor FakeGimClient: GimClientAPI {
         session
     }
 
-    public func register(handle: String, displayName: String) async throws -> Session {
-        guard session == nil else { throw GimError.InvalidInput(reason: "This device is already registered") }
-        let handle = handle.trimmingCharacters(in: .whitespaces).lowercased()
-        let displayName = displayName.trimmingCharacters(in: .whitespaces)
-        guard !handle.isEmpty, !handle.contains(where: \.isWhitespace) else {
-            throw GimError.InvalidInput(reason: "Handle must not be empty or contain spaces")
-        }
-        guard !displayName.isEmpty else { throw GimError.InvalidInput(reason: "Display name is required") }
-        let userId = "user-\(handle)"
-        if users.values.contains(where: { $0.handle == handle }) || users[userId] != nil {
-            throw GimError.InvalidInput(reason: "Handle is already taken")
-        }
-        let session = Session(userId: userId, deviceId: "device-1", handle: handle, displayName: displayName)
-        let profile = UserProfile(userId: userId, handle: handle, displayName: displayName)
-        users[userId] = profile
-        self.session = session
-        if seedsDemoOnRegister {
-            let seed = FakeDemoData.seed(me: profile, dataDirectory: options.dataDirectory, now: options.now())
-            for chat in seed.chats {
-                chats[chat.id] = chat
-                publishTimelineChange(chat.id)
-            }
-            media.merge(seed.media) { _, new in new }
-            publishChatList()
-        }
-        return session
+    public nonisolated func userId() -> String? {
+        sessionUserId.withLock { $0 }
+    }
+
+    /// Always `false`: the fake keeps no local database.
+    public nonisolated func localStateReset() -> Bool {
+        false
     }
 
     public func signOut() async throws {
         session = nil
+        awaitingLinkConfirmation = false
+        pendingApprovals = []
         syncRunning = false
         outbox = []
         setConnection(.offline)
@@ -272,6 +290,187 @@ public actor FakeGimClient: GimClientAPI {
         timelineSubscribers = [:]
         typingSubscribers = [:]
         publishChatList()
+    }
+
+    // MARK: - Identity and devices
+
+    public func createIdentity(displayName: String) async throws -> String {
+        guard session == nil else { throw GimError.InvalidInput(reason: "This device already has an identity") }
+        let displayName = try Self.validDisplayName(displayName)
+        let userId = makeId("user")
+        createdIdentities += 1
+        let code = Self.recoveryCode(
+            bytes: (0..<24).map { UInt8(truncatingIfNeeded: createdIdentities &* 37 &+ $0 &* 11) })
+        recoveryCodes[userId] = Self.normalizedRecoveryCode(code)
+        let profile = UserProfile(userId: userId, handle: "", displayName: displayName)
+        signIn(profile, deviceId: "device-1")
+        if seedsDemoOnRegister { seedDemo(around: profile) }
+        return code
+    }
+
+    public func restoreFromRecovery(userId: String, recoveryCode: String, revokeOthers: Bool) async throws {
+        guard session == nil else { throw GimError.InvalidInput(reason: "This device already has an identity") }
+        guard let code = Self.normalizedRecoveryCode(recoveryCode) else {
+            throw GimError.InvalidInput(reason: "Malformed recovery code")
+        }
+        guard let expected = recoveryCodes[userId], let profile = users[userId] else {
+            throw GimError.NotFound(reason: "device list of \(userId)")
+        }
+        guard code == expected else { throw GimError.Crypto(reason: "Wrong recovery code") }
+        if revokeOthers {
+            deviceLists[userId] = deviceLists[userId, default: []].map(Self.revoked)
+        }
+        signIn(profile, deviceId: makeId("device"))
+    }
+
+    public nonisolated func startLink(hubs: [String]) throws -> any LinkSession {
+        guard userId() == nil else { throw GimError.InvalidInput(reason: "This device already has an identity") }
+        let qrString = startedLinks.withLock { links in
+            let qrString = "\(Self.linkQrPrefix)\(links.count + 1)"
+            links[qrString] = false
+            return qrString
+        }
+        return FakeLinkSession(qrString: qrString)
+    }
+
+    /// Signs in as the demo user (`demoSelfId`), whose first device is `device-1`.
+    public func waitLink(link: any LinkSession) async throws -> String {
+        guard session == nil else { throw GimError.InvalidInput(reason: "This device already has an identity") }
+        let qrString = link.qrString()
+        let started = startedLinks.withLock { links in
+            guard links[qrString] == false else { return false }
+            links[qrString] = true
+            return true
+        }
+        guard started else { throw GimError.InvalidInput(reason: "Start a new device link") }
+        let profile = users[Self.demoSelfId] ?? FakeDemoData.me
+        if deviceLists[profile.userId] == nil {
+            deviceLists[profile.userId] = [
+                DeviceInfo(deviceId: "device-1", createdAtMs: nowMs(), isCurrent: false, revoked: false)
+            ]
+        }
+        signIn(profile, deviceId: makeId("device"))
+        awaitingLinkConfirmation = true
+        return Self.fakeSas
+    }
+
+    public func confirmLink(accepted: Bool) async throws {
+        guard awaitingLinkConfirmation, let session else {
+            throw GimError.InvalidInput(reason: "No device link to confirm")
+        }
+        awaitingLinkConfirmation = false
+        guard accepted else {
+            try await signOut()
+            return
+        }
+        if seedsDemoOnRegister, let profile = users[session.userId] { seedDemo(around: profile) }
+    }
+
+    public func approveLink(qrString: String) async throws -> any PendingApproval {
+        let session = try requireSession()
+        guard qrString.hasPrefix(Self.linkQrPrefix) else {
+            throw GimError.InvalidInput(reason: "Not a device link QR code")
+        }
+        let deviceId = makeId("device")
+        deviceLists[session.userId, default: []].append(
+            DeviceInfo(deviceId: deviceId, createdAtMs: nowMs(), isCurrent: false, revoked: false))
+        pendingApprovals.insert(deviceId)
+        return FakePendingApproval(deviceId: deviceId, sas: Self.fakeSas)
+    }
+
+    public func confirmApproval(approval: any PendingApproval, accepted: Bool) async throws {
+        let session = try requireSession()
+        let deviceId = approval.deviceId()
+        guard pendingApprovals.remove(deviceId) != nil else {
+            throw GimError.InvalidInput(reason: "No pending approval for \(deviceId)")
+        }
+        if !accepted {
+            deviceLists[session.userId] = deviceLists[session.userId, default: []].map {
+                $0.deviceId == deviceId ? Self.revoked($0) : $0
+            }
+        }
+    }
+
+    public func devices() async throws -> [DeviceInfo] {
+        let session = try requireSession()
+        return deviceList(of: session.userId, current: session)
+    }
+
+    public func userDevices(userId: String) async throws -> [DeviceInfo] {
+        let session = try requireSession()
+        return deviceList(of: userId, current: session)
+    }
+
+    public func revokeDevice(deviceId: String) async throws {
+        let session = try requireSession()
+        guard deviceId != session.deviceId else {
+            throw GimError.InvalidInput(reason: "The current device can't be revoked")
+        }
+        var list = deviceLists[session.userId, default: []]
+        guard let index = list.firstIndex(where: { $0.deviceId == deviceId }) else {
+            throw GimError.NotFound(reason: "device \(deviceId)")
+        }
+        list[index] = Self.revoked(list[index])
+        deviceLists[session.userId] = list
+    }
+
+    public func setDisplayName(name: String) async throws {
+        var session = try requireSession()
+        session.displayName = try Self.validDisplayName(name)
+        updateProfile(session)
+    }
+
+    public func claimHandle(handle: String) async throws {
+        var session = try requireSession()
+        let handle = handle.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !handle.isEmpty, !handle.contains(where: \.isWhitespace) else {
+            throw GimError.InvalidInput(reason: "Handle must not be empty or contain spaces")
+        }
+        if users.values.contains(where: { $0.handle == handle && $0.userId != session.userId }) {
+            throw GimError.Server(status: 409, reason: "Handle is already taken")
+        }
+        session.handle = handle
+        updateProfile(session)
+    }
+
+    public func releaseHandle() async throws {
+        var session = try requireSession()
+        guard !session.handle.isEmpty else { throw GimError.InvalidInput(reason: "No handle is claimed") }
+        session.handle = ""
+        updateProfile(session)
+    }
+
+    private func signIn(_ profile: UserProfile, deviceId: String) {
+        users[profile.userId] = profile
+        deviceLists[profile.userId, default: []].append(
+            DeviceInfo(deviceId: deviceId, createdAtMs: nowMs(), isCurrent: false, revoked: false))
+        session = Session(
+            userId: profile.userId, deviceId: deviceId, handle: profile.handle, displayName: profile.displayName)
+    }
+
+    private func seedDemo(around me: UserProfile) {
+        let seed = FakeDemoData.seed(me: me, dataDirectory: options.dataDirectory, now: options.now())
+        for chat in seed.chats {
+            chats[chat.id] = chat
+            publishTimelineChange(chat.id)
+        }
+        media.merge(seed.media) { _, new in new }
+        publishChatList()
+    }
+
+    private func updateProfile(_ session: Session) {
+        self.session = session
+        users[session.userId] = UserProfile(
+            userId: session.userId, handle: session.handle, displayName: session.displayName)
+        publishChatList()
+    }
+
+    private func deviceList(of userId: String, current: Session) -> [DeviceInfo] {
+        deviceLists[userId, default: []].map {
+            var device = $0
+            device.isCurrent = userId == current.userId && device.deviceId == current.deviceId
+            return device
+        }
     }
 
     // MARK: - Sync
@@ -545,6 +744,10 @@ public actor FakeGimClient: GimClientAPI {
     public func setTyping(chatId: String, active: Bool) async throws {
         _ = try requireSession()
         _ = try existingChat(chatId)
+    }
+
+    public func stopTyping(chatId: String) async throws {
+        try await setTyping(chatId: chatId, active: false)
     }
 
     // MARK: - Media
@@ -842,6 +1045,59 @@ public actor FakeGimClient: GimClientAPI {
 
     // MARK: - Pure helpers
 
+    static let recoveryAlphabet = Array("0123456789ABCDEFGHJKMNPQRSTVWXYZ")
+
+    /// gim-core's recovery code format: Crockford base32 of the bytes, most significant bit first, zero-padded,
+    /// in blocks of four separated by `-`.
+    static func recoveryCode(bytes: [UInt8]) -> String {
+        var symbols: [Character] = []
+        var buffer = 0
+        var bits = 0
+        for byte in bytes {
+            buffer = (buffer << 8 | Int(byte)) & 0xFFFF
+            bits += 8
+            while bits >= 5 {
+                bits -= 5
+                symbols.append(recoveryAlphabet[buffer >> bits & 31])
+            }
+        }
+        if bits > 0 { symbols.append(recoveryAlphabet[buffer << (5 - bits) & 31]) }
+        return stride(from: 0, to: symbols.count, by: 4)
+            .map { String(symbols[$0..<min($0 + 4, symbols.count)]) }
+            .joined(separator: "-")
+    }
+
+    /// The 39 symbols of a 24-byte recovery code, parsed like gim-core (case-insensitive, `I`/`L` as `1`, `O` as `0`,
+    /// `-` and ASCII whitespace ignored, zero padding bits); `nil` when malformed.
+    static func normalizedRecoveryCode(_ code: String) -> String? {
+        var symbols = ""
+        for character in code.uppercased() {
+            if character == "-" || (character.isASCII && character.isWhitespace) { continue }
+            let symbol: Character =
+                switch character {
+                case "I", "L": "1"
+                case "O": "0"
+                default: character
+                }
+            guard recoveryAlphabet.contains(symbol) else { return nil }
+            symbols.append(symbol)
+        }
+        guard symbols.count == 39, let last = symbols.last.flatMap({ recoveryAlphabet.firstIndex(of: $0) }),
+            last % 8 == 0
+        else { return nil }
+        return symbols
+    }
+
+    static func validDisplayName(_ name: String) throws -> String {
+        let name = name.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { throw GimError.InvalidInput(reason: "Display name is required") }
+        return name
+    }
+
+    static func revoked(_ device: DeviceInfo) -> DeviceInfo {
+        DeviceInfo(deviceId: device.deviceId, createdAtMs: 0, isCurrent: false, revoked: true)
+    }
+
     static func milliseconds(_ date: Date) -> UInt64 {
         UInt64(max(0, (date.timeIntervalSince1970 * 1000).rounded()))
     }
@@ -1022,5 +1278,37 @@ final class FakeTimeline: Timeline {
 
     func paginateBackwards(count: UInt16) async throws -> Bool {
         try await client.paginateBackwards(chatId: id, count: count)
+    }
+}
+
+/// `LinkSession` of a `FakeGimClient`.
+final class FakeLinkSession: LinkSession {
+    private let qr: String
+
+    init(qrString: String) {
+        qr = qrString
+    }
+
+    func qrString() -> String {
+        qr
+    }
+}
+
+/// `PendingApproval` of a `FakeGimClient`.
+final class FakePendingApproval: PendingApproval {
+    private let id: String
+    private let code: String
+
+    init(deviceId: String, sas: String) {
+        id = deviceId
+        code = sas
+    }
+
+    func deviceId() -> String {
+        id
+    }
+
+    func sas() -> String {
+        code
     }
 }
