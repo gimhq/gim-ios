@@ -2,126 +2,76 @@ import Foundation
 
 /// In-memory `GimClientAPI` for previews, demo mode and tests.
 ///
-/// Emits the same diff semantics as gim-core (eyeball-im `VectorDiff`): the chat list is ordered by `updatedAtMs`
-/// descending, ties by chat id; each timeline is ordered oldest first, exposes a window of the newest items that
-/// `paginateBackwards` grows at the front, and has a `dateSeparator` before the first item of each local calendar
-/// day (in `calendar`). Sync only runs between `startSync()` and `stopSync()`; own messages wait in the outbox until
-/// the client is connected. Delayed behaviour (connecting, send state progression, peer typing and replies) runs
-/// through `FakeScheduler`.
+/// Emits the same diff semantics as gim-core: the chat list is ordered by last activity (the last message time, or
+/// the creation time for empty chats) descending, ties by chat id; each timeline is ordered oldest first and exposes
+/// a window of the newest messages that `loadOlder` grows at the front. The window is kept per chat.
+/// Delayed behaviour (send status progression, peer typing and replies, reconnecting) runs through `FakeScheduler`.
 public actor FakeGimClient: GimClientAPI {
     struct Reaction: Sendable {
         var emoji: String
-        var users: [String]
+        var users: [UserId]
     }
 
     struct StoredMessage: Sendable {
-        var item: MessageItem
+        var message: TimelineMessage
         var reactions: [Reaction] = []
     }
 
-    enum Entry: Sendable {
-        case message(StoredMessage)
-        case membership(userName: String, change: MembershipChangeKind, atMs: UInt64)
-
-        var atMs: UInt64 {
-            switch self {
-            case .message(let stored): stored.item.sentAtMs
-            case .membership(_, _, let atMs): atMs
-            }
-        }
-
-        var message: StoredMessage? {
-            if case .message(let stored) = self { stored } else { nil }
-        }
-
-        var timelineItem: TimelineItem {
-            switch self {
-            case .message(let stored): .message(item: stored.item)
-            case .membership(let userName, let change, let atMs):
-                .membershipChange(userName: userName, change: change, atMs: atMs)
-            }
-        }
-    }
-
     struct StoredChat: Sendable {
-        var id: String
+        var id: ChatId
         var kind: ChatKind
         var name: String
-        var createdAtMs: UInt64
-        var members: [String]
-        var avatar: MediaRef?
-        var entries: [Entry] = []
-        /// Number of newest entries the timeline exposes.
+        var createdAt: Date
+        var members: [UserId]
+        var messages: [StoredMessage] = []
         var loadedCount = 0
         var unreadCount: UInt32 = 0
-        var typing: [String] = []
-    }
-
-    struct StoredMedia: Sendable {
-        var path: String
-        var thumbnailPath: String?
+        var typing: [UserId] = []
     }
 
     struct Seed: Sendable {
         var session: Session?
         var users: [UserProfile] = []
         var chats: [StoredChat] = []
-        /// Keyed by `mediaKey(chatId:messageId:)`.
-        var media: [String: StoredMedia] = [:]
+        var media: [MediaId: String] = [:]
     }
 
-    struct Options: Sendable {
-        var scheduler: any FakeScheduler
-        var dataDirectory: String
-        var now: @Sendable () -> Date
-        var calendar: Calendar
-        var autoReply: Bool
-        var networkReachable: Bool
-    }
-
-    /// Number of newest timeline entries exposed before `paginateBackwards` is called.
+    /// Number of newest messages a timeline exposes before `loadOlder` is called.
     public static let initialWindow = 50
     public static let failureReason = "Simulated network failure"
 
-    private let options: Options
-    private let seedsDemoOnRegister: Bool
-    private let reachabilityUpdates: AsyncStream<Bool>.Continuation
+    private let scheduler: any FakeScheduler
+    private let dataDirectory: String
+    private let now: @Sendable () -> Date
+    private let autoReply: Bool
 
     private var session: Session?
-    private var users: [String: UserProfile] = [:]
-    private var chats: [String: StoredChat] = [:]
-    private var media: [String: StoredMedia] = [:]
-    private var publishedChatList: [ChatSummary] = []
-    private var publishedTimelines: [String: [TimelineItem]] = [:]
-    private var networkReachable: Bool
-    private var syncRunning = false
-    private var connection: ConnectionState = .offline
-    /// Bumped on every connection change so stale scheduled steps do nothing.
-    private var connectionGeneration = 0
+    private var users: [UserId: UserProfile] = [:]
+    private var chats: [ChatId: StoredChat] = [:]
+    private var chatList: [ChatSummary] = []
+    private var messageChats: [MessageId: ChatId] = [:]
+    private var media: [MediaId: String] = [:]
+    private var networkAvailable = true
+    private var connection: ConnectionState = .online
     private var sendFailuresRemaining = 0
-    private var chatMembersFailure: GimError?
-    private var outbox: [String] = []
+    private var waitingForNetwork: [MessageId] = []
     private var nextId = 1
     private var nextReply = 0
 
     private var chatListSubscribers: [Subscriber<any ChatListListener>] = []
-    private var timelineSubscribers: [String: [Subscriber<any TimelineListener>]] = [:]
-    private var connectionSubscribers: [Subscriber<any ConnectionStateListener>] = []
-    private var typingSubscribers: [String: [Subscriber<any TypingListener>]] = [:]
+    private var timelineSubscribers: [ChatId: [Subscriber<any TimelineListener>]] = [:]
+    private var connectionSubscribers: [Subscriber<any ConnectionListener>] = []
+    private var typingSubscribers: [ChatId: [Subscriber<any TypingListener>]] = [:]
 
     /// - Parameters:
-    ///   - calendar: decides the local calendar days of `dateSeparator` items.
-    ///   - autoReply: peers type and reply in direct chats after each own send.
-    ///   - networkReachable: initial reachability, as `PlatformHooks.isNetworkReachable()` reports it.
     ///   - users: directory of users `findUser` can return.
-    ///   - session: the signed-in user (added to the directory), or `nil` before `register`.
+    ///   - session: the signed-in user (added to the directory), or `nil` for `unregistered`.
+    ///   - autoReply: peers type and reply in direct chats after each own send.
     public init(
         scheduler: any FakeScheduler = ImmediateFakeScheduler(),
         dataDirectory: String = FakeGimClient.defaultDataDirectory,
         now: @escaping @Sendable () -> Date = { Date() },
-        calendar: Calendar = .autoupdatingCurrent,
         autoReply: Bool = false,
-        networkReachable: Bool = true,
         users: [UserProfile] = [],
         session: Session? = nil
     ) {
@@ -130,35 +80,32 @@ public actor FakeGimClient: GimClientAPI {
             seed.users.append(
                 UserProfile(userId: session.userId, handle: session.handle, displayName: session.displayName))
         }
-        self.init(
-            options: Options(
-                scheduler: scheduler, dataDirectory: dataDirectory, now: now, calendar: calendar,
-                autoReply: autoReply, networkReachable: networkReachable),
-            seed: seed, seedsDemoOnRegister: false)
+        self.init(scheduler: scheduler, dataDirectory: dataDirectory, now: now, autoReply: autoReply, seed: seed)
     }
 
-    init(options: Options, seed: Seed, seedsDemoOnRegister: Bool) {
-        self.options = options
-        self.seedsDemoOnRegister = seedsDemoOnRegister
-        let (updates, continuation) = AsyncStream.makeStream(of: Bool.self)
-        reachabilityUpdates = continuation
-        networkReachable = options.networkReachable
-        session = seed.session
-        users = Dictionary(seed.users.map { ($0.userId, $0) }, uniquingKeysWith: { _, last in last })
-        chats = Dictionary(uniqueKeysWithValues: seed.chats.map { ($0.id, $0) })
-        media = seed.media
-        publishedChatList = Self.sortedSummaries(chats: chats, users: users, session: seed.session)
-        publishedTimelines = chats.mapValues { Self.timelineItems(of: $0, calendar: options.calendar) }
-        // `setNetworkReachable` is synchronous; this keeps its updates in call order.
-        Task { [weak self] in
-            for await reachable in updates {
-                await self?.simulateNetworkReachable(reachable)
-            }
+    init(
+        scheduler: any FakeScheduler,
+        dataDirectory: String,
+        now: @escaping @Sendable () -> Date,
+        autoReply: Bool,
+        seed: Seed
+    ) {
+        self.scheduler = scheduler
+        self.dataDirectory = dataDirectory
+        self.now = now
+        self.autoReply = autoReply
+        let users = Dictionary(seed.users.map { ($0.userId, $0) }, uniquingKeysWith: { _, last in last })
+        let chats = Dictionary(uniqueKeysWithValues: seed.chats.map { ($0.id, $0) })
+        self.session = seed.session
+        self.users = users
+        self.chats = chats
+        self.media = seed.media
+        var messageChats: [MessageId: ChatId] = [:]
+        for chat in seed.chats {
+            for stored in chat.messages { messageChats[stored.message.id] = chat.id }
         }
-    }
-
-    deinit {
-        reachabilityUpdates.finish()
+        self.messageChats = messageChats
+        self.chatList = Self.sortedSummaries(chats: chats, users: users, session: seed.session)
     }
 
     public static var defaultDataDirectory: String {
@@ -172,135 +119,54 @@ public actor FakeGimClient: GimClientAPI {
         sendFailuresRemaining = count
     }
 
-    /// While set, `chatMembers` throws `error` (for example `.NotImplemented`, as gim-core does before it ships).
-    public func failChatMembers(with error: GimError?) {
-        chatMembersFailure = error
-    }
-
-    /// Applies a reachability change immediately; `setNetworkReachable(reachable:)` does the same asynchronously.
-    public func simulateNetworkReachable(_ reachable: Bool) {
-        networkReachable = reachable
-        if reachable {
-            reconnect()
-        } else {
-            setConnection(.offline)
-        }
-    }
-
     /// Simulates an incoming text message from a chat member.
     @discardableResult
-    public func receiveText(chatId: String, from sender: String, body: String) throws -> String {
-        try receive(chatId, from: sender, content: .text(body: body))
+    public func receiveText(_ chatId: ChatId, from sender: UserId, text: String) throws -> MessageId {
+        try receive(chatId, from: sender, content: .text(text))
     }
 
     /// Simulates a chat member starting or stopping to type.
-    public func setPeerTyping(chatId: String, userId: String, active: Bool) throws {
+    public func setPeerTyping(_ chatId: ChatId, user: UserId, typing: Bool) throws {
         var chat = try existingChat(chatId)
-        guard chat.members.contains(userId), userId != session?.userId else {
-            throw GimError.NotFound(reason: "member \(userId)")
-        }
-        chat.typing.removeAll { $0 == userId }
-        if active { chat.typing.append(userId) }
+        guard chat.members.contains(user) else { throw GimError.notFound }
+        chat.typing.removeAll { $0 == user }
+        if typing { chat.typing.append(user) }
         chats[chatId] = chat
-        let typing = chat.typing
-        typingSubscribers[chatId, default: []].deliver { $0.onUpdate(userIds: typing) }
+        let profiles = chat.typing.compactMap { users[$0] }
+        typingSubscribers[chatId, default: []].deliver { $0.onTyping(chatId: chatId, users: profiles) }
     }
 
     // MARK: - Account
 
-    public func session() async throws -> Session? {
-        session
+    public func loginState() async throws -> LoginState {
+        session.map(LoginState.registered) ?? .unregistered
     }
 
-    public func register(handle: String, displayName: String) async throws -> Session {
-        guard session == nil else { throw GimError.InvalidInput(reason: "This device is already registered") }
+    public func register(serverUrl: String, handle: String, displayName: String) async throws -> Session {
         let handle = handle.trimmingCharacters(in: .whitespaces).lowercased()
         let displayName = displayName.trimmingCharacters(in: .whitespaces)
+        guard !serverUrl.isEmpty else { throw GimError.invalidInput("Server URL is required") }
         guard !handle.isEmpty, !handle.contains(where: \.isWhitespace) else {
-            throw GimError.InvalidInput(reason: "Handle must not be empty or contain spaces")
+            throw GimError.invalidInput("Handle must not be empty or contain spaces")
         }
-        guard !displayName.isEmpty else { throw GimError.InvalidInput(reason: "Display name is required") }
+        guard !displayName.isEmpty else { throw GimError.invalidInput("Display name is required") }
         let userId = "user-\(handle)"
-        if users.values.contains(where: { $0.handle == handle }) || users[userId] != nil {
-            throw GimError.InvalidInput(reason: "Handle is already taken")
+        if users.values.contains(where: { $0.handle == handle && $0.userId != userId }) || users[userId] != nil {
+            throw GimError.invalidInput("Handle is already taken")
         }
-        let session = Session(userId: userId, deviceId: "device-1", handle: handle, displayName: displayName)
-        let profile = UserProfile(userId: userId, handle: handle, displayName: displayName)
-        users[userId] = profile
+        let session = Session(
+            userId: userId, deviceId: "device-1", handle: handle, displayName: displayName, serverUrl: serverUrl)
+        users[userId] = UserProfile(userId: userId, handle: handle, displayName: displayName)
         self.session = session
-        if seedsDemoOnRegister {
-            let seed = FakeDemoData.seed(me: profile, dataDirectory: options.dataDirectory, now: options.now())
-            for chat in seed.chats {
-                chats[chat.id] = chat
-                publishTimelineChange(chat.id)
-            }
-            media.merge(seed.media) { _, new in new }
-            publishChatList()
-        }
         return session
     }
 
-    public func signOut() async throws {
+    public func logout() async throws {
         session = nil
-        syncRunning = false
-        outbox = []
-        setConnection(.offline)
-        for chatId in chats.keys {
-            timelineSubscribers[chatId, default: []].deliver { $0.onUpdate(diffs: [.clear]) }
-        }
         chats = [:]
-        publishedTimelines = [:]
-        timelineSubscribers = [:]
-        typingSubscribers = [:]
-        publishChatList()
-    }
-
-    // MARK: - Sync
-
-    public func startSync() async throws {
-        _ = try requireSession()
-        syncRunning = true
-        reconnect()
-    }
-
-    public func stopSync() async throws {
-        syncRunning = false
-        setConnection(.offline)
-    }
-
-    public nonisolated func setNetworkReachable(reachable: Bool) {
-        reachabilityUpdates.yield(reachable)
-    }
-
-    private func reconnect() {
-        guard syncRunning, networkReachable, connection == .offline else { return }
-        setConnection(.connecting)
-        let generation = connectionGeneration
-        options.scheduler.schedule(after: .milliseconds(500)) { [weak self] in
-            await self?.advanceConnection(from: .connecting, to: .syncing, generation: generation)
-        }
-    }
-
-    private func advanceConnection(from current: ConnectionState, to next: ConnectionState, generation: Int) {
-        guard connectionGeneration == generation, connection == current else { return }
-        setConnection(next)
-        if next == .syncing {
-            let generation = connectionGeneration
-            options.scheduler.schedule(after: .milliseconds(300)) { [weak self] in
-                await self?.advanceConnection(from: .syncing, to: .connected, generation: generation)
-            }
-        } else if next == .connected {
-            let waiting = outbox
-            outbox = []
-            for messageId in waiting { startDelivery(messageId) }
-        }
-    }
-
-    private func setConnection(_ state: ConnectionState) {
-        guard connection != state else { return }
-        connection = state
-        connectionGeneration += 1
-        connectionSubscribers.deliver { $0.onChange(state: state) }
+        messageChats = [:]
+        chatList = []
+        chatListSubscribers.deliver { $0.onDiffs([.reset([])]) }
     }
 
     // MARK: - Users and chats
@@ -311,417 +177,356 @@ public actor FakeGimClient: GimClientAPI {
         return users.values.first { $0.handle == handle }
     }
 
-    public func createDirectChat(userId: String) async throws -> String {
+    public func createDirectChat(with user: UserId) async throws -> ChatId {
         let session = try requireSession()
-        guard userId != session.userId else {
-            throw GimError.InvalidInput(reason: "You can't start a chat with yourself")
-        }
-        _ = try existingUser(userId)
-        if let existing = chats.values.first(where: { $0.kind == .direct && $0.members.contains(userId) }) {
+        guard user != session.userId else { throw GimError.invalidInput("You can't start a chat with yourself") }
+        guard users[user] != nil else { throw GimError.notFound }
+        if let existing = chats.values.first(where: { $0.kind == .direct && $0.members.contains(user) }) {
             return existing.id
         }
         let chat = StoredChat(
-            id: makeId("chat"), kind: .direct, name: "", createdAtMs: nowMs(), members: [session.userId, userId])
+            id: makeId("chat"), kind: .direct, name: "", createdAt: now(), members: [session.userId, user])
         chats[chat.id] = chat
-        publishTimelineChange(chat.id)
-        publishChatList()
+        publishChatListChange(chat.id)
         return chat.id
     }
 
-    public func createGroupChat(name: String, memberUserIds: [String]) async throws -> String {
+    public func createGroupChat(name: String, members: [UserId]) async throws -> ChatId {
         let session = try requireSession()
         let name = name.trimmingCharacters(in: .whitespaces)
-        guard !name.isEmpty else { throw GimError.InvalidInput(reason: "Group name is required") }
+        guard !name.isEmpty else { throw GimError.invalidInput("Group name is required") }
         var memberIds = [session.userId]
-        for member in memberUserIds where !memberIds.contains(member) {
-            _ = try existingUser(member)
+        for member in members where !memberIds.contains(member) {
+            guard users[member] != nil else { throw GimError.notFound }
             memberIds.append(member)
         }
-        let chat = StoredChat(id: makeId("chat"), kind: .group, name: name, createdAtMs: nowMs(), members: memberIds)
+        let chat = StoredChat(id: makeId("chat"), kind: .group, name: name, createdAt: now(), members: memberIds)
         chats[chat.id] = chat
-        publishTimelineChange(chat.id)
-        publishChatList()
+        publishChatListChange(chat.id)
         return chat.id
     }
 
-    public func chatMembers(chatId: String) async throws -> [UserProfile] {
-        _ = try requireSession()
-        if let chatMembersFailure { throw chatMembersFailure }
-        return try existingChat(chatId).members.compactMap { users[$0] }
-    }
-
-    public func addMembers(chatId: String, userIds: [String]) async throws {
-        _ = try requireSession()
-        var chat = try existingGroup(chatId, "Members can only be added to groups")
-        var added: [UserProfile] = []
-        for userId in userIds where !chat.members.contains(userId) && !added.contains(where: { $0.userId == userId }) {
-            added.append(try existingUser(userId))
-        }
-        guard !added.isEmpty else { return }
-        chat.members += added.map(\.userId)
-        chats[chatId] = chat
-        for user in added {
-            appendEntry(.membership(userName: user.displayName, change: .added, atMs: nowMs()), chatId)
-        }
-    }
-
-    public func removeMember(chatId: String, userId: String) async throws {
+    public func chatDetails(_ chatId: ChatId) async throws -> ChatDetails {
         let session = try requireSession()
-        var chat = try existingGroup(chatId, "Members can only be removed from groups")
-        guard userId != session.userId else { throw GimError.InvalidInput(reason: "Use leaveChat to leave a group") }
-        guard chat.members.contains(userId), let user = users[userId] else {
-            throw GimError.NotFound(reason: "member \(userId)")
+        let chat = try existingChat(chatId)
+        let members = chat.members.compactMap { id in
+            users[id].map { ChatMember(user: $0, isSelf: id == session.userId) }
         }
-        chat.members.removeAll { $0 == userId }
-        chat.typing.removeAll { $0 == userId }
-        chats[chatId] = chat
-        appendEntry(.membership(userName: user.displayName, change: .removed, atMs: nowMs()), chatId)
+        return ChatDetails(summary: summary(of: chat), members: members)
     }
 
-    public func leaveChat(chatId: String) async throws {
-        let session = try requireSession()
-        _ = try existingGroup(chatId, "Only groups can be left")
-        appendEntry(.membership(userName: session.displayName, change: .left, atMs: nowMs()), chatId)
-        chats[chatId] = nil
-        publishedTimelines[chatId] = nil
-        timelineSubscribers[chatId] = nil
-        typingSubscribers[chatId] = nil
-        publishChatList()
-    }
-
-    public func setGroupInfo(chatId: String, name: String?, avatarFilePath: String?) async throws {
+    public func addMember(_ chatId: ChatId, user: UserId) async throws {
         _ = try requireSession()
-        var chat = try existingGroup(chatId, "Only groups have a name and avatar")
-        if let name {
-            let name = name.trimmingCharacters(in: .whitespaces)
-            guard !name.isEmpty else { throw GimError.InvalidInput(reason: "Group name is required") }
-            chat.name = name
-        }
-        if let avatarFilePath {
-            let avatarId = makeId("avatar")
-            let stored = try storeFile(avatarFilePath, as: avatarId)
-            media[Self.mediaKey(chatId: chatId, messageId: avatarId)] = StoredMedia(
-                path: stored.path, thumbnailPath: stored.path)
-            chat.avatar = MediaRef(
-                chatId: chatId, messageId: avatarId, mime: Self.mime(forPath: avatarFilePath), size: stored.size,
-                hasThumbnail: true)
-        }
+        var chat = try existingChat(chatId)
+        guard chat.kind == .group else { throw GimError.invalidInput("Members can only be added to groups") }
+        guard users[user] != nil else { throw GimError.notFound }
+        guard !chat.members.contains(user) else { return }
+        chat.members.append(user)
         chats[chatId] = chat
-        publishChatList()
+        publishChatListChange(chatId)
+    }
+
+    public func removeMember(_ chatId: ChatId, user: UserId) async throws {
+        let session = try requireSession()
+        var chat = try existingChat(chatId)
+        guard chat.kind == .group else { throw GimError.invalidInput("Members can only be removed from groups") }
+        guard user != session.userId else { throw GimError.invalidInput("You can't remove yourself") }
+        guard chat.members.contains(user) else { throw GimError.notFound }
+        chat.members.removeAll { $0 == user }
+        chat.typing.removeAll { $0 == user }
+        chats[chatId] = chat
+        publishChatListChange(chatId)
     }
 
     // MARK: - Messages
 
-    public func sendText(chatId: String, body: String, replyTo: String?) async throws -> String {
-        guard !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw GimError.InvalidInput(reason: "Message is empty")
+    public func sendText(_ chatId: ChatId, text: String, replyTo: MessageId?) async throws -> MessageId {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw GimError.invalidInput("Message is empty")
         }
-        return try sendOwn(chatId, messageId: makeId("msg"), content: .text(body: body), replyTo: replyTo)
+        return try sendOwn(chatId, content: .text(text), replyTo: replyTo)
     }
 
     public func sendMedia(
-        chatId: String, filePath: String, mime: String, caption: String?, replyTo: String?
-    ) async throws -> String {
+        _ chatId: ChatId,
+        filePath: String,
+        mime: String,
+        kind: MediaKind,
+        caption: String?,
+        replyTo: MessageId?,
+        width: UInt32?,
+        height: UInt32?
+    ) async throws -> MessageId {
         _ = try requireSession()
         _ = try existingChat(chatId)
-        let messageId = makeId("msg")
-        let stored = try storeFile(filePath, as: messageId)
-        let isImage = mime.hasPrefix("image/")
-        media[Self.mediaKey(chatId: chatId, messageId: messageId)] = StoredMedia(
-            path: stored.path, thumbnailPath: isImage ? stored.path : nil)
-        let ref = MediaRef(chatId: chatId, messageId: messageId, mime: mime, size: stored.size, hasThumbnail: isImage)
+        let fileManager = FileManager.default
+        guard fileManager.fileExists(atPath: filePath) else { throw GimError.invalidInput("File not found") }
+        let mediaId = makeId("media")
+        let fileName = URL(fileURLWithPath: filePath).lastPathComponent
+        let directory = URL(fileURLWithPath: dataDirectory).appendingPathComponent("media", isDirectory: true)
+        let destination = directory.appendingPathComponent("\(mediaId)-\(fileName)")
+        let size: UInt64
+        do {
+            try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+            try fileManager.copyItem(atPath: filePath, toPath: destination.path)
+            let attributes = try fileManager.attributesOfItem(atPath: destination.path)
+            size = (attributes[.size] as? NSNumber)?.uint64Value ?? 0
+        } catch {
+            throw GimError.internal("Could not store media: \(error)")
+        }
+        media[mediaId] = destination.path
+        let info = MediaInfo(
+            mediaId: mediaId, mime: mime, size: size, fileName: fileName, width: width, height: height,
+            thumbnailPath: kind == .image ? destination.path : nil)
         let content: MessageContent =
-            isImage
-            ? .image(media: ref, width: nil, height: nil, caption: caption)
-            : .file(media: ref, fileName: URL(fileURLWithPath: filePath).lastPathComponent, caption: caption)
-        return try sendOwn(chatId, messageId: messageId, content: content, replyTo: replyTo)
+            switch kind {
+            case .image: .image(info, caption: caption)
+            case .file: .file(info, caption: caption)
+            }
+        return try sendOwn(chatId, content: content, replyTo: replyTo)
     }
 
-    public func editMessage(chatId: String, messageId: String, newBody: String) async throws {
+    public func edit(_ messageId: MessageId, text: String) async throws {
         _ = try requireSession()
-        let stored = try existingMessage(chatId, messageId)
-        guard stored.item.isOwn else { throw GimError.InvalidInput(reason: "Only your own messages can be edited") }
-        guard case .text = stored.item.content else { throw GimError.InvalidInput(reason: "Only text can be edited") }
-        guard !newBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw GimError.InvalidInput(reason: "Message is empty")
+        let stored = try existingMessage(messageId)
+        guard stored.message.isOwn else { throw GimError.invalidInput("Only your own messages can be edited") }
+        guard case .text = stored.message.content else { throw GimError.invalidInput("Only text can be edited") }
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw GimError.invalidInput("Message is empty")
         }
-        updateMessage(chatId, messageId) {
-            $0.item.content = .text(body: newBody)
-            $0.item.edited = true
+        let editedAt = now()
+        updateMessage(messageId) {
+            $0.message.content = .text(text)
+            $0.message.editedAt = editedAt
         }
     }
 
-    public func deleteMessage(chatId: String, messageId: String) async throws {
+    public func delete(_ messageId: MessageId) async throws {
         _ = try requireSession()
-        let stored = try existingMessage(chatId, messageId)
-        guard stored.item.isOwn else {
-            throw GimError.InvalidInput(reason: "Only your own messages can be deleted")
-        }
-        updateMessage(chatId, messageId) {
-            $0.item.content = .deleted
-            $0.item.replyTo = nil
-            $0.item.edited = false
+        let stored = try existingMessage(messageId)
+        guard stored.message.isOwn else { throw GimError.invalidInput("Only your own messages can be deleted") }
+        updateMessage(messageId) {
+            $0.message.content = .deleted
+            $0.message.replyTo = nil
+            $0.message.editedAt = nil
             $0.reactions = []
-            $0.item.reactions = []
         }
     }
 
-    public func react(chatId: String, messageId: String, emoji: String) async throws {
-        try setOwnReaction(chatId, messageId, emoji: emoji, active: true)
+    public func react(_ messageId: MessageId, emoji: String, remove: Bool) async throws {
+        let session = try requireSession()
+        let stored = try existingMessage(messageId)
+        guard !emoji.isEmpty else { throw GimError.invalidInput("Reaction is empty") }
+        guard stored.message.content != .deleted else { throw GimError.invalidInput("Message was deleted") }
+        updateMessage(messageId) {
+            Self.setReaction(&$0, emoji: emoji, user: session.userId, active: !remove, selfId: session.userId)
+        }
     }
 
-    public func unreact(chatId: String, messageId: String, emoji: String) async throws {
-        try setOwnReaction(chatId, messageId, emoji: emoji, active: false)
-    }
-
-    public func retrySend(chatId: String, messageId: String) async throws {
+    public func retry(_ messageId: MessageId) async throws {
         _ = try requireSession()
-        let stored = try existingMessage(chatId, messageId)
-        guard case .failed = stored.item.sendState else {
-            throw GimError.InvalidInput(reason: "Message has not failed")
-        }
-        updateMessage(chatId, messageId) { $0.item.sendState = .pending }
+        let stored = try existingMessage(messageId)
+        guard case .failed = stored.message.sendState else { throw GimError.invalidInput("Message has not failed") }
+        updateMessage(messageId) { $0.message.sendState = .pending }
         startDelivery(messageId)
     }
 
-    public func cancelSend(chatId: String, messageId: String) async throws {
-        _ = try requireSession()
-        let stored = try existingMessage(chatId, messageId)
-        switch stored.item.sendState {
-        case .pending, .failed: break
-        default: throw GimError.InvalidInput(reason: "Message was already sent")
-        }
-        guard var chat = chats[chatId],
-            let index = chat.entries.firstIndex(where: { $0.message?.item.messageId == messageId })
-        else { return }
-        if index >= chat.entries.count - chat.loadedCount { chat.loadedCount -= 1 }
-        chat.entries.remove(at: index)
-        chats[chatId] = chat
-        outbox.removeAll { $0 == messageId }
-        publishTimelineChange(chatId)
-        publishChatList()
-    }
-
-    public func markRead(chatId: String, upToMessageId: String) async throws {
+    public func markRead(_ chatId: ChatId) async throws {
         _ = try requireSession()
         var chat = try existingChat(chatId)
-        guard let index = chat.entries.firstIndex(where: { $0.message?.item.messageId == upToMessageId }) else {
-            throw GimError.NotFound(reason: "message \(upToMessageId)")
-        }
-        let unreadAfter = chat.entries[(index + 1)...].filter { $0.message.map { !$0.item.isOwn } ?? false }.count
-        let unread = min(chat.unreadCount, UInt32(unreadAfter))
-        guard unread != chat.unreadCount else { return }
-        chat.unreadCount = unread
+        guard chat.unreadCount > 0 else { return }
+        chat.unreadCount = 0
         chats[chatId] = chat
-        publishChatList()
+        publishChatListChange(chatId)
     }
 
-    public func setTyping(chatId: String, active: Bool) async throws {
+    public func setTyping(_ chatId: ChatId, typing: Bool) async throws {
         _ = try requireSession()
         _ = try existingChat(chatId)
     }
 
-    // MARK: - Media
-
-    public func fetchMedia(chatId: String, messageId: String, destPath: String) async throws -> String {
-        guard let stored = media[Self.mediaKey(chatId: chatId, messageId: messageId)] else {
-            throw GimError.NotFound(reason: "media \(messageId)")
-        }
-        return try copyFile(stored.path, to: destPath)
-    }
-
-    public func fetchThumbnail(chatId: String, messageId: String, destPath: String) async throws -> String? {
-        guard let stored = media[Self.mediaKey(chatId: chatId, messageId: messageId)] else {
-            throw GimError.NotFound(reason: "media \(messageId)")
-        }
-        return try stored.thumbnailPath.map { try copyFile($0, to: destPath) }
-    }
-
-    // MARK: - Listeners
-
-    public func chatList(listener: any ChatListListener) async throws -> TaskHandle {
-        let subscription = FakeSubscription()
-        let list = publishedChatList
-        subscription.deliver { listener.onUpdate(diffs: [.reset(values: list)]) }
-        chatListSubscribers.append(Subscriber(subscription: subscription, listener: listener))
-        return subscription.taskHandle()
-    }
-
-    public func timeline(chatId: String) async throws -> any Timeline {
-        _ = try existingChat(chatId)
-        return FakeTimeline(client: self, chatId: chatId)
-    }
-
-    public func connectionState(listener: any ConnectionStateListener) async throws -> TaskHandle {
-        let subscription = FakeSubscription()
-        let state = connection
-        subscription.deliver { listener.onChange(state: state) }
-        connectionSubscribers.append(Subscriber(subscription: subscription, listener: listener))
-        return subscription.taskHandle()
-    }
-
-    public func typing(chatId: String, listener: any TypingListener) async throws -> TaskHandle {
-        let typing = try existingChat(chatId).typing
-        let subscription = FakeSubscription()
-        subscription.deliver { listener.onUpdate(userIds: typing) }
-        typingSubscribers[chatId, default: []].append(Subscriber(subscription: subscription, listener: listener))
-        return subscription.taskHandle()
-    }
-
-    func addTimelineListener(chatId: String, listener: any TimelineListener) -> TaskHandle {
-        let subscription = FakeSubscription()
-        let items = publishedTimelines[chatId] ?? []
-        subscription.deliver { listener.onUpdate(diffs: [.reset(values: items)]) }
-        if chats[chatId] != nil {
-            timelineSubscribers[chatId, default: []].append(Subscriber(subscription: subscription, listener: listener))
-        }
-        return subscription.taskHandle()
-    }
-
-    func paginateBackwards(chatId: String, count: UInt16) throws -> Bool {
+    public func loadOlder(_ chatId: ChatId, count: UInt32) async throws -> Bool {
         var chat = try existingChat(chatId)
-        let hidden = chat.entries.count - chat.loadedCount
+        let hidden = chat.messages.count - chat.loadedCount
         let loaded = min(Int(count), hidden)
         guard loaded > 0 else { return hidden > 0 }
+        let older = chat.messages[(hidden - loaded)..<hidden]
         chat.loadedCount += loaded
         chats[chatId] = chat
-        publishTimelineChange(chatId)
+        let diffs = older.enumerated().map { offset, stored in
+            TimelineDiff.insert(index: UInt32(offset), stored.message)
+        }
+        timelineSubscribers[chatId, default: []].deliver { $0.onDiffs(diffs) }
         return hidden - loaded > 0
+    }
+
+    public func fetchMedia(_ mediaId: MediaId) async throws -> String {
+        guard let path = media[mediaId], FileManager.default.fileExists(atPath: path) else {
+            throw GimError.notFound
+        }
+        return path
+    }
+
+    // MARK: - Connection
+
+    public func setNetworkAvailable(_ available: Bool) async {
+        networkAvailable = available
+        if !available {
+            setConnection(.offline)
+        } else if connection == .offline {
+            setConnection(.connecting)
+            scheduler.schedule(after: .milliseconds(500)) { [weak self] in await self?.finishConnecting() }
+        }
+    }
+
+    private func finishConnecting() {
+        guard networkAvailable, connection == .connecting else { return }
+        setConnection(.online)
+        let waiting = waitingForNetwork
+        waitingForNetwork = []
+        for messageId in waiting { startDelivery(messageId) }
+    }
+
+    private func setConnection(_ state: ConnectionState) {
+        guard connection != state else { return }
+        connection = state
+        connectionSubscribers.deliver { $0.onState(state) }
+    }
+
+    // MARK: - Subscriptions
+
+    public func subscribeChatList(_ listener: any ChatListListener) async throws -> any SubscriptionHandle {
+        let handle = FakeSubscription()
+        let list = chatList
+        handle.deliver { listener.onDiffs([.reset(list)]) }
+        chatListSubscribers.append(Subscriber(handle: handle, listener: listener))
+        return handle
+    }
+
+    public func subscribeTimeline(
+        _ chatId: ChatId, _ listener: any TimelineListener
+    ) async throws -> any SubscriptionHandle {
+        let chat = try existingChat(chatId)
+        let handle = FakeSubscription()
+        let window = chat.messages.suffix(chat.loadedCount).map(\.message)
+        handle.deliver { listener.onDiffs([.reset(window)]) }
+        timelineSubscribers[chatId, default: []].append(Subscriber(handle: handle, listener: listener))
+        return handle
+    }
+
+    public func subscribeConnection(_ listener: any ConnectionListener) async throws -> any SubscriptionHandle {
+        let handle = FakeSubscription()
+        let state = connection
+        handle.deliver { listener.onState(state) }
+        connectionSubscribers.append(Subscriber(handle: handle, listener: listener))
+        return handle
+    }
+
+    public func subscribeTyping(
+        _ chatId: ChatId, _ listener: any TypingListener
+    ) async throws -> any SubscriptionHandle {
+        let chat = try existingChat(chatId)
+        let handle = FakeSubscription()
+        let profiles = chat.typing.compactMap { users[$0] }
+        handle.deliver { listener.onTyping(chatId: chatId, users: profiles) }
+        typingSubscribers[chatId, default: []].append(Subscriber(handle: handle, listener: listener))
+        return handle
     }
 
     // MARK: - Sending
 
-    private func sendOwn(
-        _ chatId: String, messageId: String, content: MessageContent, replyTo: String?
-    ) throws -> String {
+    private func sendOwn(_ chatId: ChatId, content: MessageContent, replyTo: MessageId?) throws -> MessageId {
         let session = try requireSession()
         _ = try existingChat(chatId)
         let reply = try replyTo.map { try replyPreview(for: $0, in: chatId) }
-        let item = MessageItem(
-            messageId: messageId, chatId: chatId,
-            sender: UserProfile(userId: session.userId, handle: session.handle, displayName: session.displayName),
-            isOwn: true, sentAtMs: nowMs(), content: content, replyTo: reply, reactions: [], edited: false,
-            sendState: .pending)
-        appendEntry(.message(StoredMessage(item: item)), chatId)
-        startDelivery(messageId)
-        return messageId
+        let message = TimelineMessage(
+            id: makeId("msg"), chatId: chatId, senderId: session.userId, senderName: session.displayName,
+            isOwn: true, timestamp: now(), content: content, replyTo: reply, sendState: .pending)
+        append(StoredMessage(message: message))
+        startDelivery(message.id)
+        return message.id
     }
 
-    private func startDelivery(_ messageId: String) {
-        guard connection == .connected else {
-            outbox.append(messageId)
+    private func startDelivery(_ messageId: MessageId) {
+        guard networkAvailable else {
+            waitingForNetwork.append(messageId)
             return
         }
-        let state: SendState
         if sendFailuresRemaining > 0 {
             sendFailuresRemaining -= 1
-            state = .failed(reason: Self.failureReason)
+            scheduler.schedule(after: .milliseconds(300)) { [weak self] in
+                await self?.advance(messageId, to: .failed(reason: Self.failureReason))
+            }
         } else {
-            state = .sent
-        }
-        options.scheduler.schedule(after: .milliseconds(300)) { [weak self] in await self?.advance(messageId, to: state)
+            scheduler.schedule(after: .milliseconds(300)) { [weak self] in await self?.advance(messageId, to: .sent) }
         }
     }
 
-    private func advance(_ messageId: String, to state: SendState) {
-        guard let located = locateMessage(messageId), located.message.item.content != .deleted else { return }
-        let chatId = located.chatId
-        updateMessage(chatId, messageId) { $0.item.sendState = state }
+    private func advance(_ messageId: MessageId, to state: SendState) {
+        guard let stored = try? existingMessage(messageId), stored.message.content != .deleted else { return }
+        updateMessage(messageId) { $0.message.sendState = state }
         switch state {
         case .sent:
-            options.scheduler.schedule(after: .milliseconds(700)) { [weak self] in
+            scheduler.schedule(after: .milliseconds(700)) { [weak self] in
                 await self?.advance(messageId, to: .delivered)
             }
-            scheduleAutoReply(chatId)
+            scheduleAutoReply(stored.message.chatId)
         case .delivered:
-            options.scheduler.schedule(after: .milliseconds(1500)) { [weak self] in
-                await self?.advance(messageId, to: .read)
-            }
+            scheduler.schedule(after: .milliseconds(1500)) { [weak self] in await self?.advance(messageId, to: .read) }
         case .pending, .read, .failed:
             break
         }
     }
 
-    private func scheduleAutoReply(_ chatId: String) {
-        guard options.autoReply, let session, let chat = chats[chatId], chat.kind == .direct,
+    private func scheduleAutoReply(_ chatId: ChatId) {
+        guard autoReply, let session, let chat = chats[chatId], chat.kind == .direct,
             let peer = chat.members.first(where: { $0 != session.userId })
         else { return }
-        options.scheduler.schedule(after: .seconds(1)) { [weak self] in
-            try? await self?.setPeerTyping(chatId: chatId, userId: peer, active: true)
+        scheduler.schedule(after: .seconds(1)) { [weak self] in
+            try? await self?.setPeerTyping(chatId, user: peer, typing: true)
         }
-        options.scheduler.schedule(after: .seconds(3)) { [weak self] in await self?.deliverAutoReply(chatId, from: peer)
-        }
+        scheduler.schedule(after: .seconds(3)) { [weak self] in await self?.deliverAutoReply(chatId, from: peer) }
     }
 
-    private func deliverAutoReply(_ chatId: String, from peer: String) {
-        try? setPeerTyping(chatId: chatId, userId: peer, active: false)
-        let body = FakeDemoData.replies[nextReply % FakeDemoData.replies.count]
+    private func deliverAutoReply(_ chatId: ChatId, from peer: UserId) {
+        try? setPeerTyping(chatId, user: peer, typing: false)
+        let text = FakeDemoData.replies[nextReply % FakeDemoData.replies.count]
         nextReply += 1
-        _ = try? receive(chatId, from: peer, content: .text(body: body))
+        _ = try? receive(chatId, from: peer, content: .text(text))
     }
 
-    private func receive(_ chatId: String, from sender: String, content: MessageContent) throws -> String {
+    private func receive(_ chatId: ChatId, from sender: UserId, content: MessageContent) throws -> MessageId {
         let session = try requireSession()
         var chat = try existingChat(chatId)
         guard sender != session.userId, chat.members.contains(sender), let profile = users[sender] else {
-            throw GimError.NotFound(reason: "member \(sender)")
+            throw GimError.notFound
         }
         chat.unreadCount += 1
         chats[chatId] = chat
-        let item = MessageItem(
-            messageId: makeId("msg"), chatId: chatId, sender: profile, isOwn: false, sentAtMs: nowMs(),
-            content: content, replyTo: nil, reactions: [], edited: false, sendState: nil)
-        appendEntry(.message(StoredMessage(item: item)), chatId)
-        return item.messageId
-    }
-
-    private func setOwnReaction(_ chatId: String, _ messageId: String, emoji: String, active: Bool) throws {
-        let session = try requireSession()
-        let stored = try existingMessage(chatId, messageId)
-        guard !emoji.isEmpty else { throw GimError.InvalidInput(reason: "Reaction is empty") }
-        guard stored.item.content != .deleted else { throw GimError.InvalidInput(reason: "Message was deleted") }
-        updateMessage(chatId, messageId) {
-            Self.setReaction(&$0, emoji: emoji, user: session.userId, active: active, selfId: session.userId)
-        }
+        let message = TimelineMessage(
+            id: makeId("msg"), chatId: chatId, senderId: sender, senderName: profile.displayName, isOwn: false,
+            timestamp: now(), content: content)
+        append(StoredMessage(message: message))
+        return message.id
     }
 
     // MARK: - State helpers
 
     private func requireSession() throws -> Session {
-        guard let session else { throw GimError.NotRegistered }
+        guard let session else { throw GimError.unauthorized }
         return session
     }
 
-    private func existingUser(_ userId: String) throws -> UserProfile {
-        guard let user = users[userId] else { throw GimError.NotFound(reason: "user \(userId)") }
-        return user
-    }
-
-    private func existingChat(_ chatId: String) throws -> StoredChat {
-        guard let chat = chats[chatId] else { throw GimError.NotFound(reason: "chat \(chatId)") }
+    private func existingChat(_ chatId: ChatId) throws -> StoredChat {
+        guard let chat = chats[chatId] else { throw GimError.notFound }
         return chat
     }
 
-    private func existingGroup(_ chatId: String, _ notGroupReason: String) throws -> StoredChat {
-        let chat = try existingChat(chatId)
-        guard chat.kind == .group else { throw GimError.InvalidInput(reason: notGroupReason) }
-        return chat
-    }
-
-    private func existingMessage(_ chatId: String, _ messageId: String) throws -> StoredMessage {
-        let chat = try existingChat(chatId)
-        guard let stored = chat.entries.lazy.compactMap(\.message).first(where: { $0.item.messageId == messageId })
-        else { throw GimError.NotFound(reason: "message \(messageId)") }
+    private func existingMessage(_ messageId: MessageId) throws -> StoredMessage {
+        guard let chatId = messageChats[messageId],
+            let stored = chats[chatId]?.messages.first(where: { $0.message.id == messageId })
+        else { throw GimError.notFound }
         return stored
-    }
-
-    private func locateMessage(_ messageId: String) -> (chatId: String, message: StoredMessage)? {
-        for chat in chats.values {
-            if let stored = chat.entries.lazy.compactMap(\.message).first(where: { $0.item.messageId == messageId }) {
-                return (chat.id, stored)
-            }
-        }
-        return nil
     }
 
     private func makeId(_ prefix: String) -> String {
@@ -729,240 +534,109 @@ public actor FakeGimClient: GimClientAPI {
         return "\(prefix)-local-\(nextId)"
     }
 
-    private func nowMs() -> UInt64 {
-        Self.milliseconds(options.now())
-    }
-
-    private func replyPreview(for messageId: String, in chatId: String) throws -> ReplyPreview {
-        guard let target = locateMessage(messageId) else {
-            throw GimError.NotFound(reason: "message \(messageId)")
-        }
-        guard target.chatId == chatId else { throw GimError.InvalidInput(reason: "Reply target is in another chat") }
+    private func replyPreview(for messageId: MessageId, in chatId: ChatId) throws -> ReplyPreview {
+        let target = try existingMessage(messageId).message
+        guard target.chatId == chatId else { throw GimError.invalidInput("Reply target is in another chat") }
         return ReplyPreview(
-            messageId: messageId, senderName: target.message.item.sender.displayName,
-            text: Self.previewText(target.message.item.content))
+            messageId: target.id, senderName: target.senderName, preview: Self.previewText(target.content))
     }
 
-    private func storeFile(_ sourcePath: String, as id: String) throws -> (path: String, size: UInt64) {
-        let fileManager = FileManager.default
-        guard fileManager.fileExists(atPath: sourcePath) else { throw GimError.InvalidInput(reason: "File not found") }
-        let directory = URL(fileURLWithPath: options.dataDirectory).appendingPathComponent("media", isDirectory: true)
-        let destination = directory.appendingPathComponent(
-            "\(id)-\(URL(fileURLWithPath: sourcePath).lastPathComponent)")
-        do {
-            try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
-            try fileManager.copyItem(atPath: sourcePath, toPath: destination.path)
-            let attributes = try fileManager.attributesOfItem(atPath: destination.path)
-            return (destination.path, (attributes[.size] as? NSNumber)?.uint64Value ?? 0)
-        } catch {
-            throw GimError.Storage(reason: "Could not store media: \(error)")
-        }
-    }
-
-    private func copyFile(_ sourcePath: String, to destPath: String) throws -> String {
-        let fileManager = FileManager.default
-        do {
-            let destination = URL(fileURLWithPath: destPath)
-            try fileManager.createDirectory(
-                at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
-            if fileManager.fileExists(atPath: destPath) { try fileManager.removeItem(at: destination) }
-            try fileManager.copyItem(atPath: sourcePath, toPath: destPath)
-            return destPath
-        } catch {
-            throw GimError.Storage(reason: "Could not write media: \(error)")
-        }
-    }
-
-    private func appendEntry(_ entry: Entry, _ chatId: String) {
+    private func append(_ stored: StoredMessage) {
+        let chatId = stored.message.chatId
         guard var chat = chats[chatId] else { return }
-        chat.entries.append(entry)
+        chat.messages.append(stored)
         chat.loadedCount += 1
         chats[chatId] = chat
-        publishTimelineChange(chatId)
-        publishChatList()
+        messageChats[stored.message.id] = chatId
+        let diff = TimelineDiff.insert(index: UInt32(chat.loadedCount - 1), stored.message)
+        timelineSubscribers[chatId, default: []].deliver { $0.onDiffs([diff]) }
+        publishChatListChange(chatId)
     }
 
-    private func updateMessage(_ chatId: String, _ messageId: String, _ mutate: (inout StoredMessage) -> Void) {
-        guard var chat = chats[chatId],
-            let index = chat.entries.firstIndex(where: { $0.message?.item.messageId == messageId }),
-            var stored = chat.entries[index].message
+    private func updateMessage(_ messageId: MessageId, _ mutate: (inout StoredMessage) -> Void) {
+        guard let chatId = messageChats[messageId], var chat = chats[chatId],
+            let index = chat.messages.firstIndex(where: { $0.message.id == messageId })
         else { return }
-        mutate(&stored)
-        chat.entries[index] = .message(stored)
+        mutate(&chat.messages[index])
         chats[chatId] = chat
-        publishTimelineChange(chatId)
-        publishChatList()
+        let windowStart = chat.messages.count - chat.loadedCount
+        if index >= windowStart {
+            let diff = TimelineDiff.update(index: UInt32(index - windowStart), chat.messages[index].message)
+            timelineSubscribers[chatId, default: []].deliver { $0.onDiffs([diff]) }
+        }
+        publishChatListChange(chatId)
     }
 
-    /// Emits the diffs that move the published timeline of `chatId` to its current state.
-    private func publishTimelineChange(_ chatId: String) {
-        guard let chat = chats[chatId] else { return }
-        let items = Self.timelineItems(of: chat, calendar: options.calendar)
-        let diffs = Self.timelineDiffs(from: publishedTimelines[chatId] ?? [], to: items)
-        publishedTimelines[chatId] = items
-        guard !diffs.isEmpty else { return }
-        timelineSubscribers[chatId, default: []].deliver { $0.onUpdate(diffs: diffs) }
-    }
-
-    /// Emits the diffs that move the published chat list to the current state. A chat that changed position is
-    /// removed and inserted again.
-    private func publishChatList() {
+    /// Emits the diffs that move the published chat list to the current state after one chat changed.
+    private func publishChatListChange(_ chatId: ChatId) {
         let newList = Self.sortedSummaries(chats: chats, users: users, session: session)
-        let diffs = Self.chatListDiffs(from: publishedChatList, to: newList)
-        publishedChatList = newList
-        guard !diffs.isEmpty else { return }
-        chatListSubscribers.deliver { $0.onUpdate(diffs: diffs) }
-    }
-
-    // MARK: - Pure helpers
-
-    static func milliseconds(_ date: Date) -> UInt64 {
-        UInt64(max(0, (date.timeIntervalSince1970 * 1000).rounded()))
-    }
-
-    static func mediaKey(chatId: String, messageId: String) -> String {
-        "\(chatId)/\(messageId)"
-    }
-
-    static func mime(forPath path: String) -> String {
-        switch URL(fileURLWithPath: path).pathExtension.lowercased() {
-        case "png": "image/png"
-        case "jpg", "jpeg": "image/jpeg"
-        case "heic": "image/heic"
-        default: "application/octet-stream"
-        }
-    }
-
-    /// The loaded window of `chat` with a `dateSeparator` before the first item of each local calendar day.
-    static func timelineItems(of chat: StoredChat, calendar: Calendar) -> [TimelineItem] {
-        var items: [TimelineItem] = []
-        var currentDay: UInt64?
-        for entry in chat.entries.suffix(chat.loadedCount) {
-            let date = Date(timeIntervalSince1970: TimeInterval(entry.atMs) / 1000)
-            let day = milliseconds(calendar.startOfDay(for: date))
-            if day != currentDay {
-                items.append(.dateSeparator(dayStartMs: day))
-                currentDay = day
-            }
-            items.append(entry.timelineItem)
-        }
-        return items
-    }
-
-    /// Diffs from `old` to `new` that keep the common prefix and suffix and replace the middle.
-    static func timelineDiffs(from old: [TimelineItem], to new: [TimelineItem]) -> [TimelineDiff] {
-        if old == new { return [] }
-        if old.isEmpty { return [.append(values: new)] }
-        if new.isEmpty { return [.clear] }
-        var prefix = 0
-        while prefix < min(old.count, new.count), old[prefix] == new[prefix] { prefix += 1 }
-        var suffix = 0
-        while suffix < min(old.count, new.count) - prefix, old[old.count - 1 - suffix] == new[new.count - 1 - suffix] {
-            suffix += 1
-        }
-        let oldMiddle = old.count - prefix - suffix
-        let newMiddle = new.count - prefix - suffix
-        let paired = min(oldMiddle, newMiddle)
-        var diffs: [TimelineDiff] = (prefix..<(prefix + paired)).map { .set(index: UInt32($0), value: new[$0]) }
-        let start = prefix + paired
-        if oldMiddle > paired {
-            let removed = oldMiddle - paired
-            if suffix == 0 {
-                diffs.append(removed == 1 ? .popBack : .truncate(length: UInt32(start)))
-            } else if start == 0 && removed == 1 {
-                diffs.append(.popFront)
-            } else {
-                diffs += Array(repeating: .remove(index: UInt32(start)), count: removed)
-            }
-        } else if newMiddle > paired {
-            let added = Array(new[start..<(start + newMiddle - paired)])
-            if suffix == 0 {
-                diffs.append(added.count == 1 ? .pushBack(value: added[0]) : .append(values: added))
-            } else if start == 0 && added.count == 1 {
-                diffs.append(.pushFront(value: added[0]))
-            } else {
-                diffs += added.enumerated().map { .insert(index: UInt32(start + $0.offset), value: $0.element) }
-            }
-        }
-        return diffs
-    }
-
-    /// `set` for a chat that stayed in place, `remove` plus `pushFront`/`insert`/`pushBack` for one that moved,
-    /// `clear` when the list became empty.
-    static func chatListDiffs(from old: [ChatSummary], to new: [ChatSummary]) -> [ChatListDiff] {
-        if old == new { return [] }
-        if new.isEmpty { return [.clear] }
-        var current = old
+        let oldIndex = chatList.firstIndex { $0.id == chatId }
+        let newIndex = newList.firstIndex { $0.id == chatId }
         var diffs: [ChatListDiff] = []
-        let newIds = Set(new.map(\.chatId))
-        for index in current.indices.reversed() where !newIds.contains(current[index].chatId) {
-            current.remove(at: index)
-            diffs.append(.remove(index: UInt32(index)))
+        switch (oldIndex, newIndex) {
+        case (let old?, let new?) where old == new:
+            if chatList[old] != newList[new] { diffs.append(.update(index: UInt32(new), newList[new])) }
+        case (let old?, let new?):
+            diffs.append(.remove(index: UInt32(old)))
+            diffs.append(.insert(index: UInt32(new), newList[new]))
+        case (nil, let new?):
+            diffs.append(.insert(index: UInt32(new), newList[new]))
+        case (let old?, nil):
+            diffs.append(.remove(index: UInt32(old)))
+        case (nil, nil):
+            break
         }
-        for (index, summary) in new.enumerated() {
-            if index < current.count, current[index].chatId == summary.chatId {
-                if current[index] != summary { diffs.append(.set(index: UInt32(index), value: summary)) }
-                current[index] = summary
-                continue
-            }
-            if let oldIndex = current.firstIndex(where: { $0.chatId == summary.chatId }) {
-                current.remove(at: oldIndex)
-                diffs.append(.remove(index: UInt32(oldIndex)))
-            }
-            current.insert(summary, at: index)
-            if index == 0 {
-                diffs.append(.pushFront(value: summary))
-            } else if index == current.count - 1 {
-                diffs.append(.pushBack(value: summary))
-            } else {
-                diffs.append(.insert(index: UInt32(index), value: summary))
-            }
-        }
-        return diffs
+        chatList = newList
+        guard !diffs.isEmpty else { return }
+        chatListSubscribers.deliver { $0.onDiffs(diffs) }
+    }
+
+    private func summary(of chat: StoredChat) -> ChatSummary {
+        Self.summary(of: chat, users: users, session: session)
     }
 
     static func sortedSummaries(
-        chats: [String: StoredChat], users: [String: UserProfile], session: Session?
+        chats: [ChatId: StoredChat], users: [UserId: UserProfile], session: Session?
     ) -> [ChatSummary] {
         chats.values
-            .map { summary(of: $0, users: users, session: session) }
+            .map { (activity: $0.messages.last?.message.timestamp ?? $0.createdAt, chat: $0) }
             .sorted { lhs, rhs in
-                lhs.updatedAtMs != rhs.updatedAtMs ? lhs.updatedAtMs > rhs.updatedAtMs : lhs.chatId < rhs.chatId
+                lhs.activity != rhs.activity ? lhs.activity > rhs.activity : lhs.chat.id < rhs.chat.id
             }
+            .map { summary(of: $0.chat, users: users, session: session) }
     }
 
-    static func summary(of chat: StoredChat, users: [String: UserProfile], session: Session?) -> ChatSummary {
-        let last = chat.entries.last { $0.message != nil }?.message?.item
-        let name: String
+    static func summary(of chat: StoredChat, users: [UserId: UserProfile], session: Session?) -> ChatSummary {
+        let last = chat.messages.last?.message
+        let title: String
+        var avatarPath: String?
         switch chat.kind {
         case .group:
-            name = chat.name
+            title = chat.name
         case .direct:
             let peer = chat.members.first { $0 != session?.userId }.flatMap { users[$0] }
-            name = peer?.displayName ?? chat.name
+            title = peer?.displayName ?? chat.name
+            avatarPath = peer?.avatarPath
         }
         return ChatSummary(
-            chatId: chat.id, kind: chat.kind, name: name, avatar: chat.avatar,
-            lastMessage: last.map {
-                MessagePreview(
-                    senderName: $0.sender.displayName, text: previewText($0.content), sentAtMs: $0.sentAtMs,
-                    isOwn: $0.isOwn)
-            },
-            unreadCount: chat.unreadCount, updatedAtMs: chat.entries.last?.atMs ?? chat.createdAtMs,
-            memberCount: UInt32(chat.members.count))
+            id: chat.id, kind: chat.kind, title: title, avatarPath: avatarPath,
+            lastMessagePreview: last.map { previewText($0.content) }, lastMessageSenderName: last?.senderName,
+            lastMessageAt: last?.timestamp, unreadCount: chat.unreadCount, memberCount: UInt32(chat.members.count))
     }
 
     static func previewText(_ content: MessageContent) -> String {
         switch content {
-        case .text(let body): body
-        case .image(_, _, _, let caption): caption.map { "Photo: \($0)" } ?? "Photo"
-        case .file(_, let fileName, _): "File: \(fileName ?? "attachment")"
+        case .text(let text): text
+        case .image(_, let caption): caption.map { "Photo: \($0)" } ?? "Photo"
+        case .file(let info, _): info.fileName ?? "File"
         case .deleted: "Message deleted"
         case .unsupported: "Unsupported message"
         }
     }
 
-    static func setReaction(_ stored: inout StoredMessage, emoji: String, user: String, active: Bool, selfId: String) {
+    static func setReaction(
+        _ stored: inout StoredMessage, emoji: String, user: UserId, active: Bool, selfId: UserId
+    ) {
         if let index = stored.reactions.firstIndex(where: { $0.emoji == emoji }) {
             stored.reactions[index].users.removeAll { $0 == user }
             if active { stored.reactions[index].users.append(user) }
@@ -970,31 +644,8 @@ public actor FakeGimClient: GimClientAPI {
         } else if active {
             stored.reactions.append(Reaction(emoji: emoji, users: [user]))
         }
-        stored.item.reactions = stored.reactions.map {
-            ReactionGroup(emoji: $0.emoji, count: UInt32($0.users.count), own: $0.users.contains(selfId))
+        stored.message.reactions = stored.reactions.map {
+            ReactionGroup(emoji: $0.emoji, count: UInt32($0.users.count), includesMe: $0.users.contains(selfId))
         }
-    }
-}
-
-/// `Timeline` of one chat of a `FakeGimClient`.
-final class FakeTimeline: Timeline {
-    private let client: FakeGimClient
-    private let id: String
-
-    init(client: FakeGimClient, chatId: String) {
-        self.client = client
-        id = chatId
-    }
-
-    func chatId() -> String {
-        id
-    }
-
-    func addListener(listener: any TimelineListener) async -> TaskHandle {
-        await client.addTimelineListener(chatId: id, listener: listener)
-    }
-
-    func paginateBackwards(count: UInt16) async throws -> Bool {
-        try await client.paginateBackwards(chatId: id, count: count)
     }
 }

@@ -5,14 +5,14 @@ import SwiftUI
 /// The signed-in home screen: every chat, newest activity first, served by gim-core from its local database.
 public struct ChatListScreen: View {
     private let client: any GimClientAPI
-    private let onOpen: (String) -> Void
+    private let onOpen: (ChatId) -> Void
     private let onOpenSettings: (() -> Void)?
 
     @State private var viewModel: ChatListViewModel
     @State private var showsNewChat = false
 
     /// - Parameter onOpenSettings: shows a settings button in the toolbar when set.
-    public init(client: any GimClientAPI, onOpen: @escaping (String) -> Void, onOpenSettings: (() -> Void)? = nil) {
+    public init(client: any GimClientAPI, onOpen: @escaping (ChatId) -> Void, onOpenSettings: (() -> Void)? = nil) {
         self.client = client
         self.onOpen = onOpen
         self.onOpenSettings = onOpenSettings
@@ -92,7 +92,7 @@ private struct ChatRowView: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            AvatarView(id: row.id, name: row.title, avatarPath: nil, size: 52)
+            AvatarView(id: row.id, name: row.title, avatarPath: row.avatarPath, size: 52)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(row.title)

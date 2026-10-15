@@ -3,11 +3,10 @@ import GIMClientKit
 
 /// One chat list row, ready for display.
 public struct ChatRow: Sendable, Hashable, Identifiable {
-    public let id: String
+    public let id: ChatId
     public let kind: ChatKind
     public let title: String
-    /// Group avatar; load it with `fetchThumbnail`.
-    public let avatar: MediaRef?
+    public let avatarPath: String?
     /// Last message preview, prefixed with the sender's name in groups; `nil` for chats without messages.
     public let preview: String?
     /// Relative time of the last message.
@@ -17,21 +16,21 @@ public struct ChatRow: Sendable, Hashable, Identifiable {
     public let unreadText: String?
 
     public init(summary: ChatSummary, dateFormatter: RelativeDateFormatter) {
-        id = summary.chatId
+        id = summary.id
         kind = summary.kind
-        title = summary.name
-        avatar = summary.avatar
+        title = summary.title
+        avatarPath = summary.avatarPath
         preview = Self.preview(for: summary)
-        time = summary.lastMessage.map { dateFormatter.string(from: Date(epochMilliseconds: $0.sentAtMs)) }
+        time = summary.lastMessageAt.map(dateFormatter.string(from:))
         unreadCount = summary.unreadCount
         unreadText = Self.unreadText(for: summary.unreadCount)
     }
 
-    /// gim-core already renders the last message as text ("Photo", "File: report.pdf", "Message deleted", …).
+    /// gim-core already renders the last message as text ("Photo", a file name, "Message deleted", …).
     public static func preview(for summary: ChatSummary) -> String? {
-        guard let message = summary.lastMessage else { return nil }
-        guard summary.kind == .group, !message.senderName.isEmpty else { return message.text }
-        return "\(message.senderName): \(message.text)"
+        guard let text = summary.lastMessagePreview else { return nil }
+        guard summary.kind == .group, let sender = summary.lastMessageSenderName, !sender.isEmpty else { return text }
+        return "\(sender): \(text)"
     }
 
     public static func unreadText(for count: UInt32) -> String? {

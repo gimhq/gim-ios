@@ -2,41 +2,38 @@ import Foundation
 import GIMClientKit
 import Network
 
-/// Tracks network reachability for `PlatformHooks.isNetworkReachable()` and forwards changes to the attached
-/// client's `setNetworkReachable(reachable:)`, in order and without repeats.
-public final class ReachabilityMonitor: @unchecked Sendable {
+/// Forwards network path changes to `GimClientAPI.setNetworkAvailable`, in order and without repeats.
+public final class ReachabilityMonitor: Sendable {
     private let monitor = NWPathMonitor()
-    private let lock = NSLock()
-    private var reachable = true
-    private weak var client: (any GimClientAPI)?
+    private let continuation: AsyncStream<Bool>.Continuation
+    private let forwarding: Task<Void, Never>
 
-    public init() {
-        monitor.pathUpdateHandler = { [weak self] path in
-            self?.update(path.status == .satisfied)
+    public init(client: any GimClientAPI) {
+        let (stream, continuation) = AsyncStream.makeStream(of: Bool.self)
+        self.continuation = continuation
+        forwarding = Task {
+            var last: Bool?
+            for await available in stream where available != last {
+                last = available
+                await client.setNetworkAvailable(available)
+            }
         }
-        // A serial queue keeps the updates in order.
+    }
+
+    public func start() {
+        monitor.pathUpdateHandler = { [continuation] path in
+            continuation.yield(path.status == .satisfied)
+        }
         monitor.start(queue: DispatchQueue(label: "im.g.apps.reachability"))
     }
 
-    deinit {
+    public func stop() {
         monitor.cancel()
+        continuation.finish()
     }
 
-    public var isReachable: Bool {
-        lock.withLock { reachable }
-    }
-
-    /// The client that receives reachability changes; `nil` detaches.
-    public func attach(_ client: (any GimClientAPI)?) {
-        lock.withLock { self.client = client }
-    }
-
-    private func update(_ value: Bool) {
-        let target: (any GimClientAPI)? = lock.withLock {
-            guard value != reachable else { return nil }
-            reachable = value
-            return client
-        }
-        target?.setNetworkReachable(reachable: value)
+    deinit {
+        stop()
+        forwarding.cancel()
     }
 }

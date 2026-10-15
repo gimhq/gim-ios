@@ -4,11 +4,11 @@ import SwiftUI
 
 /// Group name plus members added by handle. Shown inside a navigation stack.
 public struct NewGroupScreen: View {
-    private let onCreated: (String) -> Void
+    private let onCreated: (ChatId) -> Void
 
     @State private var viewModel: NewGroupViewModel
 
-    public init(client: any GimClientAPI, onCreated: @escaping (String) -> Void) {
+    public init(client: any GimClientAPI, onCreated: @escaping (ChatId) -> Void) {
         self.onCreated = onCreated
         _viewModel = State(initialValue: NewGroupViewModel(client: client))
     }
@@ -90,7 +90,7 @@ private struct MemberChip: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            AvatarView(id: user.userId, name: user.displayName, avatarPath: nil, size: 24)
+            AvatarView(id: user.userId, name: user.displayName, avatarPath: user.avatarPath, size: 24)
             Text(user.displayName)
                 .font(.subheadline)
                 .lineLimit(1)

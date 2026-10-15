@@ -12,7 +12,7 @@ final class NewGroupViewModelTests: XCTestCase {
 
     @MainActor
     func testRequiresNameAndTwoOtherMembers() async {
-        let (client, _) = await connected(makeDemoClient())
+        let (client, _) = makeDemoClient()
         let viewModel = NewGroupViewModel(client: client)
         XCTAssertEqual(viewModel.validationMessage, "Enter a group name.")
         XCTAssertFalse(viewModel.canCreate)
@@ -35,7 +35,7 @@ final class NewGroupViewModelTests: XCTestCase {
 
     @MainActor
     func testAddMemberRejectsUnknownSelfAndDuplicates() async {
-        let (client, _) = await connected(makeDemoClient())
+        let (client, _) = makeDemoClient()
         let viewModel = NewGroupViewModel(client: client)
 
         await add("nobody", to: viewModel)
@@ -53,7 +53,7 @@ final class NewGroupViewModelTests: XCTestCase {
 
     @MainActor
     func testRemoveMemberChip() async {
-        let (client, _) = await connected(makeDemoClient())
+        let (client, _) = makeDemoClient()
         let viewModel = NewGroupViewModel(client: client)
         await add("sofia", to: viewModel)
         await add("luca", to: viewModel)
@@ -65,7 +65,7 @@ final class NewGroupViewModelTests: XCTestCase {
 
     @MainActor
     func testCreateReturnsNewGroup() async throws {
-        let (client, _) = await connected(makeDemoClient())
+        let (client, _) = makeDemoClient()
         let viewModel = NewGroupViewModel(client: client)
         let invalid = await viewModel.create()
         XCTAssertNil(invalid)
@@ -76,14 +76,10 @@ final class NewGroupViewModelTests: XCTestCase {
         let created = await viewModel.create()
         let chatId = try XCTUnwrap(created)
 
-        var chats: [ChatSummary] = []
-        let list = await first(try await ListenerBridge.chatList(client))
-        try DiffApplier.apply(try XCTUnwrap(list), to: &chats)
-        let summary = try XCTUnwrap(chats.first { $0.chatId == chatId })
-        XCTAssertEqual(summary.name, "Regatta")
-        XCTAssertEqual(summary.kind, .group)
-        let members = try await client.chatMembers(chatId: chatId)
-        XCTAssertEqual(Set(members.map(\.handle)), ["alex", "sofia", "nikos"])
+        let details = try await client.chatDetails(chatId)
+        XCTAssertEqual(details.summary.title, "Regatta")
+        XCTAssertEqual(details.summary.kind, .group)
+        XCTAssertEqual(Set(details.members.map(\.user.handle)), ["alex", "sofia", "nikos"])
         XCTAssertFalse(viewModel.isCreating)
         XCTAssertNil(viewModel.errorMessage)
     }
@@ -94,7 +90,7 @@ final class NewGroupViewModelTests: XCTestCase {
 
         await add("sofia", to: viewModel)
 
-        XCTAssertEqual(viewModel.memberError, ErrorPresenter.message(for: GimError.NotRegistered))
+        XCTAssertEqual(viewModel.memberError, ErrorPresenter.message(for: GimError.unauthorized))
         XCTAssertTrue(viewModel.members.isEmpty)
     }
 }

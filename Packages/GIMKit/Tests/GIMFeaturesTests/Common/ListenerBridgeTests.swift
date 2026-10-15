@@ -5,8 +5,16 @@ import Observation
 import XCTest
 
 final class ListenerBridgeTests: XCTestCase {
+    private func makeClient() throws -> (FakeGimClient, ManualFakeScheduler) {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
+        let scheduler = ManualFakeScheduler()
+        let client = FakeGimClient.demo(scheduler: scheduler, dataDirectory: directory.path, autoReply: false)
+        return (client, scheduler)
+    }
+
     func testChatListStreamStartsWithResetAndFollowsChanges() async throws {
-        let (client, _) = await connected(makeDemoClient())
+        let (client, _) = try makeClient()
         let stream = try await ListenerBridge.chatList(client)
         var iterator = stream.makeAsyncIterator()
 
@@ -16,7 +24,7 @@ final class ListenerBridgeTests: XCTestCase {
         XCTAssertTrue(reset.isReset)
         XCTAssertEqual(list.count, 2)
 
-        try await client.markRead(chatId: FakeGimClient.demoDirectChatId, upToMessageId: "msg-sofia-149")
+        try await client.markRead(FakeGimClient.demoDirectChatId)
         let second = await iterator.next()
         let changes = try DiffApplier.apply(try XCTUnwrap(second), to: &list)
         XCTAssertEqual(changes.reloads, [1])
@@ -24,56 +32,53 @@ final class ListenerBridgeTests: XCTestCase {
     }
 
     func testTimelineStreamDeliversStatusProgression() async throws {
-        let (client, scheduler) = await connected(makeDemoClient())
+        let (client, scheduler) = try makeClient()
         let stream = try await ListenerBridge.timeline(client, chatId: FakeGimClient.demoDirectChatId)
         var iterator = stream.makeAsyncIterator()
-        var items: [TimelineItem] = []
+        var messages: [TimelineMessage] = []
         let reset = await iterator.next()
-        try DiffApplier.apply(try XCTUnwrap(reset), to: &items)
+        try DiffApplier.apply(try XCTUnwrap(reset), to: &messages)
 
-        let id = try await client.sendText(chatId: FakeGimClient.demoDirectChatId, body: "Hi", replyTo: nil)
+        let id = try await client.sendText(FakeGimClient.demoDirectChatId, text: "Hi", replyTo: nil)
         await scheduler.runUntilIdle()
         var states: [SendState?] = []
         for _ in 0..<4 {
             let batch = await iterator.next()
-            try DiffApplier.apply(try XCTUnwrap(batch), to: &items)
-            let message = items.lazy.compactMap { item -> MessageItem? in
-                if case .message(let message) = item, message.messageId == id { message } else { nil }
-            }.first
-            states.append(message?.sendState)
+            try DiffApplier.apply(try XCTUnwrap(batch), to: &messages)
+            states.append(messages.last { $0.id == id }?.sendState)
         }
         XCTAssertEqual(states, [.pending, .sent, .delivered, .read])
     }
 
-    func testConnectionStateAndTypingStreams() async throws {
-        let (client, _) = await connected(makeDemoClient())
-        var connection = try await ListenerBridge.connectionState(client).makeAsyncIterator()
+    func testConnectionAndTypingStreams() async throws {
+        let (client, _) = try makeClient()
+        var connection = try await ListenerBridge.connection(client).makeAsyncIterator()
         let initialState = await connection.next()
-        XCTAssertEqual(initialState, .connected)
-        client.setNetworkReachable(reachable: false)
+        XCTAssertEqual(initialState, .online)
+        await client.setNetworkAvailable(false)
         let offline = await connection.next()
         XCTAssertEqual(offline, .offline)
 
         var typing = try await ListenerBridge.typing(client, chatId: FakeGimClient.demoGroupChatId).makeAsyncIterator()
         let nobody = await typing.next()
-        XCTAssertEqual(nobody, [])
-        try await client.setPeerTyping(chatId: FakeGimClient.demoGroupChatId, userId: "user-luca", active: true)
+        XCTAssertEqual(nobody?.map(\.handle), [])
+        try await client.setPeerTyping(FakeGimClient.demoGroupChatId, user: "user-luca", typing: true)
         let luca = await typing.next()
-        XCTAssertEqual(luca, ["user-luca"])
+        XCTAssertEqual(luca?.map(\.handle), ["luca"])
     }
 
     func testSubscribeErrorsAreThrown() async throws {
-        let (client, _) = await connected(makeDemoClient())
+        let (client, _) = try makeClient()
         do {
             _ = try await ListenerBridge.timeline(client, chatId: "missing")
-            XCTFail("Expected NotFound")
+            XCTFail("Expected notFound")
         } catch {
-            XCTAssertEqual(error as? GimError, .NotFound(reason: "chat missing"))
+            XCTAssertEqual(error as? GimError, .notFound)
         }
     }
 
     func testCancellingTheConsumerEndsTheStream() async throws {
-        let (client, _) = await connected(makeDemoClient())
+        let (client, _) = try makeClient()
         let stream = try await ListenerBridge.chatList(client)
         let consumer = Task {
             var batches = 0
@@ -83,15 +88,6 @@ final class ListenerBridgeTests: XCTestCase {
         consumer.cancel()
         let batches = await consumer.value
         XCTAssertLessThanOrEqual(batches, 1)
-    }
-
-    func testStreamKeepsTheSubscriptionAliveUntilItEnds() async throws {
-        let (client, _) = await connected(makeDemoClient())
-        var iterator = try await ListenerBridge.chatList(client).makeAsyncIterator()
-        _ = await iterator.next()
-        try await client.receiveText(chatId: FakeGimClient.demoGroupChatId, from: "user-luca", body: "Still here")
-        let update = await iterator.next()
-        XCTAssertNotNil(update)
     }
 }
 

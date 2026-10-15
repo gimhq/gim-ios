@@ -48,13 +48,13 @@ public final class NewChatViewModel {
     }
 
     /// Starts (or reopens) the direct chat with the found user. Returns `nil` on failure.
-    public func startChat() async -> String? {
+    public func startChat() async -> ChatId? {
         guard case .found(let user) = state, !isStarting else { return nil }
         isStarting = true
         startError = nil
         defer { isStarting = false }
         do {
-            return try await client.createDirectChat(userId: user.userId)
+            return try await client.createDirectChat(with: user.userId)
         } catch {
             startError = ErrorPresenter.message(for: error)
             return nil

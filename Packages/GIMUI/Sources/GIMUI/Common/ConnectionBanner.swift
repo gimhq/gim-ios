@@ -1,7 +1,7 @@
 import GIMClientKit
 import SwiftUI
 
-/// Slim status bar shown while the client is offline, connecting or catching up.
+/// Slim status bar shown while the client is connecting or offline.
 public struct ConnectionBanner: View {
     let state: ConnectionState
 
@@ -11,13 +11,8 @@ public struct ConnectionBanner: View {
 
     public var body: some View {
         switch state {
-        case .connected:
+        case .online:
             EmptyView()
-        case .syncing:
-            banner {
-                ProgressView().controlSize(.small)
-                Text("Updating…")
-            }
         case .connecting:
             banner {
                 ProgressView().controlSize(.small)
@@ -45,7 +40,6 @@ public struct ConnectionBanner: View {
 #Preview {
     VStack {
         ConnectionBanner(state: .connecting)
-        ConnectionBanner(state: .syncing)
         ConnectionBanner(state: .offline)
     }
 }

@@ -4,7 +4,6 @@ import SwiftUI
 /// Shows the current session and lets the user sign out.
 struct SettingsSheet: View {
     let session: Session?
-    let serverUrl: String?
     let signOut: () async -> String?
 
     @Environment(\.dismiss) private var dismiss
@@ -26,9 +25,7 @@ struct SettingsSheet: View {
                         }
                     }
                     Section("Session") {
-                        if let serverUrl {
-                            LabeledContent("Server", value: serverUrl)
-                        }
+                        LabeledContent("Server", value: session.serverUrl)
                         LabeledContent("User ID", value: session.userId)
                         LabeledContent("Device ID", value: session.deviceId)
                     }

@@ -57,21 +57,7 @@ public enum OnboardingValidation {
     }
 }
 
-/// The outcome of a successful registration: the client created for the typed server URL and its new session.
-public struct Registration: Sendable {
-    public let client: any GimClientAPI
-    public let config: ClientConfig
-    public let session: Session
-
-    public init(client: any GimClientAPI, config: ClientConfig, session: Session) {
-        self.client = client
-        self.config = config
-        self.session = session
-    }
-}
-
-/// Drives the registration form: validates input, creates the client for the typed server URL (the URL is part of
-/// `ClientConfig`), registers this device and reports the result.
+/// Drives the registration form: validates input, registers this device and reports the new session.
 @MainActor
 @Observable
 public final class OnboardingViewModel {
@@ -85,30 +71,17 @@ public final class OnboardingViewModel {
     /// Set by the first submit attempt so empty fields also show their messages.
     public private(set) var showsAllErrors = false
 
-    private let factory: any GimClientFactory
-    private let hooks: any PlatformHooks
-    private let onRegistered: @MainActor (Registration) -> Void
-    @ObservationIgnored private var client: (any GimClientAPI)?
-    @ObservationIgnored private var clientConfig: ClientConfig?
+    private let client: any GimClientAPI
+    private let onRegistered: @MainActor (Session) -> Void
 
-    /// - Parameters:
-    ///   - serverUrl: initial value of the server field.
-    ///   - client: an unregistered client already created for `serverUrl`; reused while the URL is unchanged.
     public init(
-        factory: any GimClientFactory,
-        hooks: any PlatformHooks,
+        client: any GimClientAPI,
         serverUrl: String = "",
-        client: (any GimClientAPI)? = nil,
-        onRegistered: @escaping @MainActor (Registration) -> Void
+        onRegistered: @escaping @MainActor (Session) -> Void
     ) {
-        self.factory = factory
-        self.hooks = hooks
+        self.client = client
         self.serverUrl = serverUrl
         self.onRegistered = onRegistered
-        if let client {
-            self.client = client
-            clientConfig = ClientConfig(serverUrl: OnboardingValidation.normalizedServerUrl(serverUrl))
-        }
     }
 
     /// Inline message for the server URL field; `nil` while the field is untouched.
@@ -138,28 +111,15 @@ public final class OnboardingViewModel {
         isSubmitting = true
         errorMessage = nil
         defer { isSubmitting = false }
-        let config = ClientConfig(serverUrl: OnboardingValidation.normalizedServerUrl(serverUrl))
         do {
-            let client = try await client(for: config)
             let session = try await client.register(
+                serverUrl: OnboardingValidation.normalizedServerUrl(serverUrl),
                 handle: OnboardingValidation.normalizedHandle(handle),
                 displayName: OnboardingValidation.normalizedDisplayName(displayName))
-            onRegistered(Registration(client: client, config: config, session: session))
+            onRegistered(session)
         } catch {
             errorMessage = ErrorPresenter.message(for: error)
         }
-    }
-
-    /// The client for `config`, created through the factory when the server URL changed.
-    private func client(for config: ClientConfig) async throws -> any GimClientAPI {
-        if let client, clientConfig == config { return client }
-        // Release the old client first: both would use the same data directory.
-        client = nil
-        clientConfig = nil
-        let client = try await factory.make(config: config, hooks: hooks)
-        self.client = client
-        clientConfig = config
-        return client
     }
 
     private func visible(_ error: String?, for value: String) -> String? {

@@ -13,7 +13,6 @@ func makeFormatter() -> RelativeDateFormatter {
 }
 
 extension XCTestCase {
-    /// The registered demo client; pass it to `connected(_:)` before use.
     func makeDemoClient() -> (FakeGimClient, ManualFakeScheduler) {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
@@ -22,60 +21,6 @@ extension XCTestCase {
             scheduler: scheduler, dataDirectory: directory.path, now: { fixedNow }, autoReply: false)
         return (client, scheduler)
     }
-
-    func makeTemporaryDirectory() -> String {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
-        return directory.path
-    }
-}
-
-/// Starts sync and lets the client connect.
-func connected(_ demo: (FakeGimClient, ManualFakeScheduler)) async -> (FakeGimClient, ManualFakeScheduler) {
-    try? await demo.0.startSync()
-    await demo.1.runUntilIdle()
-    return demo
-}
-
-/// In-memory `PlatformHooks`.
-final class TestHooks: PlatformHooks, @unchecked Sendable {
-    private let lock = NSLock()
-    private var values: [String: Data] = [:]
-    private let directory: String
-
-    init(dataDir: String) {
-        directory = dataDir
-    }
-
-    func secureStoreGet(key: String) -> Data? { lock.withLock { values[key] } }
-    func secureStoreSet(key: String, value: Data) throws { lock.withLock { values[key] = value } }
-    func secureStoreDelete(key: String) { _ = lock.withLock { values.removeValue(forKey: key) } }
-    func dataDir() -> String { directory }
-    func isNetworkReachable() -> Bool { true }
-}
-
-/// Factory that records each config and returns `makeClient(config)`.
-final class RecordingFactory: GimClientFactory, @unchecked Sendable {
-    private let lock = NSLock()
-    private var recorded: [ClientConfig] = []
-    private let makeClient: @Sendable (ClientConfig) throws -> any GimClientAPI
-
-    init(_ makeClient: @escaping @Sendable (ClientConfig) throws -> any GimClientAPI) {
-        self.makeClient = makeClient
-    }
-
-    var configs: [ClientConfig] { lock.withLock { recorded } }
-
-    func make(config: ClientConfig, hooks: any PlatformHooks) async throws -> any GimClientAPI {
-        lock.withLock { recorded.append(config) }
-        return try makeClient(config)
-    }
-}
-
-/// Collects the first value of `stream`.
-func first<Value>(_ stream: AsyncStream<Value>) async -> Value? {
-    var iterator = stream.makeAsyncIterator()
-    return await iterator.next()
 }
 
 /// Lets main-actor tasks run until `condition` holds; fails after about a second.

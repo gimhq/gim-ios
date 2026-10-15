@@ -13,7 +13,7 @@ final class NewChatViewModelTests: XCTestCase {
 
     @MainActor
     func testTypingDebouncesToOneSearch() async {
-        let (client, _) = await connected(makeDemoClient())
+        let (client, _) = makeDemoClient()
         let (viewModel, sleeper) = makeViewModel(client: client)
 
         viewModel.query = "s"
@@ -36,7 +36,7 @@ final class NewChatViewModelTests: XCTestCase {
 
     @MainActor
     func testNewQueryCancelsPendingSearch() async {
-        let (client, _) = await connected(makeDemoClient())
+        let (client, _) = makeDemoClient()
         let (viewModel, sleeper) = makeViewModel(client: client)
 
         viewModel.query = "sofia"
@@ -51,7 +51,7 @@ final class NewChatViewModelTests: XCTestCase {
 
     @MainActor
     func testClearingQueryReturnsToIdle() async {
-        let (client, _) = await connected(makeDemoClient())
+        let (client, _) = makeDemoClient()
         let (viewModel, sleeper) = makeViewModel(client: client)
 
         viewModel.query = "sofia"
@@ -72,12 +72,12 @@ final class NewChatViewModelTests: XCTestCase {
         await eventually { sleeper.pendingCount == 1 }
         sleeper.releaseAll()
 
-        await eventually { viewModel.state == .error(ErrorPresenter.message(for: GimError.NotRegistered)) }
+        await eventually { viewModel.state == .error(ErrorPresenter.message(for: GimError.unauthorized)) }
     }
 
     @MainActor
     func testStartChatReturnsDirectChat() async {
-        let (client, _) = await connected(makeDemoClient())
+        let (client, _) = makeDemoClient()
         let (viewModel, sleeper) = makeViewModel(client: client)
 
         let none = await viewModel.startChat()
@@ -96,7 +96,7 @@ final class NewChatViewModelTests: XCTestCase {
 
     @MainActor
     func testStartChatWithSelfShowsError() async {
-        let (client, _) = await connected(makeDemoClient())
+        let (client, _) = makeDemoClient()
         let (viewModel, sleeper) = makeViewModel(client: client)
 
         viewModel.query = "alex"
@@ -108,6 +108,6 @@ final class NewChatViewModelTests: XCTestCase {
         XCTAssertNil(chatId)
         XCTAssertEqual(
             viewModel.startError,
-            ErrorPresenter.message(for: GimError.InvalidInput(reason: "You can't start a chat with yourself")))
+            ErrorPresenter.message(for: GimError.invalidInput("You can't start a chat with yourself")))
     }
 }
