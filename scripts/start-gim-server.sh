@@ -4,8 +4,9 @@
 #   scripts/start-gim-server.sh start [port]   # default port 8080
 #   scripts/start-gim-server.sh stop
 #
-# `start` installs the fixture's dependencies with bun, launches `bun src/index.ts` in the background on 127.0.0.1
-# with a fresh database, waits for /healthz and prints the base URL and log path. The database, data dir, pid file
+# `start` installs the fixture's dependencies with bun, launches `src/index.ts` in the background on 127.0.0.1
+# with a fresh database and per-request logging (LOG_LEVEL from GIM_SERVER_LOG_LEVEL, default debug), waits for
+# /healthz and prints the base URL and log path. The database, data dir, pid file
 # and log live in GIM_SERVER_RUNTIME_DIR (default .gim-server/ at the repo root), which `start` recreates.
 set -euo pipefail
 
@@ -36,6 +37,31 @@ stop() {
     fi
 }
 
+# The fixture logs no requests, so its entry point is started with Bun.serve wrapped to log one JSON line per
+# request (method, path, status, duration) in the fixture's log format.
+request_logger='
+const serve = Bun.serve
+Bun.serve = (options) => serve({
+  ...options,
+  async fetch(request, server) {
+    const started = performance.now()
+    const log = (status) => console.log(JSON.stringify({
+      time: new Date().toISOString(), level: "debug", msg: "request", method: request.method,
+      path: new URL(request.url).pathname, status, ms: Math.round(performance.now() - started),
+    }))
+    try {
+      const response = await options.fetch.call(server, request, server)
+      log(response?.status ?? 101)
+      return response
+    } catch (error) {
+      log(`error: ${error}`)
+      throw error
+    }
+  },
+})
+await import("./src/index.ts")
+'
+
 healthy() {
     if command -v curl >/dev/null 2>&1; then
         curl -fsS -o /dev/null --max-time 2 "$1/healthz"
@@ -59,9 +85,9 @@ start() {
 
     (
         cd "$fixture"
-        PORT=$port HOST=127.0.0.1 LOG_LEVEL=info \
+        PORT=$port HOST=127.0.0.1 LOG_LEVEL=${GIM_SERVER_LOG_LEVEL:-debug} \
             DATABASE_PATH=$runtime/data/gim.db DATA_DIR=$runtime/data \
-            nohup bun src/index.ts >"$log_file" 2>&1 &
+            nohup bun -e "$request_logger" >"$log_file" 2>&1 &
         echo $! >"$pid_file"
     )
 

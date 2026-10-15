@@ -7,131 +7,176 @@ import XCTest
 ///
 /// The server defaults to `http://127.0.0.1:8080`, which the simulator shares with the host; override it with
 /// `TEST_RUNNER_GIM_E2E_SERVER_URL=<url> xcodebuild test …`.
+///
+/// The test is synchronous so that `continueAfterFailure = false` stops it at the first failed check; the peer's
+/// async calls run in detached tasks that the test waits for (`waitForPeer`). Every check names its step, and a
+/// failure attaches a screenshot and the app's accessibility tree.
 final class MessagingSmokeTests: XCTestCase {
     private let serverUrl = ProcessInfo.processInfo.environment["GIM_E2E_SERVER_URL"] ?? "http://127.0.0.1:8080"
     /// For every step that waits on the server or the other client.
     private let networkTimeout: TimeInterval = 30
 
     @MainActor
-    func testMessagingWithScriptedPeer() async throws {
+    func testMessagingWithScriptedPeer() throws {
         continueAfterFailure = false
+        let serverUrl = serverUrl
         let suffix = UUID().uuidString.prefix(8).lowercased()
         let appHandle = "alice_\(suffix)"
         let groupName = "Smoke \(suffix)"
+        let app = XCUIApplication()
+        print("[e2e] app and peer use server \(serverUrl); app handle \(appHandle)")
 
-        // a. The peer registers first, then the app completes onboarding.
-        let peer: ScriptedPeer
-        do {
-            peer = try await ScriptedPeer.register(
-                serverUrl: serverUrl, handle: "peer_\(suffix)", displayName: "Peer \(suffix)")
-        } catch {
-            XCTFail("The peer can't register on \(serverUrl); is `scripts/start-gim-server.sh start` running? \(error)")
-            return
+        try XCTContext.runActivity(named: "pre-flight: GET \(serverUrl)/healthz") { _ in
+            try checkServerHealth(app)
+        }
+
+        let peer = try XCTContext.runActivity(named: "step a: peer registers on \(serverUrl)") { _ in
+            try waitForPeer("step a: peer registers as peer_\(suffix)", app) {
+                try await ScriptedPeer.register(
+                    serverUrl: serverUrl, handle: "peer_\(suffix)", displayName: "Peer \(suffix)")
+            }
         }
         addTeardownBlock { await peer.shutdown() }
 
-        let app = XCUIApplication()
-        app.launchArguments += ["-GIMDefaultServerURL", serverUrl]
-        app.launch()
-        signOutIfNeeded(app)
+        try XCTContext.runActivity(named: "step a: app onboarding with server \(serverUrl)") { _ in
+            app.launchArguments += ["-GIMDefaultServerURL", serverUrl]
+            app.launch()
+            try signOutIfNeeded(app)
+            let serverField = app.textFields["onboarding.serverUrl"]
+            try require(
+                serverField.waitForExistence(timeout: networkTimeout), "step a: onboarding server field visible", app)
+            try require(
+                serverField.value as? String == serverUrl,
+                "step a: server field pre-filled with \(serverUrl), found \(String(describing: serverField.value))",
+                app)
+            try type(appHandle, into: app.textFields["onboarding.handle"], "step a: handle field", app)
+            // Return submits the form, like the Create Account button that the keyboard may cover.
+            try type("Alice \(suffix)\n", into: app.textFields["onboarding.displayName"], "step a: display name", app)
+            let signedIn = app.buttons["chatList.newChat"].waitForExistence(timeout: networkTimeout)
+            try require(
+                signedIn,
+                signedIn
+                    ? ""
+                    : "step a: chat list visible after Create Account (onboarding errors: \(onboardingErrors(app)))",
+                app)
+        }
 
-        let serverField = app.textFields["onboarding.serverUrl"]
-        XCTAssertTrue(serverField.waitForExistence(timeout: networkTimeout))
-        XCTAssertEqual(serverField.value as? String, serverUrl)
-        type(appHandle, into: app.textFields["onboarding.handle"])
-        // Return submits the form, like the Create Account button that the keyboard may cover.
-        type("Alice \(suffix)\n", into: app.textFields["onboarding.displayName"])
+        let chatId = try XCTContext.runActivity(named: "step b: app creates group \(groupName)") { _ in
+            try tap(app.buttons["chatList.newChat"], "step b: New Chat button", app)
+            try tap(app.buttons["newChat.newGroup"], "step b: New Group row", app)
+            try type(groupName, into: app.textFields["newGroup.name"], "step b: group name field", app)
+            try type(peer.session.handle, into: app.textFields["newGroup.memberHandle"], "step b: member handle", app)
+            try tap(app.buttons["newGroup.addMember"], "step b: Add member button", app)
+            try require(
+                app.buttons["Remove \(peer.session.displayName)"].waitForExistence(timeout: networkTimeout),
+                "step b: peer \(peer.session.handle) added as member chip", app)
+            try tap(app.buttons["newGroup.create"], "step b: Create button", app)
+            try require(
+                app.textViews["composer.text"].waitForExistence(timeout: networkTimeout),
+                "step b: conversation with composer opened", app)
+            return try eventually("step b: peer joins group \(groupName)", app) { peer.chatId(named: groupName) }
+        }
 
-        // b. The app creates a group with the peer.
-        let newChat = app.buttons["chatList.newChat"]
-        XCTAssertTrue(newChat.waitForExistence(timeout: networkTimeout))
-        newChat.tap()
-        tapWhenReady(app.buttons["newChat.newGroup"])
-        type(groupName, into: app.textFields["newGroup.name"])
-        type(peer.session.handle, into: app.textFields["newGroup.memberHandle"])
-        app.buttons["newGroup.addMember"].tap()
-        XCTAssertTrue(app.buttons["Remove \(peer.session.displayName)"].waitForExistence(timeout: networkTimeout))
-        tapWhenReady(app.buttons["newGroup.create"])
-        XCTAssertTrue(app.textViews["composer.text"].waitForExistence(timeout: networkTimeout))
-        let chatId = try await eventually("the peer joins the group") { peer.chatId(named: groupName) }
-
-        // c. The app sends text; the peer receives it.
         let appText = "Hello from the app \(suffix)"
-        send(appText, in: app)
-        let appMessage = try await eventually("the peer receives the app's text") {
-            try await peer.messages(in: chatId).first { $0.text == appText }
-        }
-
-        // d. The peer sends an image and a text reply; the app shows both. The text comes last so that it is the
-        //    newest bubble, right above the composer, for the long press below.
-        _ = try await peer.sendImage(chatId: chatId)
-        let peerText = "Hello from the peer \(suffix)"
-        let peerTextId = try await peer.sendText(chatId: chatId, body: peerText, replyTo: appMessage.messageId)
-        let peerImage = app.descendants(matching: .any)["timeline.message.image"]
-        XCTAssertTrue(peerImage.waitForExistence(timeout: networkTimeout))
-        XCTAssertTrue(messageText(peerText, in: app).waitForExistence(timeout: networkTimeout))
-
-        // f. The app replies to the peer's text and reacts to it; the peer sees both.
-        let replyText = "Reply from the app \(suffix)"
-        openMenu(on: messageText(peerText, in: app), in: app)
-        app.buttons["Reply"].tap()
-        send(replyText, in: app)
-        _ = try await eventually("the peer receives the app's reply") {
-            try await peer.messages(in: chatId).first { $0.text == replyText && $0.replyTo?.messageId == peerTextId }
-        }
-        let reaction = "👍"
-        openMenu(on: messageText(peerText, in: app), in: app)
-        app.buttons[reaction].tap()
-        _ = try await eventually("the peer sees the app's reaction") {
-            try await peer.messages(in: chatId).first {
-                $0.messageId == peerTextId && $0.reactions.contains { $0.emoji == reaction }
+        let appMessage = try XCTContext.runActivity(named: "step c: app sends text, peer receives it") { _ in
+            try send(appText, "step c", app)
+            return try eventually("step c: peer receives \"\(appText)\"", app) {
+                try await peer.messages(in: chatId).first { $0.text == appText }
             }
         }
 
-        // e. The app sends a photo from the library (seeded with `xcrun simctl addmedia` in CI).
-        try await sendPhotoIfPickerIsAutomatable(app: app, peer: peer, chatId: chatId)
-
-        // g. The peer marks everything read; the app's reply shows the read ticks.
-        let lastFromApp = try await eventually("the peer has the app's messages") {
-            try await peer.messages(in: chatId).last { $0.sender.userId != peer.session.userId }
+        // The peer's text comes after its image so that it is the newest bubble, right above the composer, for the
+        // long presses in step f.
+        let peerText = "Hello from the peer \(suffix)"
+        let peerTextId = try XCTContext.runActivity(named: "step d: peer sends image and text, app shows both") { _ in
+            _ = try waitForPeer("step d: peer sends an image", app) { try await peer.sendImage(chatId: chatId) }
+            let id = try waitForPeer("step d: peer sends a text", app) {
+                try await peer.sendText(chatId: chatId, body: peerText, replyTo: appMessage.messageId)
+            }
+            try require(
+                app.descendants(matching: .any)["timeline.message.image"].waitForExistence(timeout: networkTimeout),
+                "step d: app shows the peer's image cell", app)
+            try require(
+                messageText(peerText, in: app).waitForExistence(timeout: networkTimeout),
+                "step d: app shows the peer's text", app)
+            return id
         }
-        try await peer.markRead(chatId: chatId, upToMessageId: lastFromApp.messageId)
-        let replyStatus = app.cells
-            .containing(Self.messageTextPredicate(replyText))
-            .descendants(matching: .any)
-            .matching(identifier: "timeline.message.status")
-            .firstMatch
-        let read = expectation(for: NSPredicate(format: "label == 'Read'"), evaluatedWith: replyStatus)
-        await fulfillment(of: [read], timeout: networkTimeout)
 
-        // h. Signing out returns to onboarding with the server pre-filled.
-        app.navigationBars.buttons["Chats"].tap()
-        signOut(app)
-        XCTAssertTrue(app.textFields["onboarding.handle"].waitForExistence(timeout: networkTimeout))
-        XCTAssertEqual(app.textFields["onboarding.serverUrl"].value as? String, serverUrl)
+        let replyText = "Reply from the app \(suffix)"
+        try XCTContext.runActivity(named: "step f: app replies and reacts, peer sees both") { _ in
+            try openMenu(on: messageText(peerText, in: app), "step f: reply menu", app)
+            try tap(app.buttons["Reply"], "step f: Reply menu item", app)
+            try send(replyText, "step f", app)
+            _ = try eventually("step f: peer receives the reply to its message", app) {
+                try await peer.messages(in: chatId).first {
+                    $0.text == replyText && $0.replyTo?.messageId == peerTextId
+                }
+            }
+            let reaction = "👍"
+            try openMenu(on: messageText(peerText, in: app), "step f: reaction menu", app)
+            try tap(app.buttons[reaction], "step f: \(reaction) menu item", app)
+            _ = try eventually("step f: peer sees the \(reaction) reaction", app) {
+                try await peer.messages(in: chatId).first {
+                    $0.messageId == peerTextId && $0.reactions.contains { $0.emoji == reaction }
+                }
+            }
+        }
+
+        try XCTContext.runActivity(named: "step e: app sends a photo from the library") { _ in
+            try sendPhotoIfPickerIsAutomatable(app: app, peer: peer, chatId: chatId)
+        }
+
+        try XCTContext.runActivity(named: "step g: peer marks read, app shows read ticks") { _ in
+            let lastFromApp = try eventually("step g: peer has the app's messages", app) {
+                try await peer.messages(in: chatId).last { $0.sender.userId != peer.session.userId }
+            }
+            try waitForPeer("step g: peer marks read", app) {
+                try await peer.markRead(chatId: chatId, upToMessageId: lastFromApp.messageId)
+            }
+            let replyStatus = app.cells
+                .containing(Self.messageTextPredicate(replyText))
+                .descendants(matching: .any)
+                .matching(identifier: "timeline.message.status")
+                .firstMatch
+            let read = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == 'Read'"), object: replyStatus)
+            try require(
+                XCTWaiter().wait(for: [read], timeout: networkTimeout) == .completed,
+                "step g: app's reply shows Read, found \(replyStatus.exists ? replyStatus.label : "no status")", app)
+        }
+
+        try XCTContext.runActivity(named: "step h: sign out returns to onboarding") { _ in
+            try tap(app.navigationBars.buttons["Chats"], "step h: back to Chats", app)
+            try signOut(app)
+            let serverField = app.textFields["onboarding.serverUrl"]
+            try require(
+                app.textFields["onboarding.handle"].waitForExistence(timeout: networkTimeout),
+                "step h: onboarding visible after sign-out", app)
+            try require(
+                serverField.value as? String == serverUrl,
+                "step h: server field pre-filled with \(serverUrl), found \(String(describing: serverField.value))",
+                app)
+        }
     }
 
     /// Attaches a photo through the system photo picker and checks that the peer receives it. The picker runs out
     /// of process; when its grid can't be reached the step is recorded and skipped, and the image path stays
     /// covered by the peer-to-app direction.
     @MainActor
-    private func sendPhotoIfPickerIsAutomatable(app: XCUIApplication, peer: ScriptedPeer, chatId: String) async throws {
-        app.buttons["composer.attach"].tap()
-        tapWhenReady(app.buttons["Photo Library"])
+    private func sendPhotoIfPickerIsAutomatable(app: XCUIApplication, peer: ScriptedPeer, chatId: String) throws {
+        try tap(app.buttons["composer.attach"], "step e: Attach button", app)
+        try tap(app.buttons["Photo Library"], "step e: Photo Library menu item", app)
         let photo = app.images
             .matching(NSPredicate(format: "label BEGINSWITH 'Photo' AND identifier != 'timeline.message.image'"))
             .firstMatch
         guard photo.waitForExistence(timeout: networkTimeout) else {
-            let screenshot = XCTAttachment(screenshot: app.screenshot())
-            screenshot.name = "Photo picker grid not reachable; app-to-peer image skipped"
-            screenshot.lifetime = .keepAlways
-            add(screenshot)
+            print("[e2e] step e: photo picker grid not reachable; app-to-peer image skipped")
+            attachDiagnostics("step e: photo picker grid not reachable; app-to-peer image skipped", app)
             let cancel = app.buttons["Cancel"]
             if cancel.exists { cancel.tap() } else { app.swipeDown(velocity: .fast) }
             return
         }
         photo.tap()
-        _ = try await eventually("the peer receives the app's photo") {
+        _ = try eventually("step e: peer receives the app's photo", app) {
             try await peer.messages(in: chatId).first {
                 guard case .image = $0.content else { return false }
                 return $0.sender.userId != peer.session.userId
@@ -139,15 +184,38 @@ final class MessagingSmokeTests: XCTestCase {
         }
     }
 
+    /// Fails fast when the server is not reachable from the test runner. An App Transport Security rejection is
+    /// only logged: the runner has no ATS exception, and the peer's registration checks the server anyway.
+    @MainActor
+    private func checkServerHealth(_ app: XCUIApplication) throws {
+        let url = URL(string: "\(serverUrl)/healthz")!
+        let status = try waitForPeer("pre-flight: GET \(url)", app) { () async throws -> Int in
+            do {
+                let (_, response) = try await URLSession.shared.data(from: url)
+                return (response as? HTTPURLResponse)?.statusCode ?? -1
+            } catch let error as URLError where error.code == .appTransportSecurityRequiresSecureConnection {
+                return 0
+            }
+        }
+        if status == 0 {
+            print("[e2e] pre-flight: ATS blocked \(url) in the test runner; relying on the peer registration")
+            return
+        }
+        try require(
+            status == 200,
+            "pre-flight: \(url) answered \(status); start the server with `scripts/start-gim-server.sh start`", app)
+    }
+
     /// Signs out a session left over from an earlier, interrupted run.
     @MainActor
-    private func signOutIfNeeded(_ app: XCUIApplication) {
+    private func signOutIfNeeded(_ app: XCUIApplication) throws {
         let handleField = app.textFields["onboarding.handle"]
         let settings = app.buttons["chatList.settings"]
         for _ in 0..<Int(networkTimeout) {
             if handleField.exists { return }
             if settings.exists {
-                signOut(app)
+                print("[e2e] step a: signing out a leftover session")
+                try signOut(app)
                 return
             }
             _ = handleField.waitForExistence(timeout: 1)
@@ -155,39 +223,70 @@ final class MessagingSmokeTests: XCTestCase {
     }
 
     @MainActor
-    private func signOut(_ app: XCUIApplication) {
-        tapWhenReady(app.buttons["chatList.settings"])
-        tapWhenReady(app.buttons["settings.signOut"])
+    private func signOut(_ app: XCUIApplication) throws {
+        try tap(app.buttons["chatList.settings"], "sign-out: Settings button", app)
+        try tap(app.buttons["settings.signOut"], "sign-out: Sign Out button", app)
         // The confirmation dialog's button has the same title.
-        tapWhenReady(
-            app.buttons.matching(NSPredicate(format: "label == 'Sign Out' AND identifier != 'settings.signOut'"))
-                .firstMatch)
+        let confirm = app.buttons
+            .matching(NSPredicate(format: "label == 'Sign Out' AND identifier != 'settings.signOut'"))
+            .firstMatch
+        try tap(confirm, "sign-out: confirmation button", app)
     }
 
     @MainActor
-    private func send(_ text: String, in app: XCUIApplication) {
-        type(text, into: app.textViews["composer.text"])
-        tapWhenReady(app.buttons["composer.send"])
+    private func send(_ text: String, _ step: String, _ app: XCUIApplication) throws {
+        try type(text, into: app.textViews["composer.text"], "\(step): composer text view", app)
+        try tap(app.buttons["composer.send"], "\(step): Send button", app)
     }
 
     @MainActor
-    private func openMenu(on message: XCUIElement, in app: XCUIApplication) {
-        XCTAssertTrue(message.waitForExistence(timeout: networkTimeout))
+    private func openMenu(on message: XCUIElement, _ step: String, _ app: XCUIApplication) throws {
+        try require(message.waitForExistence(timeout: networkTimeout), "\(step): message bubble visible", app)
         message.press(forDuration: 1.2)
-        XCTAssertTrue(app.buttons["Reply"].waitForExistence(timeout: 5))
+        try require(app.buttons["Reply"].waitForExistence(timeout: 5), "\(step): context menu open", app)
     }
 
     @MainActor
-    private func type(_ text: String, into element: XCUIElement) {
-        tapWhenReady(element)
+    private func type(_ text: String, into element: XCUIElement, _ check: String, _ app: XCUIApplication) throws {
+        try tap(element, check, app)
         element.typeText(text)
     }
 
     @MainActor
-    private func tapWhenReady(_ element: XCUIElement) {
-        let ready = expectation(for: NSPredicate(format: "exists == true AND enabled == true"), evaluatedWith: element)
-        wait(for: [ready], timeout: networkTimeout)
+    private func tap(_ element: XCUIElement, _ check: String, _ app: XCUIApplication) throws {
+        let ready = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "exists == true AND enabled == true"), object: element)
+        try require(XCTWaiter().wait(for: [ready], timeout: networkTimeout) == .completed, "\(check) ready", app)
         element.tap()
+    }
+
+    /// Records a failure named after the step, with a screenshot and the accessibility tree, and stops the test.
+    @MainActor
+    private func require(_ condition: Bool, _ check: String, _ app: XCUIApplication) throws {
+        guard !condition else { return }
+        attachDiagnostics("Failed: \(check)", app)
+        XCTFail("Failed: \(check)")
+        throw SmokeTestError.failed(check)
+    }
+
+    @MainActor
+    private func attachDiagnostics(_ name: String, _ app: XCUIApplication) {
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "\(name) (screenshot)"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+        let tree = XCTAttachment(string: app.debugDescription)
+        tree.name = "\(name) (accessibility tree)"
+        tree.lifetime = .keepAlways
+        add(tree)
+    }
+
+    /// The red error texts of the onboarding form, if any.
+    @MainActor
+    private func onboardingErrors(_ app: XCUIApplication) -> String {
+        let labels = app.staticTexts.allElementsBoundByIndex.map(\.label)
+        let errors = labels.filter { $0.hasPrefix("Couldn't") || $0.hasPrefix("Can't") || $0.contains("error") }
+        return errors.isEmpty ? "none" : errors.joined(separator: " | ")
     }
 
     /// The body label of the timeline bubble showing `text`.
@@ -200,28 +299,75 @@ final class MessagingSmokeTests: XCTestCase {
         NSPredicate(format: "identifier == 'timeline.message.text' AND label == %@", text)
     }
 
-    /// Polls `probe` until it returns a value, for state of the scripted peer that has no UI to wait on.
+    /// Polls `probe` every 250 ms until it returns a value, for state of the scripted peer that has no UI to wait on.
     @MainActor
-    private func eventually<T>(
-        _ description: String, _ probe: () async throws -> T?
-    ) async throws -> T {
-        let deadline = Date().addingTimeInterval(networkTimeout)
-        while true {
-            if let value = try await probe() { return value }
-            guard Date() < deadline else {
-                throw SmokeTestError.timedOut("Timed out after \(Int(networkTimeout)) s waiting until \(description)")
+    private func eventually<T: Sendable>(
+        _ check: String, _ app: XCUIApplication, _ probe: @escaping @Sendable () async throws -> T?
+    ) throws -> T {
+        let timeout = networkTimeout
+        let value = try waitForPeer(check, app, timeout: timeout + 5) { () async throws -> T? in
+            let deadline = Date().addingTimeInterval(timeout)
+            while Date() < deadline {
+                if let value = try await probe() { return value }
+                try await Task.sleep(for: .milliseconds(250))
             }
-            try await Task.sleep(for: .milliseconds(250))
+            return nil
         }
+        guard let value else {
+            try require(false, "\(check) within \(Int(timeout)) s", app)
+            fatalError("unreachable")
+        }
+        return value
+    }
+
+    /// Runs one async peer operation and waits for it on the main thread, failing the step when it throws or
+    /// doesn't finish in time.
+    @MainActor
+    private func waitForPeer<T: Sendable>(
+        _ check: String, _ app: XCUIApplication, timeout: TimeInterval? = nil,
+        _ operation: @escaping @Sendable () async throws -> T
+    ) throws -> T {
+        let outcome = OutcomeBox<T>()
+        let done = XCTestExpectation(description: check)
+        Task.detached {
+            do {
+                outcome.set(.success(try await operation()))
+            } catch {
+                outcome.set(.failure(error))
+            }
+            done.fulfill()
+        }
+        let waited = XCTWaiter().wait(for: [done], timeout: timeout ?? networkTimeout)
+        switch (waited, outcome.value) {
+        case (.completed, .success(let value)?):
+            return value
+        case (.completed, .failure(let error)?):
+            try require(false, "\(check): \(error)", app)
+        default:
+            try require(false, "\(check): no result within \(Int(timeout ?? networkTimeout)) s", app)
+        }
+        fatalError("unreachable")
+    }
+}
+
+/// The result of a detached peer operation, handed back to the waiting test.
+private final class OutcomeBox<T: Sendable>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var outcome: Result<T, any Error>?
+
+    var value: Result<T, any Error>? { lock.withLock { outcome } }
+
+    func set(_ outcome: Result<T, any Error>) {
+        lock.withLock { self.outcome = outcome }
     }
 }
 
 private enum SmokeTestError: Error, CustomStringConvertible {
-    case timedOut(String)
+    case failed(String)
 
     var description: String {
         switch self {
-        case .timedOut(let message): message
+        case .failed(let check): "Failed: \(check)"
         }
     }
 }

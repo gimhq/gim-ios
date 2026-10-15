@@ -166,17 +166,23 @@ jobs:
           xcrun simctl bootstatus "$SIM" -b
           xcrun simctl addmedia "$SIM" GIM/UITests/Fixtures/photo-library-seed.png
 
+      # Signed ad hoc ("Sign to Run Locally") instead of CODE_SIGNING_ALLOWED=NO: an unsigned simulator app has no
+      # application-identifier entitlement, so its Keychain writes fail (errSecMissingEntitlement) and onboarding
+      # stops with a storage error. The raw log is kept next to the xcresult; xcbeautify drops failure locations.
       - name: Run XCUITest smoke
         run: |
           set -o pipefail
+          mkdir -p "$RUNNER_TEMP/results"
           xcodebuild test \
             -project GIM.xcodeproj \
             -scheme GIM \
             -only-testing:GIMUITests \
             -destination "platform=iOS Simulator,id=$SIM" \
             -resultBundlePath "$RUNNER_TEMP/results/GIM-e2e.xcresult" \
-            CODE_SIGNING_ALLOWED=NO \
-            | xcbeautify
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY=- \
+            DEVELOPMENT_TEAM= \
+            2>&1 | tee "$RUNNER_TEMP/results/xcodebuild-e2e.log" | xcbeautify
 
       - name: Stop gim-server
         if: always()
@@ -189,6 +195,7 @@ jobs:
           name: ios-e2e
           path: |
             ${{ runner.temp }}/results/*.xcresult
+            ${{ runner.temp }}/results/xcodebuild-e2e.log
             .gim-server/server.log
           if-no-files-found: ignore
           include-hidden-files: true
