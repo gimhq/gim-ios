@@ -156,6 +156,34 @@ final class PushNotificationHandlerTests: XCTestCase {
         XCTAssertEqual(presentation, .generic)
     }
 
+    func testAPushAfterSignOutGivesGenericContent() async throws {
+        let failures = FailureLog()
+        let directory = makeTemporaryDirectory()
+        let app = FakeGimClient.demo(scheduler: ManualFakeScheduler(), dataDirectory: directory, autoReply: false)
+        let openedBeforeSignOut = FakeGimClient.demo(
+            scheduler: ManualFakeScheduler(), dataDirectory: directory, autoReply: false, mode: .extension)
+        try await app.signOut()
+        let payload = #"{"type":"message","chat_id":"\#(FakeGimClient.demoGroupChatId)","body":"Anchored in Hydra"}"#
+
+        let deletedStore = PushNotificationHandler(
+            factory: RecordingFactory { _ in openedBeforeSignOut }, makeHooks: { TestHooks(dataDir: directory) },
+            serverUrl: "https://gim.example.eu", onFailure: { failures.append($0) })
+        let afterDeletion = await deletedStore.presentation(payload: payload)
+        XCTAssertEqual(afterDeletion, .generic)
+
+        // A new extension client finds no database key.
+        let noKey = PushNotificationHandler(
+            factory: RecordingFactory { _ in throw GimError.InvalidInput(reason: "no database key") },
+            makeHooks: { TestHooks(dataDir: directory) }, serverUrl: "https://gim.example.eu",
+            onFailure: { failures.append($0) })
+        let newClient = await noKey.presentation(payload: payload)
+        XCTAssertEqual(newClient, .generic)
+
+        XCTAssertEqual(failures.lines.count, 2)
+        XCTAssertTrue(failures.lines[0].contains("deleted by sign-out"), failures.lines[0])
+        XCTAssertTrue(failures.lines[1].contains("no database key"), failures.lines[1])
+    }
+
     func testARejectedPayloadGivesGenericContent() async {
         let directory = makeTemporaryDirectory()
         let (handler, _) = makeHandler { config in
