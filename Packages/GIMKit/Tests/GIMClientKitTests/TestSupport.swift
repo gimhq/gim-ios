@@ -90,6 +90,10 @@ extension Recorder: TypingListener where Event == [String] {
     func onUpdate(userIds: [String]) { record(userIds) }
 }
 
+extension Recorder: HubListListener where Event == [HubInfo] {
+    func onUpdate(hubs: [HubInfo]) { record(hubs) }
+}
+
 /// A settable clock for `FakeGimClient(now:)`.
 final class TestClock: @unchecked Sendable {
     private let lock = NSLock()

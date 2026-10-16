@@ -59,6 +59,45 @@ public struct DeviceInfo: Sendable, Hashable {
     }
 }
 
+/// Where a hub of the user's hosting record stands on this device.
+public enum HubState: Sendable, Hashable {
+    /// Listed, but this device has no URL for it that proved the hub's identity (none known yet, or only one shared
+    /// by another own device): never contacted. Call `addHub(url:)` with its URL on this device.
+    case unverified
+    /// Listed and in use.
+    case verified
+    /// No longer listed by the hosting record.
+    case removed
+}
+
+/// A hub of the user's hosting record, for the hub settings screen.
+public struct HubInfo: Sendable, Hashable {
+    public var hubId: String
+    /// Client API base URL, once known.
+    public var url: String?
+    public var state: HubState
+    /// Priority in the hosting record; lower is preferred.
+    public var priority: UInt8
+    /// The first listed hub: submissions go there first.
+    public var isPrimary: Bool
+    /// The hub this client was created for (`ClientConfig.serverUrl`); it cannot be removed.
+    public var isHome: Bool
+    /// This device holds a session on the hub.
+    public var signedIn: Bool
+
+    public init(
+        hubId: String, url: String?, state: HubState, priority: UInt8, isPrimary: Bool, isHome: Bool, signedIn: Bool
+    ) {
+        self.hubId = hubId
+        self.url = url
+        self.state = state
+        self.priority = priority
+        self.isPrimary = isPrimary
+        self.isHome = isHome
+        self.signedIn = signedIn
+    }
+}
+
 public enum ChatKind: Sendable, Hashable {
     case direct
     case group
@@ -311,6 +350,20 @@ public enum GimError: Error, Sendable, Hashable, LocalizedError {
     /// The call sends to (or changes) a chat this device is leaving or has left. `state` is `leaving` or `left`; see
     /// `ChatState`.
     case ChatNotActive(chatId: String, state: ChatState)
+    /// The server at the configured URL did not prove that it is the expected hub at that URL (a wrong URL, or a
+    /// relay in between); the device did not sign in there. Check the hub URL.
+    case HubNotVerified(reason: String)
+    /// `removeHub` without `confirmOwnedGroups`: the hub owns `groupCount` chats of this user. They are not moved;
+    /// after the removal they stay reachable through the other members' hubs. Ask the user, then call `removeHub`
+    /// again with `confirmOwnedGroups`.
+    case HubOwnsGroups(hubId: String, groupCount: UInt32)
+    /// The hub is the only listed hub and cannot be removed.
+    case LastHub(hubId: String)
+    /// The hub is the one this client was created for (`HubInfo.isHome`) and cannot be removed.
+    case HomeHub(hubId: String)
+    /// Messages or membership changes sent through the hub are not settled yet, so it cannot be removed now; try again
+    /// later.
+    case HubNotDrained(hubId: String, reason: String)
 
     public var errorDescription: String? {
         String(reflecting: self)
