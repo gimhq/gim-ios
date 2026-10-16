@@ -104,6 +104,37 @@ final class FakeGimClientPushTests: XCTestCase {
         XCTAssertEqual(content.chatTitle, "Sofia Marin")
     }
 
+    func testSignOutDeletesTheStoreOfEarlierClients() async throws {
+        let directory = try makeTemporaryDirectory()
+        let app = FakeGimClient.demo(scheduler: ManualFakeScheduler(), dataDirectory: directory, autoReply: false)
+        let earlier = FakeGimClient.demo(
+            scheduler: ManualFakeScheduler(), dataDirectory: directory, autoReply: false, mode: .extension)
+        let otherDirectory = try makeDemo(mode: .extension)
+        let payload = #"{"type":"message","chat_id":"chat-sofia","body":"Hi"}"#
+
+        try await app.signOut()
+
+        await assertThrows(.Storage(reason: "the local store was deleted by sign-out")) {
+            try await earlier.processPush(payload: payload)
+        }
+        let later = FakeGimClient.demo(
+            scheduler: ManualFakeScheduler(), dataDirectory: directory, autoReply: false, mode: .extension)
+        let content = try await later.processPush(payload: payload)
+        XCTAssertEqual(content.kind, .message)
+        let unaffected = try await otherDirectory.processPush(payload: payload)
+        XCTAssertEqual(unaffected.kind, .message)
+    }
+
+    func testExtensionModeCannotSignOut() async throws {
+        let client = try makeDemo(mode: .extension)
+        await assertThrows(.InvalidInput(reason: "an app extension cannot sign out")) {
+            try await client.signOut()
+        }
+        XCTAssertNotNil(client.userId())
+        let content = try await client.processPush(payload: #"{"type":"message","chat_id":"chat-sofia","body":"Hi"}"#)
+        XCTAssertEqual(content.kind, .message)
+    }
+
     func testCreateClientPassesTheMode() async throws {
         let hooks = MemoryHooks(dataDir: try makeTemporaryDirectory())
         let client = try await createClient(

@@ -8,8 +8,10 @@ import XCTest
 /// Service Extension's handler decrypts that delivery's payload in-app and Springboard shows the result (step e), and
 /// the chat shows the message (step f). Then (step g) the app holds its sync and goes to the home screen, the peer
 /// creates a new group with the app's user and a bystander, and the invitation's delivery goes through the same in-app
-/// path: an `invite` named after the group whose body names the inviter, shown by Springboard. Skipped without
-/// `TEST_RUNNER_GIM_E2E_PUSH_MOCK_URL`.
+/// path: an `invite` named after the group whose body names the inviter, shown by Springboard. Finally (step h) the app
+/// signs out from Settings in the foreground, and step d's payload goes through the in-app path again: the handler finds
+/// no local store (gim-core deleted it, and a new extension-mode client fails with `InvalidInput`) and shows the
+/// generic content, or nothing, without crashing the app. Skipped without `TEST_RUNNER_GIM_E2E_PUSH_MOCK_URL`.
 ///
 /// `simctl push` does not launch Notification Service Extensions on the iOS 27 simulator: it injects the notification
 /// through `UNUserNotificationCenter`, so Springboard shows the mock's own alert ("New message"), which the test
@@ -24,7 +26,7 @@ import XCTest
 /// it stopped until the next push has been processed, so the extension-mode client joins the group as the extension
 /// would while the app is suspended. gim-core's store lock is not involved: the app's client simply does not sync.
 final class PushSmokeTests: E2ETestCase {
-    private let summary = StepSummary("PushSmokeTests", steps: ["a", "b", "c", "d", "e", "f", "g"])
+    private let summary = StepSummary("PushSmokeTests", steps: ["a", "b", "c", "d", "e", "f", "g", "h"])
     /// The push mock's own wait, plus the hub's dispatch and the helper's poll.
     private let pushTimeout: TimeInterval = 60
 
@@ -214,6 +216,35 @@ final class PushSmokeTests: E2ETestCase {
                 "step g: Springboard shows \"\(body)\"", app)
         }
         summary.finish("g")
+
+        summary.start("h")
+        try XCTContext.runActivity(named: "step h: app signs out, a later push gets the generic content") { _ in
+            app.activate()
+            try require(app.wait(for: .runningForeground, timeout: 10), "step h: app in the foreground", app)
+            let done = app.buttons["debug.push.done"]
+            if done.waitForExistence(timeout: 3) { done.tap() }
+            // Step f left the chat with the peer open.
+            if !app.buttons["chatList.settings"].waitForExistence(timeout: 3) {
+                try tap(backButton(app), "step h: back to the chat list", app)
+            }
+            try signOut(app)
+            try require(
+                app.buttons["onboarding.create"].waitForExistence(timeout: networkTimeout),
+                "step h: onboarding is shown after sign-out", app)
+
+            app.open(Self.debugPushURL(payload: String(decoding: delivery.gim ?? Data(), as: UTF8.self)))
+            let kind = app.staticTexts["debug.push.kind"]
+            try require(kind.waitForExistence(timeout: networkTimeout), "step h: the processed push is shown", app)
+            let body = app.staticTexts["debug.push.body"].label
+            let displayed = app.staticTexts["debug.push.shouldDisplay"].label
+            try require(
+                (kind.label == "generic" && body == "New message") || displayed == "false",
+                "step h: generic \"New message\" or not displayed (found kind \(kind.label), body \"\(body)\", "
+                    + "shouldDisplay \(displayed))", app)
+            try require(app.state == .runningForeground, "step h: the app is still running", app)
+            print("[e2e] in-app extension path after sign-out: kind=\(kind.label) displayed=\(displayed)")
+        }
+        summary.finish("h")
     }
 
     /// The first Springboard element (a banner or a Notification Center entry) whose label contains `text`.
