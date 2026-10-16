@@ -6,10 +6,11 @@ import XCTest
 final class PushNotificationHandlerTests: XCTestCase {
     private func content(
         kind: NotificationKind, chatTitle: String? = "Aegean Crew", sender: String? = "Sofia Marin",
-        body: String = "Anchored in Hydra", collapseId: String? = "msg-42", shouldDisplay: Bool = true
+        senderUserId: String? = "user-sofia", body: String = "Anchored in Hydra", collapseId: String? = "msg-42",
+        shouldDisplay: Bool = true
     ) -> NotificationContent {
         NotificationContent(
-            chatId: "chat-aegean", chatTitle: chatTitle, senderUserId: "user-sofia", senderDisplayName: sender,
+            chatId: "chat-aegean", chatTitle: chatTitle, senderUserId: senderUserId, senderDisplayName: sender,
             body: body, messageId: "msg-42", collapseId: collapseId, kind: kind, shouldDisplay: shouldDisplay,
             timestamp: 1_791_000_000_000)
     }
@@ -49,12 +50,35 @@ final class PushNotificationHandlerTests: XCTestCase {
         XCTAssertTrue(presentation.isDisplayed)
     }
 
-    func testInviteWithoutASenderNameShowsTheChat() {
+    func testInviteShowsTheGroupAndNamesTheInviter() {
+        XCTAssertEqual(
+            NotificationPresentation(content(kind: .invite, body: "You were added")),
+            NotificationPresentation(
+                isDisplayed: true, title: "Aegean Crew", body: "Sofia Marin added you",
+                threadIdentifier: "chat-aegean", collapseId: "msg-42", kind: .invite))
+    }
+
+    func testInviteWithoutASenderNameNamesTheInviterById() {
         let presentation = NotificationPresentation(content(kind: .invite, sender: nil, body: "You were added"))
         XCTAssertEqual(presentation.title, "Aegean Crew")
-        XCTAssertEqual(presentation.body, "You were added")
+        XCTAssertEqual(presentation.body, "user-sofia added you")
         XCTAssertEqual(presentation.threadIdentifier, "chat-aegean")
         XCTAssertEqual(presentation.kind, .invite)
+    }
+
+    func testInviteWithoutAnInviterKeepsGimCoresBody() {
+        let presentation = NotificationPresentation(
+            content(kind: .invite, sender: nil, senderUserId: nil, body: "You were added"))
+        XCTAssertEqual(presentation.title, "Aegean Crew")
+        XCTAssertEqual(presentation.body, "You were added")
+    }
+
+    func testGenericInAKnownChatShowsNewMessageWithTheChat() {
+        let presentation = NotificationPresentation(content(kind: .generic, sender: nil, body: "New message"))
+        XCTAssertEqual(presentation.title, "Aegean Crew")
+        XCTAssertEqual(presentation.body, "New message")
+        XCTAssertEqual(presentation.kind, .generic)
+        XCTAssertTrue(presentation.isDisplayed)
     }
 
     func testGenericForAnUnknownChatHasNoTitleOrThread() {
@@ -64,9 +88,14 @@ final class PushNotificationHandlerTests: XCTestCase {
         XCTAssertEqual(NotificationPresentation(generic), .generic)
     }
 
-    func testShouldDisplayFalseIsNotDisplayed() {
-        let presentation = NotificationPresentation(content(kind: .membership, shouldDisplay: false))
-        XCTAssertFalse(presentation.isDisplayed)
+    func testShouldDisplayFalseIsEmptyForEveryKind() {
+        for kind in [NotificationKind.message, .reaction, .invite, .membership, .generic] {
+            XCTAssertEqual(
+                NotificationPresentation(content(kind: kind, shouldDisplay: false)),
+                NotificationPresentation(
+                    isDisplayed: false, title: "", body: "", threadIdentifier: "", collapseId: "msg-42", kind: kind),
+                "\(kind)")
+        }
     }
 
     func testCollapseIdIsPassedThrough() {
