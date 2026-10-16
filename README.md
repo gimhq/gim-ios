@@ -53,6 +53,17 @@ placeholder (`New message`, `mutable-content: 1`); the hub's payload is under `g
   failure, and running out of time, shows the generic "New message". Each push appends
   `nse seq=<n> footprint_bytes=<peak phys_footprint> elapsed_ms=<ms> kind=<kind>` to `<group container>/gim-nse.log`
   (copied back by the Mac gate as `nse.log`).
+- Simulator: `simctl push` does not launch Notification Service Extensions on the iOS 27 simulator. CoreSimulatorBridge
+  injects the notification through `UNUserNotificationCenter`, so Springboard shows the mock's alert ("New message")
+  and `gim-nse.log` stays empty there (the metrics are for devices). Debug builds with `GIMPushProvider`
+  `mock-ios-sim` therefore have a debug entry point, the URL scheme `gim-debug://process-push?payload=<base64url JSON>`
+  (`DebugPushURL`; the UI tests open it with `XCUIApplication.open(_:)`). It runs the extension's
+  `PushNotificationHandler` in-app with an extension-mode client on the App Group directory, next to the app's own
+  client (gim-core's `flock` on `gim.lock` serializes the two clients as it does two processes). It shows the result
+  in a sheet (`debug.push.title`, `.body`, `.shouldDisplay`, `.kind`) and posts it as a local notification 5 s later.
+  `PushSmokeTests` step e passes it the delivery's `simctl.payload.gim`. Release builds compile none of it; their URL
+  type has an empty scheme. Launching the extension process and measuring its ~24 MB footprint need a device with
+  APNs and are deferred.
 - The extension has the `com.apple.developer.usernotifications.filtering` entitlement so that empty content hides the
   notification. On devices Apple must approve it for the team before such builds can be signed; the simulator does
   not check it.

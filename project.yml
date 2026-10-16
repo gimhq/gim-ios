@@ -41,6 +41,12 @@ targets:
         # `mock-ios-sim` registers a push token for gim-push-mock + `xcrun simctl push` (README "Push"); empty
         # registers nothing.
         GIMPushProvider: $(GIM_PUSH_PROVIDER)
+        # Debug: `gim-debug://process-push?payload=<base64url>` runs the extension's push handler in-app (README
+        # "Push"); the Release scheme is empty, and Release has no code for it.
+        CFBundleURLTypes:
+          - CFBundleURLName: im.g.apps.debug
+            CFBundleURLSchemes:
+              - $(GIM_DEBUG_URL_SCHEME)
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         NSCameraUsageDescription: Scan the code shown on your new device.
@@ -65,9 +71,11 @@ targets:
         Debug:
           GIM_DEFAULT_SERVER_URL: http://localhost:8080
           GIM_PUSH_PROVIDER: mock-ios-sim
+          GIM_DEBUG_URL_SCHEME: gim-debug
         Release:
           GIM_DEFAULT_SERVER_URL: ""
           GIM_PUSH_PROVIDER: ""
+          GIM_DEBUG_URL_SCHEME: ""
   # Decrypts pushes with gim-core on the App Group's local state; links no SwiftUI (GIMPlatform, not GIMUI).
   GIMNotificationService:
     type: app-extension

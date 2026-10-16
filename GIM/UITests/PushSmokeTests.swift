@@ -4,10 +4,16 @@ import XCTest
 /// End-to-end push through gim-push-mock (`scripts/e2e-hub.sh start` or `fed-start`, then `scripts/mac-gate.sh e2e
 /// --push-mock-url <url>`, whose helper hands every mock-ios-sim delivery to `xcrun simctl push`): the app onboards and
 /// allows notifications (step a), a scripted peer opens a direct chat with it (step b), the app goes to the home screen
-/// (step c), the peer's text shows decrypted in a notification from the Notification Service Extension and the mock
-/// recorded the delivery (step d), and tapping the notification opens the app on the message (step e). Step f only
-/// observes what the simulator shows for a push gim-core says not to display (an edit); it never fails. Skipped
-/// without `TEST_RUNNER_GIM_E2E_PUSH_MOCK_URL`.
+/// (step c), the peer's text reaches the mock as a mock-ios-sim delivery for this app (step d), the Notification
+/// Service Extension's handler decrypts that delivery's payload in-app and Springboard shows the result (step e), and
+/// the chat shows the message (step f). Skipped without `TEST_RUNNER_GIM_E2E_PUSH_MOCK_URL`.
+///
+/// `simctl push` does not launch Notification Service Extensions on the iOS 27 simulator: it injects the notification
+/// through `UNUserNotificationCenter`, so Springboard shows the mock's own alert ("New message"), which the test
+/// ignores. Step e therefore hands the delivery's `simctl.payload.gim` (what the extension would read from `userInfo`)
+/// to the Debug app's `gim-debug://process-push` entry point, which runs the extension's `PushNotificationHandler`
+/// with an extension-mode client on the App Group's data directory and posts the result as a local notification. The
+/// extension process itself and its memory footprint need a device with APNs.
 final class PushSmokeTests: E2ETestCase {
     private let summary = StepSummary("PushSmokeTests", steps: ["a", "b", "c", "d", "e", "f"])
     /// The push mock's own wait, plus the hub's dispatch and the helper's poll.
@@ -82,74 +88,84 @@ final class PushSmokeTests: E2ETestCase {
 
         summary.start("d")
         let text = "push \(suffix)"
-        let (notification, messageId) = try XCTContext.runActivity(
-            named: "step d: peer sends \"\(text)\", a notification shows it"
-        ) { _ in
+        let delivery = try XCTContext.runActivity(named: "step d: peer sends \"\(text)\", the mock delivers it") { _ in
             let since = try waitForPeer("step d: push mock deliveries", app) {
                 try await Self.deliveries(pushMockUrl, since: nil).next
             }
-            let messageId = try waitForPeer("step d: peer sends \"\(text)\"", app) {
+            _ = try waitForPeer("step d: peer sends \"\(text)\"", app) {
                 try await peer.sendText(chatId: chatId, body: text)
             }
-            let notification = springboardText(containing: text)
-            try require(
-                notification.waitForExistence(timeout: pushTimeout),
-                "step d: notification with \"\(text)\" within \(Int(pushTimeout)) s", app)
-            let delivered = try waitForPeer("step d: push mock delivery for im.g.apps", app) {
-                try await Self.deliveries(pushMockUrl, since: since).deliveries.filter { $0.appId == "im.g.apps" }
+            // The simulator then shows the mock's own alert ("New message"): `simctl push` runs no service extension.
+            let delivery = try eventually("step d: mock-ios-sim delivery of a message to im.g.apps", app) {
+                try await Self.deliveries(pushMockUrl, since: since).deliveries.last {
+                    $0.appId == "im.g.apps" && $0.token.hasPrefix("sim-") && $0.type == "message" && $0.gim != nil
+                }
             }
-            try require(!delivered.isEmpty, "step d: the push mock delivered a mock-ios-sim push to im.g.apps", app)
-            print("[e2e] push mock deliveries for im.g.apps: \(delivered.map(\.summary).joined(separator: ", "))")
-            return (notification, messageId)
+            print("[e2e] push mock delivery seq=\(delivery.seq) token=\(delivery.token) type=\(delivery.type)")
+            return delivery
         }
         summary.finish("d")
 
         summary.start("e")
-        try XCTContext.runActivity(named: "step e: tapping the notification opens the app on the message") { _ in
-            if notification.exists && notification.isHittable {
-                notification.tap()
-            } else {
-                // The banner is gone: open Notification Center.
-                springboard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.01))
-                    .press(
-                        forDuration: 0.1,
-                        thenDragTo: springboard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6)))
-                try tap(springboardText(containing: text), "step e: notification in Notification Center", app)
-            }
-            try require(app.wait(for: .runningForeground, timeout: 10), "step e: app in the foreground", app)
-            if !app.textViews["composer.text"].exists {
-                try tap(peerRow, "step e: chat with the peer", app)
-            }
-            scrollToLatest(app)
+        try XCTContext.runActivity(named: "step e: the extension's handler decrypts the delivered payload in-app") {
+            _ in
+            let payload = String(decoding: delivery.gim ?? Data(), as: UTF8.self)
+            app.open(Self.debugPushURL(payload: payload))
+            try waitForLabel(
+                app.staticTexts["debug.push.body"], containing: text, "step e: debug.push.body is \"\(text)\"", app)
             try require(
-                messageText(text, in: app).waitForExistence(timeout: networkTimeout),
-                "step e: the chat shows \"\(text)\"",
+                app.staticTexts["debug.push.body"].label == text,
+                "step e: debug.push.body exactly \"\(text)\" (found \"\(app.staticTexts["debug.push.body"].label)\")",
                 app)
+            try require(
+                app.staticTexts["debug.push.shouldDisplay"].label == "true", "step e: debug.push.shouldDisplay true",
+                app)
+            try require(app.staticTexts["debug.push.kind"].label == "message", "step e: debug.push.kind message", app)
+            print("[e2e] in-app extension path: title=\(app.staticTexts["debug.push.title"].label) body=\(text)")
+            // The app posts the result as a local notification a few seconds later; Springboard shows it in the
+            // background.
+            XCUIDevice.shared.press(.home)
+            try require(
+                springboardText(containing: text).waitForExistence(timeout: 20),
+                "step e: Springboard shows the decrypted \"\(text)\"", app)
         }
         summary.finish("e")
 
         summary.start("f")
-        let observed = try XCTContext.runActivity(named: "step f: an edit (not displayed) in the background") { _ in
-            XCUIDevice.shared.press(.home)
-            let edited = "\(text) edited"
-            try waitForPeer("step f: peer edits its message", app) {
-                try await peer.editText(chatId: chatId, messageId: messageId, body: edited)
+        try XCTContext.runActivity(named: "step f: the chat shows the message") { _ in
+            let banner = springboardText(containing: text)
+            if banner.exists && banner.isHittable {
+                banner.tap()
+            } else {
+                app.activate()
             }
-            // Anything the simulator shows for it: the edited text, gim-core's generic text or the mock's alert.
-            let shown = springboard.descendants(matching: .any)
-                .matching(NSPredicate(format: "label CONTAINS %@ OR label CONTAINS 'New message'", edited))
-                .firstMatch
-            let result = shown.waitForExistence(timeout: 20) ? "shown: \(shown.label)" : "nothing shown in 20 s"
-            print("[e2e] push not to display (edit): \(result)")
-            return shown.exists ? "shown" : "hidden"
+            try require(app.wait(for: .runningForeground, timeout: 10), "step f: app in the foreground", app)
+            let done = app.buttons["debug.push.done"]
+            if done.waitForExistence(timeout: 3) { done.tap() }
+            if !app.textViews["composer.text"].exists {
+                try tap(peerRow, "step f: chat with the peer", app)
+            }
+            scrollToLatest(app)
+            try require(
+                messageText(text, in: app).waitForExistence(timeout: networkTimeout),
+                "step f: the chat shows \"\(text)\"", app)
         }
-        summary.finish("f", observed)
+        summary.finish("f")
     }
 
     /// The first Springboard element (a banner or a Notification Center entry) whose label contains `text`.
     @MainActor
     private func springboardText(containing text: String) -> XCUIElement {
         springboard.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
+    }
+
+    /// The app's debug entry point (GIMFeatures `DebugPushURL`): `gim-debug://process-push?payload=<base64url>`.
+    private static func debugPushURL(payload: String) -> URL {
+        let encoded = Data(payload.utf8).base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+        return URL(string: "gim-debug://process-push?payload=\(encoded)")!
     }
 
     /// `GET /deliveries?provider=mock-ios-sim` of gim-push-mock (gim-hub docs/push-mock.md), after `since` if set.
@@ -159,36 +175,35 @@ final class PushSmokeTests: E2ETestCase {
             [URLQueryItem(name: "provider", value: "mock-ios-sim")]
             + (since.map { [URLQueryItem(name: "since", value: "\($0)")] } ?? [])
         let (data, response) = try await URLSession.shared.data(from: components.url!)
-        guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
-        return try JSONDecoder().decode(Deliveries.self, from: data)
+        guard (response as? HTTPURLResponse)?.statusCode == 200,
+            let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let next = (object["next"] as? NSNumber)?.uint64Value
+        else { throw URLError(.badServerResponse) }
+        let deliveries = (object["deliveries"] as? [[String: Any]] ?? []).map(Deliveries.Delivery.init)
+        return Deliveries(deliveries: deliveries, next: next)
     }
 }
 
 /// The part of the push mock's `GET /deliveries` answer the test reads.
-private struct Deliveries: Decodable, Sendable {
-    struct Delivery: Decodable, Sendable {
-        struct Body: Decodable, Sendable {
-            struct Registration: Decodable, Sendable {
-                var appId: String?
-
-                enum CodingKeys: String, CodingKey {
-                    case appId = "app_id"
-                }
-            }
-
-            struct Payload: Decodable, Sendable {
-                var type: String?
-            }
-
-            var registration: Registration
-            var payload: Payload?
-        }
-
+private struct Deliveries: Sendable {
+    struct Delivery: Sendable {
         var seq: UInt64
-        var body: Body
+        var appId: String
+        var token: String
+        var type: String
+        /// `simctl.payload.gim` as JSON: the object `simctl push` hands to the app, the hub's payload.
+        var gim: Data?
 
-        var appId: String? { body.registration.appId }
-        var summary: String { "seq=\(seq) type=\(body.payload?.type ?? "?")" }
+        init(_ object: [String: Any]) {
+            let body = object["body"] as? [String: Any] ?? [:]
+            let registration = body["registration"] as? [String: Any] ?? [:]
+            let gim = ((object["simctl"] as? [String: Any])?["payload"] as? [String: Any])?["gim"]
+            seq = (object["seq"] as? NSNumber)?.uint64Value ?? 0
+            appId = registration["app_id"] as? String ?? ""
+            token = registration["token"] as? String ?? ""
+            type = (gim as? [String: Any])?["type"] as? String ?? ""
+            self.gim = gim.flatMap { try? JSONSerialization.data(withJSONObject: $0) }
+        }
     }
 
     var deliveries: [Delivery]

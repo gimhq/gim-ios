@@ -65,10 +65,6 @@ final class ScriptedPeer: Sendable {
         return try await client.createDirectChat(userId: user.userId)
     }
 
-    func editText(chatId: String, messageId: String, body: String) async throws {
-        try await client.editMessage(chatId: chatId, messageId: messageId, newBody: body)
-    }
-
     /// Sends a small generated PNG.
     func sendImage(chatId: String) async throws -> String {
         let url = directory.appendingPathComponent("peer-\(UUID().uuidString).png")
