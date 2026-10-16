@@ -40,7 +40,10 @@ public final class TimelineItemBuilder {
     /// - Parameters:
     ///   - items: the gim-core timeline, oldest first.
     ///   - typingText: adds the typing row at the bottom when set.
-    public func build(_ items: [TimelineItem], isGroup: Bool, typingText: String?) -> [TimelineDisplayItem] {
+    ///   - unavailableMedia: ids of the messages whose attachment couldn't be downloaded for now.
+    public func build(
+        _ items: [TimelineItem], isGroup: Bool, typingText: String?, unavailableMedia: Set<String> = []
+    ) -> [TimelineDisplayItem] {
         var result: [TimelineDisplayItem] = []
         result.reserveCapacity(items.count + 1)
         var usedIds: Set<String> = []
@@ -63,7 +66,8 @@ public final class TimelineItemBuilder {
                 let row = messageRow(
                     message, isGroup: isGroup,
                     isFirstInRun: !Self.continuesRun(previous, message),
-                    hasTail: !Self.continuesRun(.message(item: message), next))
+                    hasTail: !Self.continuesRun(.message(item: message), next),
+                    isMediaUnavailable: unavailableMedia.contains(message.messageId))
                 append(TimelineDisplayItem.id(forMessage: message.messageId), .message(row))
             case .dateSeparator(let dayStartMs):
                 append("day:\(dayStartMs)", .dateSeparator(dayLabel(dayStartMs)))
@@ -105,9 +109,9 @@ public final class TimelineItemBuilder {
 
     static func membershipText(_ userName: String, _ change: MembershipChangeKind) -> String {
         switch change {
-        case .added: "\(userName) was added"
-        case .removed: "\(userName) was removed"
-        case .left: "\(userName) left"
+        case .added: "\(UserLabel.name(userName)) was added"
+        case .removed: "\(UserLabel.name(userName)) was removed"
+        case .left: "\(UserLabel.name(userName)) left"
         }
     }
 
@@ -126,7 +130,7 @@ public final class TimelineItemBuilder {
     }
 
     private func messageRow(
-        _ message: MessageItem, isGroup: Bool, isFirstInRun: Bool, hasTail: Bool
+        _ message: MessageItem, isGroup: Bool, isFirstInRun: Bool, hasTail: Bool, isMediaUnavailable: Bool
     ) -> TimelineMessageRow {
         let isDeleted = message.content == .deleted
         let body: MessageBody
@@ -147,12 +151,19 @@ public final class TimelineItemBuilder {
         }
         return TimelineMessageRow(
             message: message, body: body,
-            senderName: isGroup && !message.isOwn && isFirstInRun ? message.sender.displayName : nil,
+            senderName: isGroup && !message.isOwn && isFirstInRun ? UserLabel.name(for: message.sender) : nil,
             isFirstInRun: isFirstInRun, hasTail: hasTail,
-            reply: isDeleted ? nil : message.replyTo,
+            reply: isDeleted ? nil : message.replyTo.map(Self.labelled),
             reactions: isDeleted ? [] : message.reactions,
             isEdited: !isDeleted && message.edited,
             timeText: timeFormatter.string(from: Date(epochMilliseconds: message.sentAtMs)),
-            status: message.isOwn && !isDeleted ? message.sendState.map(MessageStatus.init) : nil)
+            status: message.isOwn && !isDeleted ? message.sendState.map(MessageStatus.init) : nil,
+            isMediaUnavailable: isMediaUnavailable)
+    }
+
+    private static func labelled(_ reply: ReplyPreview) -> ReplyPreview {
+        var reply = reply
+        reply.senderName = UserLabel.name(reply.senderName)
+        return reply
     }
 }

@@ -43,10 +43,12 @@ public final class GroupInfoViewModel {
     public var editedName = ""
     public private(set) var isSavingName = false
     public private(set) var isLeaving = false
-    /// Set once the user left the group; the screen should close.
+    /// Set once `leaveChat` returned (the chat is leaving until the own `Left` change arrives); the screen should
+    /// close.
     public private(set) var hasLeft = false
 
     private let client: any GimClientAPI
+    private let leavingChats: LeavingChats?
     @ObservationIgnored private var chatList: [ChatSummary] = []
     @ObservationIgnored private var selfUserId: String?
     @ObservationIgnored private var loadGeneration = 0
@@ -55,9 +57,11 @@ public final class GroupInfoViewModel {
     @ObservationIgnored private var listTask: Task<Void, Never>?
     @ObservationIgnored private var timelineTask: Task<Void, Never>?
 
-    public init(client: any GimClientAPI, chatId: String) {
+    /// - Parameter leavingChats: records the chat as leaving after `leave()`.
+    public init(client: any GimClientAPI, chatId: String, leavingChats: LeavingChats? = nil) {
         self.client = client
         self.chatId = chatId
+        self.leavingChats = leavingChats
     }
 
     deinit {
@@ -147,7 +151,13 @@ public final class GroupInfoViewModel {
                 self.errorMessage = "No one uses the handle @\(handle)."
                 return false
             }
-            try await self.client.addMembers(chatId: self.chatId, userIds: [user.userId])
+            do {
+                try await self.client.addMembers(chatId: self.chatId, userIds: [user.userId])
+            } catch GimError.NotFound {
+                // Every invitee is unknown or has no device; nothing was committed.
+                self.errorMessage = NewGroupViewModel.noneFoundMessage
+                return false
+            }
             self.memberHandle = ""
             return true
         }
@@ -199,7 +209,11 @@ public final class GroupInfoViewModel {
         errorMessage = nil
         defer { isLeaving = false }
         do {
-            try await client.leaveChat(chatId: chatId)
+            if let leavingChats {
+                try await leavingChats.leave(chatId: chatId)
+            } else {
+                try await client.leaveChat(chatId: chatId)
+            }
             stop()
             hasLeft = true
             errorMessage = nil

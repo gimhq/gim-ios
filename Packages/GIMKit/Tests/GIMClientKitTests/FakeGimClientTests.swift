@@ -653,7 +653,7 @@ final class FakeGimClientTests: XCTestCase {
         await assertThrows(.NotFound(reason: "user user-missing")) {
             try await client.createDirectChat(userId: "user-missing")
         }
-        await assertThrows(.NotFound(reason: "user user-missing")) {
+        await assertThrows(.NotFound(reason: "users user-missing")) {
             try await client.createGroupChat(name: "X", memberUserIds: ["user-missing"])
         }
         await assertThrows(.InvalidInput(reason: "Group name is required")) {
@@ -707,14 +707,89 @@ final class FakeGimClientTests: XCTestCase {
         XCTAssertEqual(members.map(\.userId), [FakeGimClient.demoSelfId, "user-sofia"])
     }
 
-    func testLeaveChatRemovesItFromTheChatList() async throws {
+    func testUnknownAndDevicelessInviteesAreSkipped() async throws {
+        let client = try await makeDemo()
+        await client.addRemoteUser(UserProfile(userId: "user-kai", handle: "kai", displayName: "Kai"), hasDevice: false)
+        await assertThrows(.NotFound(reason: "user user-kai has no device")) {
+            try await client.createDirectChat(userId: "user-kai")
+        }
+        await assertThrows(.NotFound(reason: "users user-kai, user-missing")) {
+            try await client.createGroupChat(name: "X", memberUserIds: ["user-kai", "user-missing"])
+        }
+
+        let chat = try await client.createGroupChat(name: "Regatta", memberUserIds: ["user-luca", "user-missing"])
+        let (_, timeline) = try await subscribeTimeline(client, chat)
+        let atMs = ms(base)
+        XCTAssertEqual(
+            timeline.items,
+            [
+                .dateSeparator(dayStartMs: dayStartMs(atMs)),
+                .membershipChange(userName: "user-missing", change: .removed, atMs: atMs),
+            ])
+        var members = try await client.chatMembers(chatId: chat)
+        XCTAssertEqual(members.map(\.userId), [FakeGimClient.demoSelfId, "user-luca"])
+
+        await assertThrows(.NotFound(reason: "users user-kai")) {
+            try await client.addMembers(chatId: chat, userIds: ["user-kai", "user-luca"])
+        }
+        try await client.addMembers(chatId: chat, userIds: ["user-nikos", "user-kai"])
+        XCTAssertEqual(
+            Array(timeline.items.suffix(2)),
+            [
+                .membershipChange(userName: "Nikos Papadopoulos", change: .added, atMs: atMs),
+                .membershipChange(userName: "Kai", change: .removed, atMs: atMs),
+            ])
+        members = try await client.chatMembers(chatId: chat)
+        XCTAssertEqual(members.map(\.userId), [FakeGimClient.demoSelfId, "user-luca", "user-nikos"])
+    }
+
+    func testRemoteUserWithoutHandle() async throws {
+        let client = try await makeDemo()
+        let marta = UserProfile(userId: "user-marta", handle: "", displayName: "Marta")
+        await client.addRemoteUser(marta)
+
+        try await client.addMembers(chatId: group, userIds: [marta.userId])
+
+        let members = try await client.chatMembers(chatId: group)
+        XCTAssertEqual(members.last, marta)
+        let found = try await client.findUser(handle: " ")
+        XCTAssertNil(found)
+    }
+
+    func testFetchMediaFailsOnceWhenInjected() async throws {
+        let client = try await makeDemo()
+        let destination = URL(fileURLWithPath: try makeTemporaryDirectory()).appendingPathComponent("photo").path
+        let failure = GimError.RetryLater(status: 503, retryAfterSecs: 5, reason: "peer_unavailable")
+        await client.failNextFetchMedia(with: failure)
+
+        await assertThrows(failure) {
+            try await client.fetchMedia(chatId: self.direct, messageId: "msg-sofia-140", destPath: destination)
+        }
+        let path = try await client.fetchMedia(chatId: direct, messageId: "msg-sofia-140", destPath: destination)
+        XCTAssertEqual(path, destination)
+    }
+
+    func testLeaveChatIsLeavingUntilTheLeftChangeArrives() async throws {
         let client = try await makeDemo()
         let list = try await subscribeChatList(client)
         let (_, timeline) = try await subscribeTimeline(client, group)
 
         try await client.leaveChat(chatId: group)
 
-        XCTAssertEqual(timeline.items.last, .membershipChange(userName: "Alex Morgan", change: .left, atMs: ms(base)))
+        XCTAssertEqual(list.items.map(\.chatId), [group, direct])
+        let refusal = GimError.InvalidInput(reason: "invalid state: leaving chat \(group)")
+        await assertThrows(refusal) { try await client.sendText(chatId: self.group, body: "Hi", replyTo: nil) }
+        await assertThrows(refusal) {
+            try await client.sendMedia(
+                chatId: self.group, filePath: "/nonexistent", mime: "image/png", caption: nil, replyTo: nil)
+        }
+        try await client.leaveChat(chatId: group)
+
+        clock.now = base.addingTimeInterval(2)
+        await scheduler.advance(by: FakeGimClient.leaveCommitDelay)
+
+        XCTAssertEqual(
+            timeline.items.last, .membershipChange(userName: "Alex Morgan", change: .left, atMs: ms(clock.now)))
         XCTAssertEqual(list.items.map(\.chatId), [direct])
         await assertThrows(.NotFound(reason: "chat \(group)")) { try await client.chatMembers(chatId: self.group) }
         await assertThrows(.InvalidInput(reason: "Only groups can be left")) {

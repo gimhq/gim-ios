@@ -7,25 +7,31 @@ public struct ConversationScreen: View {
     private let client: any GimClientAPI
     private let chatId: String
     private let drafts: ComposerDrafts
+    private let leavingChats: LeavingChats?
 
     @State private var actions: MessageActionsViewModel
 
-    /// - Parameter drafts: unsent text per chat, shared by all chats of the session.
-    public init(client: any GimClientAPI, chatId: String, drafts: ComposerDrafts) {
+    /// - Parameters:
+    ///   - drafts: unsent text per chat, shared by all chats of the session.
+    ///   - leavingChats: the chats the user is leaving, shared by all screens of the session.
+    public init(client: any GimClientAPI, chatId: String, drafts: ComposerDrafts, leavingChats: LeavingChats? = nil) {
         self.client = client
         self.chatId = chatId
         self.drafts = drafts
+        self.leavingChats = leavingChats
         _actions = State(initialValue: MessageActionsViewModel(client: client, chatId: chatId))
     }
 
     public var body: some View {
         ChatScreen(
-            client: client, chatId: chatId,
+            client: client, chatId: chatId, leavingChats: leavingChats,
             contextMenuProvider: { [actions] message, context in
                 MessageContextMenu.menu(for: message, context: context, actions: actions)
             }
         ) { _, replyingTo, editing in
-            ComposerView(client: client, chatId: chatId, drafts: drafts, replyingTo: replyingTo, editing: editing)
+            ComposerView(
+                client: client, chatId: chatId, drafts: drafts, leavingChats: leavingChats, replyingTo: replyingTo,
+                editing: editing)
         }
         .confirmationDialog(
             "Delete this message for everyone?",

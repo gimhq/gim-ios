@@ -294,4 +294,52 @@ final class ComposerViewModelTests: XCTestCase {
         XCTAssertEqual(preview(.file(media: media, fileName: nil, caption: nil)), "File")
         XCTAssertEqual(preview(.deleted), "This message was deleted")
     }
+
+    // MARK: - Leaving
+
+    @MainActor
+    func testComposerIsDisabledWhileLeaving() async throws {
+        let client = await makeClient()
+        let group = FakeGimClient.demoGroupChatId
+        let leavingChats = LeavingChats(client: client)
+        let viewModel = ComposerViewModel(client: client, chatId: group, leavingChats: leavingChats)
+        viewModel.textChanged("Bye")
+        XCTAssertTrue(viewModel.canSend)
+        XCTAssertTrue(viewModel.canAttach)
+
+        try await leavingChats.leave(chatId: group)
+
+        XCTAssertTrue(viewModel.isLeaving)
+        XCTAssertFalse(viewModel.canSend)
+        XCTAssertFalse(viewModel.canAttach)
+    }
+
+    @MainActor
+    func testSendRefusedWhileLeavingShowsLeavingInsteadOfError() async throws {
+        let client = await makeClient()
+        let group = FakeGimClient.demoGroupChatId
+        // Left in an earlier run: only the refused send tells this session.
+        try await client.fake.leaveChat(chatId: group)
+        let leavingChats = LeavingChats(client: client)
+        let viewModel = ComposerViewModel(client: client, chatId: group, leavingChats: leavingChats)
+        viewModel.textChanged("Bye")
+
+        await viewModel.send()
+
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertTrue(viewModel.isLeaving)
+        XCTAssertEqual(viewModel.text, "Bye")
+    }
+
+    @MainActor
+    func testRetryLaterShowsWhenToTryAgain() async {
+        let client = await makeClient()
+        let viewModel = makeViewModel(client)
+        viewModel.textChanged("Hello")
+        await client.failNext(with: .RetryLater(status: 503, retryAfterSecs: 12, reason: "peer_unavailable"))
+
+        await viewModel.send()
+
+        XCTAssertEqual(viewModel.errorMessage, "Another server is unavailable. Try again in 12 s.")
+    }
 }

@@ -16,12 +16,24 @@ public final class ChatListViewModel {
 
     private let client: any GimClientAPI
     private let dateFormatter: RelativeDateFormatter
+    private let leavingChats: LeavingChats?
     @ObservationIgnored private var listTask: Task<Void, Never>?
     @ObservationIgnored private var connectionTask: Task<Void, Never>?
 
-    public init(client: any GimClientAPI, dateFormatter: RelativeDateFormatter = RelativeDateFormatter()) {
+    /// - Parameter leavingChats: the chats the user is leaving; their rows say so.
+    public init(
+        client: any GimClientAPI, dateFormatter: RelativeDateFormatter = RelativeDateFormatter(),
+        leavingChats: LeavingChats? = nil
+    ) {
         self.client = client
         self.dateFormatter = dateFormatter
+        self.leavingChats = leavingChats
+    }
+
+    /// The text under the row's title: "Leaving…" while the user is leaving the chat, otherwise the last message.
+    public func subtitle(for row: ChatRow) -> String {
+        if leavingChats?.contains(row.id) == true { return "Leaving…" }
+        return row.preview ?? "No messages yet"
     }
 
     deinit {

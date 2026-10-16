@@ -110,4 +110,20 @@ final class NewChatViewModelTests: XCTestCase {
             viewModel.startError,
             ErrorPresenter.message(for: GimError.InvalidInput(reason: "You can't start a chat with yourself")))
     }
+
+    @MainActor
+    func testStartChatWithUserWithoutDeviceShowsNotFound() async {
+        let (client, _) = await connected(makeDemoClient())
+        await client.addRemoteUser(UserProfile(userId: "user-kai", handle: "kai", displayName: "Kai"), hasDevice: false)
+        let (viewModel, sleeper) = makeViewModel(client: client)
+
+        viewModel.query = "kai"
+        await eventually { sleeper.pendingCount == 1 }
+        sleeper.releaseAll()
+        await eventually { viewModel.state != .searching }
+
+        let chatId = await viewModel.startChat()
+        XCTAssertNil(chatId)
+        XCTAssertEqual(viewModel.startError, "User not found")
+    }
 }

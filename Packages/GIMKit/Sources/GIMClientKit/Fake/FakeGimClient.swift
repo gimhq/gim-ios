@@ -86,6 +86,8 @@ public actor FakeGimClient: GimClientAPI {
     /// Number of newest timeline entries exposed before `paginateBackwards` is called.
     public static let initialWindow = 50
     public static let failureReason = "Simulated network failure"
+    /// Time another member takes to commit a leave Proposal, after which the own `left` change arrives.
+    public static let leaveCommitDelay: Duration = .seconds(2)
     /// The SAS of every simulated device link.
     public static let fakeSas = "123 456"
     /// The other device of a client created with a session.
@@ -125,6 +127,11 @@ public actor FakeGimClient: GimClientAPI {
     /// Bumped on every connection change so stale scheduled steps do nothing.
     private var connectionGeneration = 0
     private var sendFailuresRemaining = 0
+    /// Chats left with `leaveChat` whose `left` change has not arrived yet.
+    private var leavingChatIds: Set<String> = []
+    private var fetchMediaFailure: GimError?
+    /// Users in the directory without a device: invites to them fail like invites to unknown users.
+    private var devicelessUserIds: Set<String> = []
     private var chatMembersFailure: GimError?
     private var chatMembersHeld = false
     private var heldChatMembers: [CheckedContinuation<Void, Never>] = []
@@ -217,6 +224,23 @@ public actor FakeGimClient: GimClientAPI {
         sendFailuresRemaining = count
     }
 
+    /// The next `fetchMedia` call throws `error` (for example `.RetryLater`); later calls succeed again.
+    public func failNextFetchMedia(with error: GimError) {
+        fetchMediaFailure = error
+    }
+
+    /// Adds a user to the directory, for example a remote user without a handle (which `findUser` never returns).
+    /// Add it to chats with `addMembers` or `createGroupChat`; without a device, chats with it can't be created and
+    /// invites to it are skipped.
+    public func addRemoteUser(_ profile: UserProfile, hasDevice: Bool = true) {
+        users[profile.userId] = profile
+        if hasDevice {
+            devicelessUserIds.remove(profile.userId)
+        } else {
+            devicelessUserIds.insert(profile.userId)
+        }
+    }
+
     /// While set, `chatMembers` throws `error` (for example `.Network`).
     public func failChatMembers(with error: GimError?) {
         chatMembersFailure = error
@@ -298,6 +322,7 @@ public actor FakeGimClient: GimClientAPI {
         pendingApprovals = []
         syncRunning = false
         outbox = []
+        leavingChatIds = []
         setConnection(.offline)
         for chatId in chats.keys {
             timelineSubscribers[chatId, default: []].deliver { $0.onUpdate(diffs: [.clear]) }
@@ -547,6 +572,7 @@ public actor FakeGimClient: GimClientAPI {
     public func findUser(handle: String) async throws -> UserProfile? {
         _ = try requireSession()
         let handle = handle.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !handle.isEmpty else { return nil }
         return users.values.first { $0.handle == handle }
     }
 
@@ -556,6 +582,9 @@ public actor FakeGimClient: GimClientAPI {
             throw GimError.InvalidInput(reason: "You can't start a chat with yourself")
         }
         _ = try existingUser(userId)
+        guard !devicelessUserIds.contains(userId) else {
+            throw GimError.NotFound(reason: "user \(userId) has no device")
+        }
         if let existing = chats.values.first(where: { $0.kind == .direct && $0.members.contains(userId) }) {
             return existing.id
         }
@@ -571,15 +600,13 @@ public actor FakeGimClient: GimClientAPI {
         let session = try requireSession()
         let name = name.trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else { throw GimError.InvalidInput(reason: "Group name is required") }
-        var memberIds = [session.userId]
-        for member in memberUserIds where !memberIds.contains(member) {
-            _ = try existingUser(member)
-            memberIds.append(member)
-        }
-        let chat = StoredChat(id: makeId("chat"), kind: .group, name: name, createdAtMs: nowMs(), members: memberIds)
+        let (found, skipped) = try invitees(memberUserIds, excluding: [session.userId])
+        let chat = StoredChat(
+            id: makeId("chat"), kind: .group, name: name, createdAtMs: nowMs(), members: [session.userId] + found)
         chats[chat.id] = chat
         publishTimelineChange(chat.id)
         publishChatList()
+        reportSkipped(skipped, chat.id)
         return chat.id
     }
 
@@ -596,15 +623,41 @@ public actor FakeGimClient: GimClientAPI {
     public func addMembers(chatId: String, userIds: [String]) async throws {
         _ = try requireSession()
         var chat = try existingGroup(chatId, "Members can only be added to groups")
-        var added: [UserProfile] = []
-        for userId in userIds where !chat.members.contains(userId) && !added.contains(where: { $0.userId == userId }) {
-            added.append(try existingUser(userId))
-        }
-        guard !added.isEmpty else { return }
-        chat.members += added.map(\.userId)
+        let (added, skipped) = try invitees(userIds, excluding: chat.members)
+        chat.members += added
         chats[chatId] = chat
-        for user in added {
-            appendEntry(.membership(userName: user.displayName, change: .added, atMs: nowMs()), chatId)
+        for userId in added {
+            appendEntry(
+                .membership(userName: users[userId]?.displayName ?? userId, change: .added, atMs: nowMs()), chatId)
+        }
+        reportSkipped(skipped, chatId)
+    }
+
+    /// Splits invitees into known users and unknown ones (like gim-core's users without a device, which are
+    /// skipped). `NotFound` if every invitee is unknown.
+    private func invitees(_ userIds: [String], excluding members: [String]) throws -> (
+        found: [String], skipped: [String]
+    ) {
+        var found: [String] = []
+        var skipped: [String] = []
+        for userId in userIds where !members.contains(userId) && !found.contains(userId) && !skipped.contains(userId) {
+            if users[userId] == nil || devicelessUserIds.contains(userId) {
+                skipped.append(userId)
+            } else {
+                found.append(userId)
+            }
+        }
+        if found.isEmpty, !skipped.isEmpty {
+            throw GimError.NotFound(reason: "users \(skipped.joined(separator: ", "))")
+        }
+        return (found, skipped)
+    }
+
+    /// gim-core reports each skipped invitee as a `removed` change, named like other membership changes.
+    private func reportSkipped(_ userIds: [String], _ chatId: String) {
+        for userId in userIds {
+            appendEntry(
+                .membership(userName: users[userId]?.displayName ?? userId, change: .removed, atMs: nowMs()), chatId)
         }
     }
 
@@ -621,9 +674,17 @@ public actor FakeGimClient: GimClientAPI {
         appendEntry(.membership(userName: user.displayName, change: .removed, atMs: nowMs()), chatId)
     }
 
+    /// Like gim-core, the chat is leaving until another member commits the leave: sends fail with `InvalidInput`
+    /// until the own `left` change arrives `leaveCommitDelay` later, and the chat is removed.
     public func leaveChat(chatId: String) async throws {
-        let session = try requireSession()
+        _ = try requireSession()
         _ = try existingGroup(chatId, "Only groups can be left")
+        guard leavingChatIds.insert(chatId).inserted else { return }
+        options.scheduler.schedule(after: Self.leaveCommitDelay) { [weak self] in await self?.completeLeave(chatId) }
+    }
+
+    private func completeLeave(_ chatId: String) {
+        guard leavingChatIds.remove(chatId) != nil, let session, chats[chatId] != nil else { return }
         appendEntry(.membership(userName: session.displayName, change: .left, atMs: nowMs()), chatId)
         chats[chatId] = nil
         publishedTimelines[chatId] = nil
@@ -669,7 +730,7 @@ public actor FakeGimClient: GimClientAPI {
         chatId: String, filePath: String, mime: String, caption: String?, replyTo: String?
     ) async throws -> String {
         _ = try requireSession()
-        _ = try existingChat(chatId)
+        try requireJoined(chatId)
         let messageId = makeId("msg")
         let stored = try storeFile(filePath, as: messageId)
         let isImage = mime.hasPrefix("image/")
@@ -774,6 +835,10 @@ public actor FakeGimClient: GimClientAPI {
     // MARK: - Media
 
     public func fetchMedia(chatId: String, messageId: String, destPath: String) async throws -> String {
+        if let failure = fetchMediaFailure {
+            fetchMediaFailure = nil
+            throw failure
+        }
         guard let stored = media[Self.mediaKey(chatId: chatId, messageId: messageId)] else {
             throw GimError.NotFound(reason: "media \(messageId)")
         }
@@ -845,7 +910,7 @@ public actor FakeGimClient: GimClientAPI {
         _ chatId: String, messageId: String, content: MessageContent, replyTo: String?
     ) throws -> String {
         let session = try requireSession()
-        _ = try existingChat(chatId)
+        try requireJoined(chatId)
         let reply = try replyTo.map { try replyPreview(for: $0, in: chatId) }
         let item = MessageItem(
             messageId: messageId, chatId: chatId,
@@ -950,6 +1015,14 @@ public actor FakeGimClient: GimClientAPI {
     private func existingChat(_ chatId: String) throws -> StoredChat {
         guard let chat = chats[chatId] else { throw GimError.NotFound(reason: "chat \(chatId)") }
         return chat
+    }
+
+    /// gim-core's refusal while leaving (`BaseError::InvalidState` surfaces as `InvalidInput`).
+    private func requireJoined(_ chatId: String) throws {
+        _ = try existingChat(chatId)
+        if leavingChatIds.contains(chatId) {
+            throw GimError.InvalidInput(reason: "invalid state: leaving chat \(chatId)")
+        }
     }
 
     private func existingGroup(_ chatId: String, _ notGroupReason: String) throws -> StoredChat {

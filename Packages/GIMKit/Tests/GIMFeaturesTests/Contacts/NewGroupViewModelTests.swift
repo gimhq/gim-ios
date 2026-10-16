@@ -97,4 +97,21 @@ final class NewGroupViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.memberError, ErrorPresenter.message(for: GimError.NotRegistered))
         XCTAssertTrue(viewModel.members.isEmpty)
     }
+
+    @MainActor
+    func testCreateWithOnlyUnreachableInviteesShowsNotFound() async {
+        let (client, _) = await connected(makeDemoClient())
+        for (id, handle) in [("user-kai", "kai"), ("user-mia", "mia")] {
+            await client.addRemoteUser(UserProfile(userId: id, handle: handle, displayName: handle), hasDevice: false)
+        }
+        let viewModel = NewGroupViewModel(client: client)
+        viewModel.name = "Regatta"
+        await add("kai", to: viewModel)
+        await add("mia", to: viewModel)
+
+        let created = await viewModel.create()
+
+        XCTAssertNil(created)
+        XCTAssertEqual(viewModel.errorMessage, "None of these users could be found")
+    }
 }

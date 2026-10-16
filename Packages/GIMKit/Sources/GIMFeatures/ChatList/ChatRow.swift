@@ -19,7 +19,7 @@ public struct ChatRow: Sendable, Hashable, Identifiable {
     public init(summary: ChatSummary, dateFormatter: RelativeDateFormatter) {
         id = summary.chatId
         kind = summary.kind
-        title = summary.name
+        title = UserLabel.name(summary.name)
         avatar = summary.avatar
         preview = Self.preview(for: summary)
         time = summary.lastMessage.map { dateFormatter.string(from: Date(epochMilliseconds: $0.sentAtMs)) }
@@ -31,7 +31,7 @@ public struct ChatRow: Sendable, Hashable, Identifiable {
     public static func preview(for summary: ChatSummary) -> String? {
         guard let message = summary.lastMessage else { return nil }
         guard summary.kind == .group, !message.senderName.isEmpty else { return message.text }
-        return "\(message.senderName): \(message.text)"
+        return "\(UserLabel.name(message.senderName)): \(message.text)"
     }
 
     public static func unreadText(for count: UInt32) -> String? {

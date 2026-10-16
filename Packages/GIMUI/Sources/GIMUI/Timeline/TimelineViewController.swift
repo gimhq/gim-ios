@@ -365,7 +365,15 @@ public final class TimelineViewController: UIViewController, UICollectionViewDel
         switch row.body {
         case .image(let media, _, _, _):
             let fileName = Self.fileName(for: media, fileName: nil)
-            cell.onMediaTap = { [weak self] in self?.openMedia(media, fileName: fileName) }
+            let isUnavailable = row.isMediaUnavailable
+            cell.onMediaTap = { [weak self] in
+                // Retrying reloads the row, which fetches the image again.
+                if isUnavailable {
+                    self?.viewModel.retryMedia(messageId: messageId)
+                } else {
+                    self?.openMedia(media, fileName: fileName)
+                }
+            }
             let mediaSize = layout.media?.size ?? .zero
             let maxPixelSize = max(mediaSize.width, mediaSize.height) * traitCollection.displayScale
             let viewModel = viewModel
@@ -378,7 +386,7 @@ public final class TimelineViewController: UIViewController, UICollectionViewDel
                 {
                     cell?.setImage(image)
                 }
-                if let path = try? await viewModel.mediaFilePath(for: media, fileName: fileName),
+                if !isUnavailable, let path = try? await viewModel.mediaFilePath(for: media, fileName: fileName),
                     let image = await imageLoader.image(atPath: path, maxPixelSize: maxPixelSize),
                     !Task.isCancelled
                 {
@@ -386,7 +394,10 @@ public final class TimelineViewController: UIViewController, UICollectionViewDel
                 }
             }
         case .file(let media, let fileName, _, _):
-            cell.onMediaTap = { [weak self] in self?.openMedia(media, fileName: fileName) }
+            cell.onMediaTap = { [weak self] in
+                self?.viewModel.retryMedia(messageId: messageId)
+                self?.openMedia(media, fileName: fileName)
+            }
             cell.mediaTask = nil
         case .text, .placeholder:
             cell.onMediaTap = nil
@@ -408,6 +419,8 @@ public final class TimelineViewController: UIViewController, UICollectionViewDel
                 let path = try await viewModel.mediaFilePath(for: media, fileName: fileName)
                 self?.presentQuickLook(URL(fileURLWithPath: path))
             } catch {
+                // The cell offers a retry for temporary failures.
+                guard !TimelineViewModel.isTemporaryMediaFailure(error) else { return }
                 self?.presentError(ErrorPresenter.message(for: error))
             }
         }

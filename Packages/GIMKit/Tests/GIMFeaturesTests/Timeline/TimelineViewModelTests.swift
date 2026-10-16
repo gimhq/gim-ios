@@ -212,4 +212,72 @@ final class TimelineViewModelTests: XCTestCase {
         let thumbnail = await viewModel.thumbnailPath(for: image)
         XCTAssertNotNil(thumbnail)
     }
+
+    @MainActor
+    func testTemporaryMediaFailureOffersRetry() async throws {
+        let (client, _) = await connected(makeDemoClient())
+        let viewModel = await startedViewModel(client, chatId: FakeGimClient.demoDirectChatId)
+        func imageRow() -> TimelineMessageRow? {
+            viewModel.items.compactMap(\.messageRow).first { if case .image = $0.body { true } else { false } }
+        }
+        guard case .image(let media, _, _, _) = try XCTUnwrap(imageRow()).body else { return XCTFail("expected image") }
+        XCTAssertFalse(try XCTUnwrap(imageRow()).isMediaUnavailable)
+        await client.failNextFetchMedia(with: .RetryLater(status: 503, retryAfterSecs: 5, reason: "peer_unavailable"))
+
+        do {
+            _ = try await viewModel.mediaFilePath(for: media, fileName: nil)
+            XCTFail("expected the injected failure")
+        } catch {}
+
+        XCTAssertTrue(try XCTUnwrap(imageRow()).isMediaUnavailable)
+        XCTAssertEqual(viewModel.lastChange.reloadedIds, [TimelineDisplayItem.id(forMessage: media.messageId)])
+
+        viewModel.retryMedia(messageId: media.messageId)
+        XCTAssertFalse(try XCTUnwrap(imageRow()).isMediaUnavailable)
+        let path = try await viewModel.mediaFilePath(for: media, fileName: nil)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: path))
+    }
+
+    @MainActor
+    func testPermanentMediaFailureIsNotRetryable() async throws {
+        let (client, _) = await connected(makeDemoClient())
+        let viewModel = await startedViewModel(client, chatId: FakeGimClient.demoDirectChatId)
+        let media = MediaRef(
+            chatId: FakeGimClient.demoDirectChatId, messageId: "msg-unknown", mime: "image/png", size: 1,
+            hasThumbnail: false)
+
+        do {
+            _ = try await viewModel.mediaFilePath(for: media, fileName: nil)
+            XCTFail("expected NotFound")
+        } catch {
+            XCTAssertFalse(TimelineViewModel.isTemporaryMediaFailure(error))
+        }
+        XCTAssertFalse(viewModel.items.compactMap(\.messageRow).contains { $0.isMediaUnavailable })
+    }
+
+    func testTemporaryMediaFailures() {
+        XCTAssertTrue(
+            TimelineViewModel.isTemporaryMediaFailure(GimError.RetryLater(status: 503, retryAfterSecs: 1, reason: "")))
+        XCTAssertTrue(TimelineViewModel.isTemporaryMediaFailure(GimError.Server(status: 502, reason: "peer_refused")))
+        XCTAssertTrue(
+            TimelineViewModel.isTemporaryMediaFailure(GimError.Server(status: 503, reason: "peer_unavailable")))
+        XCTAssertFalse(TimelineViewModel.isTemporaryMediaFailure(GimError.Server(status: 500, reason: "")))
+        XCTAssertFalse(TimelineViewModel.isTemporaryMediaFailure(GimError.NotFound(reason: "media")))
+        XCTAssertFalse(TimelineViewModel.isTemporaryMediaFailure(GimError.Crypto(reason: "")))
+    }
+
+    @MainActor
+    func testRemoteMemberWithoutHandleIsNamed() async throws {
+        let (client, _) = await connected(makeDemoClient())
+        let chatId = FakeGimClient.demoGroupChatId
+        await client.addRemoteUser(UserProfile(userId: "user-marta-remote", handle: "", displayName: ""))
+        try await client.addMembers(chatId: chatId, userIds: ["user-marta-remote"])
+        let viewModel = await startedViewModel(client, chatId: chatId)
+        await eventually { viewModel.isGroup }
+
+        try await client.receiveText(chatId: chatId, from: "user-marta-remote", body: "Kalimera")
+        await eventually { viewModel.items.compactMap(\.messageRow).last?.senderName == "user-mar…" }
+        try await client.setPeerTyping(chatId: chatId, userId: "user-marta-remote", active: true)
+        await eventually { viewModel.typingText == "user-mar… is typing…" }
+    }
 }

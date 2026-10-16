@@ -8,6 +8,9 @@ import Observation
 public final class NewGroupViewModel {
     /// Members besides the current user.
     public static let minimumMembers = 2
+    /// `createGroupChat` and `addMembers` fail with `NotFound` when every invitee is unknown or has no device. Some
+    /// unknown invitees do not fail the call; the timeline reports each as removed.
+    public static let noneFoundMessage = "None of these users could be found"
 
     public var name = ""
     /// Handle typed into the "add member" field.
@@ -71,6 +74,9 @@ public final class NewGroupViewModel {
         do {
             return try await client.createGroupChat(
                 name: name.trimmingCharacters(in: .whitespacesAndNewlines), memberUserIds: members.map(\.userId))
+        } catch GimError.NotFound {
+            errorMessage = Self.noneFoundMessage
+            return nil
         } catch {
             errorMessage = ErrorPresenter.message(for: error)
             return nil

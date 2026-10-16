@@ -9,10 +9,15 @@ public struct GroupInfoScreen: View {
     @State private var viewModel: GroupInfoViewModel
     @State private var confirmsLeave = false
 
-    /// - Parameter onLeft: called after the user left the group.
-    public init(client: any GimClientAPI, chatId: String, onLeft: @escaping () -> Void = {}) {
+    /// - Parameters:
+    ///   - leavingChats: records the chat as leaving once the user left it.
+    ///   - onLeft: called after the user left the group.
+    public init(
+        client: any GimClientAPI, chatId: String, leavingChats: LeavingChats? = nil, onLeft: @escaping () -> Void = {}
+    ) {
         self.onLeft = onLeft
-        _viewModel = State(initialValue: GroupInfoViewModel(client: client, chatId: chatId))
+        _viewModel = State(
+            initialValue: GroupInfoViewModel(client: client, chatId: chatId, leavingChats: leavingChats))
     }
 
     public var body: some View {
@@ -46,7 +51,7 @@ public struct GroupInfoScreen: View {
             if hasLeft { onLeft() }
         }
         .confirmationDialog(
-            "Remove \(viewModel.pendingRemoval?.user.displayName ?? "member") from the group?",
+            "Remove \(viewModel.pendingRemoval.map { UserLabel.name(for: $0.user) } ?? "member") from the group?",
             isPresented: Binding(
                 get: { viewModel.pendingRemoval != nil },
                 set: { if !$0 { viewModel.cancelRemoval() } }),

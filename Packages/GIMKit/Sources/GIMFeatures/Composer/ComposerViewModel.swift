@@ -33,6 +33,7 @@ public final class ComposerViewModel {
 
     private let client: any GimClientAPI
     private let drafts: ComposerDrafts
+    private let leavingChats: LeavingChats?
     private let now: () -> Date
     /// When `setTyping(active: true)` was last sent; `nil` while the indicator is off.
     @ObservationIgnored private var typingSentAt: Date?
@@ -41,26 +42,34 @@ public final class ComposerViewModel {
     /// The draft to restore when an edit is cancelled.
     @ObservationIgnored private var draftBeforeEdit = ""
 
-    /// - Parameter now: clock for the typing throttle.
+    /// - Parameters:
+    ///   - leavingChats: the chats the user is leaving; the composer is disabled in them.
+    ///   - now: clock for the typing throttle.
     public init(
         client: any GimClientAPI, chatId: String, drafts: ComposerDrafts = ComposerDrafts(),
-        now: @escaping () -> Date = Date.init
+        leavingChats: LeavingChats? = nil, now: @escaping () -> Date = Date.init
     ) {
         self.client = client
         self.chatId = chatId
         self.drafts = drafts
+        self.leavingChats = leavingChats
         self.now = now
         text = drafts[chatId]
     }
 
+    /// The user is leaving the chat: gim-core refuses sends until the own `Left` change arrives.
+    public var isLeaving: Bool {
+        leavingChats?.contains(chatId) ?? false
+    }
+
     /// Whether the send button is enabled.
     public var canSend: Bool {
-        !isSending && !trimmedText.isEmpty
+        !isSending && !isLeaving && !trimmedText.isEmpty
     }
 
     /// Whether attachments can be sent; not while editing.
     public var canAttach: Bool {
-        !isSending && editTarget == nil
+        !isSending && !isLeaving && editTarget == nil
     }
 
     // MARK: - Input
@@ -141,7 +150,7 @@ public final class ComposerViewModel {
                 drafts[chatId] = ""
             }
         } catch {
-            errorMessage = ErrorPresenter.message(for: error)
+            fail(error)
         }
     }
 
@@ -163,7 +172,7 @@ public final class ComposerViewModel {
         } catch let error as MediaPreparationError {
             errorMessage = error.message
         } catch {
-            errorMessage = ErrorPresenter.message(for: error)
+            fail(error)
         }
         return false
     }
@@ -198,6 +207,12 @@ public final class ComposerViewModel {
     }
 
     // MARK: - Private
+
+    /// A send refused because the chat is leaving shows the leaving state instead of an error.
+    private func fail(_ error: any Error) {
+        guard leavingChats?.handleSendError(error, chatId: chatId) != true else { return }
+        errorMessage = ErrorPresenter.message(for: error)
+    }
 
     private nonisolated static func nonEmpty(_ value: String?) -> String? {
         value.flatMap { $0.isEmpty ? nil : $0 }
