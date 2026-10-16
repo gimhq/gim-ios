@@ -2,12 +2,18 @@ import Foundation
 import GIMClientKit
 import Security
 
-/// The secure store half of `PlatformHooks`: generic-password Keychain items that never leave this device.
+/// The secure store half of `PlatformHooks`: generic-password Keychain items in an access group shared with the
+/// Notification Service Extension, readable while the device is locked after the first unlock, never leaving this
+/// device.
 public final class KeychainSecureStorage: Sendable {
     private let service: String
+    private let accessGroup: String?
 
-    public init(service: String = "im.g.apps") {
+    /// - Parameter accessGroup: `kSecAttrAccessGroup` of every item; the App Group by default, which both targets
+    ///   list in their entitlements. `nil` uses the target's default access group.
+    public init(service: String = "im.g.apps", accessGroup: String? = AppGroup.identifier) {
         self.service = service
+        self.accessGroup = accessGroup
     }
 
     /// `nil` when the key does not exist. Throws `GimError.Storage` when the Keychain can't be read (e.g.
@@ -48,10 +54,11 @@ public final class KeychainSecureStorage: Sendable {
 
     /// Deletes every item of this service. Throws `GimError.Storage` when the Keychain rejects the delete.
     public func deleteAll() throws {
-        let query: [String: Any] = [
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
         ]
+        query[kSecAttrAccessGroup as String] = accessGroup
         let status = SecItemDelete(query as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw GimError.Storage(reason: "Keychain delete failed with status \(status)")
@@ -59,10 +66,12 @@ public final class KeychainSecureStorage: Sendable {
     }
 
     private func baseQuery(key: String) -> [String: Any] {
-        [
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: key,
         ]
+        query[kSecAttrAccessGroup as String] = accessGroup
+        return query
     }
 }

@@ -13,6 +13,9 @@ class E2ETestCase: XCTestCase {
     let serverUrl = ProcessInfo.processInfo.environment["GIM_E2E_SERVER_URL"] ?? "http://127.0.0.1:8080"
     /// For every step that waits on the hub or the other client.
     let networkTimeout: TimeInterval = 30
+    /// Shows the notification authorization alert, the notifications and the home screen.
+    @MainActor
+    var springboard: XCUIApplication { XCUIApplication(bundleIdentifier: "com.apple.springboard") }
 
     /// Launches the app with `serverUrl` as the default server and signs out a leftover session, so onboarding is
     /// in front.
@@ -64,7 +67,20 @@ class E2ETestCase: XCTestCase {
                 ? ""
                 : "\(step): chat list visible after claiming the handle (onboarding errors: \(onboardingErrors(app)))",
             app)
+        allowNotificationsIfAsked()
         return recoveryCode
+    }
+
+    /// Taps Allow when the notification authorization alert, which the app shows after its first sign-in on a
+    /// simulator, appears within `timeout`. Returns whether it appeared.
+    @MainActor
+    @discardableResult
+    func allowNotificationsIfAsked(timeout: TimeInterval = 5) -> Bool {
+        let allow = springboard.alerts.buttons["Allow"]
+        guard allow.waitForExistence(timeout: timeout) else { return false }
+        print("[e2e] allowing notifications")
+        allow.tap()
+        return true
     }
 
     /// Creates a group from the chat list with `members` (added by handle) and waits for its conversation.

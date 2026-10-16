@@ -1,5 +1,6 @@
 import GIMClientKit
 import GIMFeatures
+import GIMPlatform
 import SwiftUI
 
 /// Onboarding: the server address and the choice between creating, linking and restoring an identity; after the
