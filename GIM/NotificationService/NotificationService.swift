@@ -2,7 +2,10 @@ import Foundation
 import GIMClientKit
 import GIMFeatures
 import GIMPlatform
+import OSLog
 import UserNotifications
+
+private let log = Logger(subsystem: "im.g.apps.nse", category: "push")
 
 /// Shows the decrypted content of a push. gim-core processes the hub's payload with an extension-mode client on the
 /// App Group's data directory and the server the app last used (`PushNotificationHandler`); the client is released
@@ -17,12 +20,17 @@ final class NotificationService: UNNotificationServiceExtension {
         let delivery = Delivery(contentHandler)
         self.delivery = delivery
         let payload = PushNotificationHandler.payload(from: request.content.userInfo)
+        log.info("didReceive \(request.identifier, privacy: .public), payload: \(payload != nil)")
         let handler = PushNotificationHandler(
             factory: RealGimClientFactory(),
             makeHooks: { AppPlatformHooks(dataDirectory: try AppDirectories.dataDirectory.path) },
-            serverUrl: AppGroup.defaults.string(forKey: AppGroup.serverUrlKey))
+            serverUrl: AppGroup.defaults.string(forKey: AppGroup.serverUrlKey),
+            onFailure: { log.error("generic content: \($0, privacy: .public)") })
         Task {
             let presentation = await handler.presentation(payload: payload)
+            log.info(
+                "delivering kind=\(String(describing: presentation.kind), privacy: .public) displayed=\(presentation.isDisplayed)"
+            )
             if let collapseId = presentation.collapseId {
                 await Self.removeDelivered(collapseId: collapseId)
             }
@@ -33,6 +41,7 @@ final class NotificationService: UNNotificationServiceExtension {
 
     /// The best attempt: the generic content.
     override func serviceExtensionTimeWillExpire() {
+        log.error("time expired, delivering the generic content")
         delivery?.deliver(.generic)
     }
 
@@ -48,10 +57,15 @@ final class NotificationService: UNNotificationServiceExtension {
     }
 
     private static func logMetrics(started: Date, kind: NotificationKind) {
-        guard let container = try? AppGroup.containerURL else { return }
-        let log = PushMetricsLog(url: container.appendingPathComponent("gim-nse.log"))
-        _ = try? log.append(
-            footprintBytes: physicalFootprint(), elapsedMs: Int(Date().timeIntervalSince(started) * 1000), kind: kind)
+        do {
+            let metrics = PushMetricsLog(url: try AppGroup.containerURL.appendingPathComponent("gim-nse.log"))
+            let line = try metrics.append(
+                footprintBytes: physicalFootprint(), elapsedMs: Int(Date().timeIntervalSince(started) * 1000),
+                kind: kind)
+            log.info("\(line, privacy: .public)")
+        } catch {
+            log.error("metrics not written: \(String(describing: error), privacy: .public)")
+        }
     }
 
     /// The process's peak `phys_footprint` (the figure the extension's memory limit applies to), or the current one

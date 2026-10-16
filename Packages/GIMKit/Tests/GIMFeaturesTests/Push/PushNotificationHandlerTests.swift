@@ -105,6 +105,20 @@ final class PushNotificationHandlerTests: XCTestCase {
         XCTAssertEqual(factory.configs, [ClientConfig(serverUrl: "https://gim.example.eu", mode: .extension)])
     }
 
+    func testFailuresAreReported() async {
+        let failures = FailureLog()
+        let directory = makeTemporaryDirectory()
+        let handler = PushNotificationHandler(
+            factory: RecordingFactory { _ in throw GimError.Storage(reason: "store is locked by another process") },
+            makeHooks: { TestHooks(dataDir: directory) }, serverUrl: "https://gim.example.eu",
+            onFailure: { failures.append($0) })
+        _ = await handler.presentation(payload: "{}")
+        _ = await handler.presentation(payload: nil)
+        XCTAssertEqual(failures.lines.count, 2)
+        XCTAssertTrue(failures.lines[0].contains("store is locked"), failures.lines[0])
+        XCTAssertEqual(failures.lines[1], "no gim payload")
+    }
+
     func testAFailingClientGivesGenericContent() async {
         let (handler, _) = makeHandler { _ in
             throw GimError.Storage(reason: "store is locked by another process")
@@ -131,4 +145,13 @@ final class PushNotificationHandlerTests: XCTestCase {
         XCTAssertEqual(noPayload, .generic)
         XCTAssertEqual(factory.configs, [])
     }
+}
+
+private final class FailureLog: @unchecked Sendable {
+    private let lock = NSLock()
+    private var recorded: [String] = []
+
+    var lines: [String] { lock.withLock { recorded } }
+
+    func append(_ line: String) { lock.withLock { recorded.append(line) } }
 }

@@ -58,17 +58,20 @@ public struct PushNotificationHandler: Sendable {
     private let factory: any GimClientFactory
     private let makeHooks: @Sendable () throws -> any PlatformHooks
     private let serverUrl: String?
+    private let onFailure: @Sendable (String) -> Void
 
     /// - Parameters:
     ///   - makeHooks: the platform hooks on the App Group container, made per push.
     ///   - serverUrl: the app's last used server; `nil` before the first sign-in.
+    ///   - onFailure: why the content is generic, e.g. for the system log.
     public init(
         factory: any GimClientFactory, makeHooks: @escaping @Sendable () throws -> any PlatformHooks,
-        serverUrl: String?
+        serverUrl: String?, onFailure: @escaping @Sendable (String) -> Void = { _ in }
     ) {
         self.factory = factory
         self.makeHooks = makeHooks
         self.serverUrl = serverUrl
+        self.onFailure = onFailure
     }
 
     /// The payload under `payloadKey` as JSON text (a JSON object, as `simctl push` delivers it, or a string).
@@ -84,12 +87,20 @@ public struct PushNotificationHandler: Sendable {
     /// `NotificationPresentation.generic` when there is no payload or server, or when creating the client (e.g. a
     /// missing database key, or `Storage` after a store lock timeout) or processing the push fails.
     public func presentation(payload: String?) async -> NotificationPresentation {
-        guard let payload, let serverUrl else { return .generic }
+        guard let payload else {
+            onFailure("no \(Self.payloadKey) payload")
+            return .generic
+        }
+        guard let serverUrl else {
+            onFailure("no server URL in the shared defaults")
+            return .generic
+        }
         do {
             let client = try await factory.make(
                 config: ClientConfig(serverUrl: serverUrl, mode: .extension), hooks: makeHooks())
             return NotificationPresentation(try await client.processPush(payload: payload))
         } catch {
+            onFailure("\(error)")
             return .generic
         }
     }
