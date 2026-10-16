@@ -1,13 +1,15 @@
 import Foundation
 import GIMClientKit
 import GIMFeatures
+import GIMPlatform
 import Observation
 import SwiftUI
 
 /// Owns the client and decides whether the app shows onboarding or the signed-in UI.
 ///
 /// The server URL is part of `ClientConfig`, so the client is created for the last used server (stored in
-/// `defaults`) or by onboarding for the URL the user types. Sync runs while the scene is active. Signing out drops
+/// `defaults`, the App Group's by default, where the Notification Service Extension reads it too) or by onboarding for
+/// the URL the user types. Sync runs while the scene is active. Signing out drops
 /// the client; onboarding creates a new one. Every client created through the factory gets the system time zone
 /// for its date separators (`TimeZoneMonitor`), also when it changes.
 @MainActor
@@ -19,7 +21,7 @@ public final class AppModel {
         case ready(any GimClientAPI)
     }
 
-    public static let serverUrlKey = "gim.serverUrl"
+    public static let serverUrlKey = AppGroup.serverUrlKey
     /// Launch argument (`-GIMDefaultServerURL <url>`) and Info.plist key (`GIM_DEFAULT_SERVER_URL` build setting)
     /// for the server pre-filled when no server was used yet.
     public nonisolated static let defaultServerUrlKey = "GIMDefaultServerURL"
@@ -37,11 +39,14 @@ public final class AppModel {
     /// launching.
     public private(set) var launchError: String?
     public private(set) var onboarding: OnboardingViewModel?
+    /// Debug builds: sync stays stopped while the scene is active (`holdSync`).
+    public private(set) var isSyncHeld = false
 
     private let factory: any GimClientFactory
     private let defaults: UserDefaults
     private let bundledServerUrl: String?
     private let makeHooks: @MainActor () throws -> any PlatformHooks
+    private let signedIn: @MainActor (any GimClientAPI) async -> Void
     @ObservationIgnored private var hooks: (any PlatformHooks)?
     @ObservationIgnored private var client: (any GimClientAPI)?
     @ObservationIgnored private var isActive = false
@@ -54,17 +59,21 @@ public final class AppModel {
     ///   - bundledServerUrl: the Info.plist `defaultServerUrlKey` value.
     ///   - makeHooks: builds the platform hooks handed to the factory (once per process).
     ///   - timeZones: sets the system time zone on each new client and on time zone changes.
+    ///   - signedIn: called with the client after each sign-in and at launch when signed in, e.g.
+    ///     `AppNotifications.signedIn`.
     public init(
         factory: any GimClientFactory = AppModel.defaultFactory(),
-        defaults: UserDefaults = .standard,
+        defaults: UserDefaults = AppGroup.defaults,
         bundledServerUrl: String? = Bundle.main.object(forInfoDictionaryKey: AppModel.defaultServerUrlKey) as? String,
         makeHooks: @escaping @MainActor () throws -> any PlatformHooks = AppModel.defaultHooks,
-        timeZones: TimeZoneMonitor = TimeZoneMonitor()
+        timeZones: TimeZoneMonitor = TimeZoneMonitor(),
+        signedIn: @escaping @MainActor (any GimClientAPI) async -> Void = { _ in }
     ) {
         self.factory = TimeZoneAttachingFactory(base: factory, timeZones: timeZones)
         self.defaults = defaults
         self.bundledServerUrl = bundledServerUrl
         self.makeHooks = makeHooks
+        self.signedIn = signedIn
     }
 
     /// gim-core (`RealGimClientFactory`); in debug builds the `useFakeCoreKey` launch argument selects the demo
@@ -79,8 +88,11 @@ public final class AppModel {
         return RealGimClientFactory()
     }
 
+    /// The data directory and Keychain items are shared with the Notification Service Extension through the App
+    /// Group; the data directory from before the App Group is removed.
     public static func defaultHooks() throws -> any PlatformHooks {
-        AppPlatformHooks(dataDirectory: try AppDirectories.dataDirectory.path)
+        AppDirectories.removeLegacyDataDirectory()
+        return AppPlatformHooks(dataDirectory: try AppDirectories.dataDirectory.path)
     }
 
     /// Creates the client for the last used server and routes by its session. Safe to call again after a launch
@@ -125,6 +137,15 @@ public final class AppModel {
         }
         await updateSync()
     }
+
+    #if DEBUG
+        /// Debug builds: stops sync and keeps it stopped while `held`, even when the scene becomes active; releasing
+        /// starts it again if the scene is active. For `DebugPushURL.holdSyncURL`.
+        public func holdSync(_ held: Bool) async {
+            isSyncHeld = held
+            await updateSync()
+        }
+    #endif
 
     /// Signs out, wipes the platform keystore and data directory (`PlatformWiping`), drops the client and returns to
     /// onboarding. Returns the error text when signing out or wiping fails; a failed wipe still returns to onboarding.
@@ -188,11 +209,12 @@ public final class AppModel {
         onboarding = nil
         phase = .ready(client)
         Task { await updateSync() }
+        Task { await signedIn(client) }
     }
 
     private func updateSync() async {
-        guard let client, session != nil, isActive != isSyncing else { return }
-        let start = isActive
+        let start = isActive && !isSyncHeld
+        guard let client, session != nil, start != isSyncing else { return }
         isSyncing = start
         do {
             if start {

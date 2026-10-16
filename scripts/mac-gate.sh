@@ -12,10 +12,12 @@
 # `e2e-hub.sh fed-start` for HubsSmokeTests, which is skipped without it). With --push-mock-url (`e2e-hub.sh push-url`)
 # a helper on the Mac hands every new mock-ios-sim delivery of that push mock to `xcrun simctl push` on the run's
 # simulator while GIMUITests run (logged to push-helper.log), and the tests get the URL as
-# TEST_RUNNER_GIM_E2E_PUSH_MOCK_URL. Raw xcodebuild logs, the xcbeautify output, the
-# `[e2e-summary]` line and the zipped xcresult bundles are copied to .tmp/mac/<short sha>/. Prints one
-# `[mac-gate] ...` summary line and exits non-zero on any failure. The Mac work dir is removed on success and kept on
-# failure or with --keep.
+# TEST_RUNNER_GIM_E2E_PUSH_MOCK_URL. The tests allow the app's notification authorization alert (E2ETestCase). Raw
+# xcodebuild logs, the xcbeautify output, the `[e2e-summary]` line, the Notification Service Extension's metrics
+# (gim-nse.log from the App Group container, as nse.log), the simulator's notification log of the last 30 min
+# (sim-push.log) and the zipped xcresult bundles are copied to .tmp/mac/<short sha>/. Prints one `[mac-gate] ...`
+# summary line and exits non-zero on any failure. The Mac work dir is removed on success and kept on failure or with
+# --keep.
 set -euo pipefail
 
 usage() {
@@ -235,8 +237,19 @@ if [ "$mode" = e2e ] && [ "$build" = ok ]; then
         TEST_RUNNER_GIM_E2E_PUSH_MOCK_URL=$push_mock_url run e2e xcodebuild test -project GIM.xcodeproj -scheme GIM \
         -only-testing:GIMUITests -destination "$destination" -derivedDataPath "$derived" \
         -resultBundlePath "$results/GIM-e2e.xcresult" $signing && e2e=ok
+    # Whether the Notification Service Extension ran: its own log and the notification pipeline (sim-push.log).
+    predicate="process CONTAINS \"GIMNotificationService\" OR subsystem CONTAINS \"usernotifications\""
+    predicate="$predicate OR subsystem == \"im.g.apps.nse\""
+    predicate="$predicate OR (process == \"CoreSimulatorBridge\" AND subsystem == \"com.apple.UserNotifications\")"
+    xcrun simctl spawn "$sim" log show --last 30m --style compact --predicate "$predicate" >"$out/sim-push.log" 2>&1
     grep -o "\[e2e-summary\].*" "$out/e2e.log" >"$out/e2e-summary.txt"
     cat "$out/e2e-summary.txt"
+    if group=$(xcrun simctl get_app_container "$sim" im.g.apps group.im.g.apps 2>/dev/null) \
+        && cp "$group/gim-nse.log" "$out/nse.log" 2>/dev/null; then
+        echo "[mac-gate] nse.log: $(wc -l <"$out/nse.log" | tr -d " ") pushes"
+    else
+        echo "[mac-gate] no gim-nse.log in the App Group container" | tee "$out/nse.log"
+    fi
 fi
 
 for bundle in "$results"/*.xcresult; do

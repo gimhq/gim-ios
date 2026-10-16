@@ -1,6 +1,7 @@
 import Foundation
 import GIMClientKit
 import GIMFeatures
+import GIMPlatform
 import SwiftUI
 import XCTest
 
@@ -367,6 +368,61 @@ final class AppModelTests: XCTestCase {
         await model.scenePhaseChanged(.background)
         let offline = await states.next()
         XCTAssertEqual(offline, .offline)
+    }
+
+    @MainActor
+    func testHeldSyncStaysStoppedWhileActiveUntilReleased() async throws {
+        let session = session
+        let scheduler = ManualFakeScheduler()
+        let client = FakeGimClient(scheduler: scheduler, session: session)
+        let defaults = makeDefaults()
+        defaults.set("https://gim.example.eu", forKey: AppModel.serverUrlKey)
+        let model = makeModel(factory: ClientFactory(client), defaults: defaults)
+        await model.start()
+        var states = try await ListenerBridge.connectionState(client).makeAsyncIterator()
+        _ = await states.next()
+        await model.scenePhaseChanged(.active)
+        let connecting = await states.next()
+        XCTAssertEqual(connecting, .connecting)
+        // A started sync schedules its connection steps.
+        let scheduled = scheduler.pendingCount
+
+        await model.holdSync(true)
+        XCTAssertTrue(model.isSyncHeld)
+        let held = await states.next()
+        XCTAssertEqual(held, .offline)
+        await model.scenePhaseChanged(.background)
+        await model.scenePhaseChanged(.active)
+        XCTAssertEqual(scheduler.pendingCount, scheduled, "no sync started while held")
+
+        await model.holdSync(false)
+        XCTAssertFalse(model.isSyncHeld)
+        let resumed = await states.next()
+        XCTAssertEqual(resumed, .connecting)
+        XCTAssertGreaterThan(scheduler.pendingCount, scheduled)
+    }
+
+    @MainActor
+    func testSignedInHookRunsAtLaunchAndAfterEachSignIn() async throws {
+        let launched = FakeGimClient(session: session)
+        let factory = ClientFactory(launched, FakeGimClient())
+        let defaults = makeDefaults()
+        defaults.set("https://gim.example.eu", forKey: AppModel.serverUrlKey)
+        var signedIn: [ObjectIdentifier] = []
+        let hooks = MemoryHooks()
+        let model = AppModel(
+            factory: factory, defaults: defaults, bundledServerUrl: nil, makeHooks: { hooks },
+            signedIn: { signedIn.append(ObjectIdentifier($0)) })
+
+        await model.start()
+        for _ in 0..<100 where signedIn.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertEqual(signedIn, [ObjectIdentifier(launched)])
+
+        _ = await model.signOut()
+        try await register(try XCTUnwrap(model.onboarding))
+        for _ in 0..<100 where signedIn.count < 2 { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertEqual(signedIn.count, 2)
+        XCTAssertNotEqual(signedIn.last, ObjectIdentifier(launched))
     }
 
     @MainActor

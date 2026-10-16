@@ -6,10 +6,11 @@ vendored as `Vendor/GIMCore` (UniFFI bindings + `GIMCore.xcframework.zip`, versi
 
 ## Layout
 
-- `GIM/` — app target.
+- `GIM/` — app target; `GIM/NotificationService` — the Notification Service Extension (`im.g.apps.nse`).
 - `Packages/GIMKit` — Foundation-only, builds and tests on Linux: `GIMClientKit` (mirror of the gim-core API and
   `FakeGimClient`) and `GIMFeatures` (ViewModels).
-- `Packages/GIMUI` — SwiftUI/UIKit views, platform hooks and the `Bridge` from `GIMCore` to the mirror.
+- `Packages/GIMUI` — `GIMUI` (SwiftUI/UIKit views) and `GIMPlatform` (platform hooks and the `Bridge` from `GIMCore`
+  to the mirror, without SwiftUI, which the extension links).
 - `docs/gim-core-mapping.md` — how the mirror maps to the generated gim-core API.
 
 ## Build
@@ -30,6 +31,49 @@ The app uses gim-core by default. Debug builds run against the in-memory `FakeGi
 
 Onboarding pre-fills the last used server, else the `-GIMDefaultServerURL <url>` launch argument, else the
 `GIM_DEFAULT_SERVER_URL` build setting (Debug: `http://localhost:8080`, Release: empty).
+
+## Push
+
+There is no APNs or FCM yet. Pushes travel hub webhook → gim-push-mock → a helper on the Mac → `xcrun simctl push`
+(provider `mock-ios-sim`, see `scripts/mac-gate.sh e2e --push-mock-url`). The `aps` alert of such a push is the mock's
+placeholder (`New message`, `mutable-content: 1`); the hub's payload is under `gim`.
+
+- Shared state: the app and the extension share the App Group `group.im.g.apps`. gim-core's data directory is
+  `<group container>/gim`, the Keychain items use the App Group as their access group with
+  `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` (readable while locked after the first unlock, not in backups), and the last used server is in the group's `UserDefaults`. Moving the data
+  directory there reset the local state once: the old `Application Support/gim` is removed, not migrated.
+- App: after each sign-in and at launch when signed in it asks for notification authorization (alert, sound, badge)
+  and, when the Info.plist `GIMPushProvider` is `mock-ios-sim` (`GIM_PUSH_PROVIDER`, Debug; empty in Release, which
+  registers nothing), registers a random token `sim-<uuid>` kept in the group's defaults (`PushRegistrar`). Sign-out
+  unregisters in gim-core. The app shows no notifications in the foreground; its sync updates the UI.
+- Extension: creates a client in `extension` mode per push, calls `processPush` and shows the result
+  (`PushNotificationHandler`): title = chat title, or "<sender> in <chat>" when the sender's name differs from the chat
+  title (groups), body = gim-core's body, thread = chat id, `userInfo["collapseId"]`; delivered notifications with the
+  same collapse id are removed first. An invitation (`invite`: gim-core joined the chat while processing the push) shows
+  title = the group name and body "<inviter> added you" (the inviter's name, or their handle until their profile is
+  known). If gim-core says not to display it (`shouldDisplay` false: own messages, receipts, member changes, messages
+  already read), the extension delivers empty content; since the hub coalesces pushes, an alert-priority push may
+  legitimately end silent this way. "New message" only appears when gim-core returns `generic`, and for any failure or
+  running out of time. Each push appends
+  `nse seq=<n> footprint_bytes=<peak phys_footprint> elapsed_ms=<ms> kind=<kind>` to `<group container>/gim-nse.log`
+  (copied back by the Mac gate as `nse.log`).
+- Simulator: `simctl push` does not launch Notification Service Extensions on the iOS 27 simulator. CoreSimulatorBridge
+  injects the notification through `UNUserNotificationCenter`, so Springboard shows the mock's alert ("New message")
+  and `gim-nse.log` stays empty there (the metrics are for devices). Debug builds with `GIMPushProvider`
+  `mock-ios-sim` therefore have a debug entry point, the URL scheme `gim-debug://process-push?payload=<base64url JSON>`
+  (`DebugPushURL`; the UI tests open it with `XCUIApplication.open(_:)`). It runs the extension's
+  `PushNotificationHandler` in-app with an extension-mode client on the App Group directory, next to the app's own
+  client (gim-core's `flock` on `gim.lock` serializes the two clients as it does two processes). It shows the result
+  in a sheet (`debug.push.title`, `.body`, `.shouldDisplay`, `.kind`) and posts it as a local notification 5 s later.
+  `PushSmokeTests` steps e and g pass it the delivery's `simctl.payload.gim`. `gim-debug://hold-sync` first stops the
+  app's sync until the next such push has been processed (`debug.sync.held` shows meanwhile), so a push is processed as
+  by the extension while the app is suspended; step g uses it so that the app's own sync, resumed by the activation,
+  cannot join the new group before the extension-mode client does. Release builds compile none of it; their URL
+  type has an empty scheme. Launching the extension process and measuring its ~24 MB footprint need a device with
+  APNs and are deferred.
+- The extension has the `com.apple.developer.usernotifications.filtering` entitlement so that empty content hides the
+  notification. On devices Apple must approve it for the team before such builds can be signed; the simulator does
+  not check it.
 
 ## Refreshing gim-core
 
