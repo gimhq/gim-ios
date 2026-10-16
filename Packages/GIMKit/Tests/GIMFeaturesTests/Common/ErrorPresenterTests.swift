@@ -33,7 +33,7 @@ final class ErrorPresenterTests: XCTestCase {
             (.ChatNotActive(chatId: "h/g1", state: .leaving), "You're leaving this chat."),
             (
                 .HubNotVerified(reason: "audience_url_mismatch"),
-                "This server couldn't prove it is the hub at this address. Check the address and try again."
+                "This hub couldn't prove it is reachable at this address. Check the address and try again."
             ),
             (.HubOwnsGroups(hubId: "h2", groupCount: 3), "This hub hosts 3 groups you own."),
             (.HubOwnsGroups(hubId: "h2", groupCount: 1), "This hub hosts 1 group you own."),
@@ -41,7 +41,7 @@ final class ErrorPresenterTests: XCTestCase {
             (.HomeHub(hubId: "h1"), "This device's home hub can't be removed. Make another hub primary instead."),
             (
                 .HubNotDrained(hubId: "h2", reason: "1 messages and 0 commits not acknowledged yet"),
-                "Messages sent through this hub are still on their way. Try again in a moment."
+                "Messages sent through this hub are still on their way. Try again later."
             ),
         ]
         for (error, message) in cases {
