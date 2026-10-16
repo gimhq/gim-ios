@@ -14,7 +14,8 @@ class E2ETestCase: XCTestCase {
     /// For every step that waits on the hub or the other client.
     let networkTimeout: TimeInterval = 30
     /// Shows the notification authorization alert, the notifications and the home screen.
-    let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+    @MainActor
+    var springboard: XCUIApplication { XCUIApplication(bundleIdentifier: "com.apple.springboard") }
 
     /// Launches the app with `serverUrl` as the default server and signs out a leftover session, so onboarding is
     /// in front.
