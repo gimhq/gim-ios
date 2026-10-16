@@ -2,8 +2,8 @@ import GIMCore
 import XCTest
 
 /// End-to-end chat state against a running gim-hub (`scripts/e2e-hub.sh start`): the app leaves a group (Leaving…
-/// until a scripted peer's sync commits the removal, then left), and a peer removes the app's user while the app is
-/// in the background (sync stopped). See `E2ETestCase` for the hub URL.
+/// while the scripted peers' sync is paused, left once a peer's sync commits the removal), and a peer removes the
+/// app's user while the app is in the background (sync stopped). See `E2ETestCase` for the hub URL.
 final class ChatStateSmokeTests: E2ETestCase {
     private let summary = StepSummary("ChatStateSmokeTests", steps: ["a", "b", "c", "d", "e", "f"])
     /// How step e's send went, for the summary line: "rejected" (the hub rejected it and it shows Not sent), "refused"
@@ -58,20 +58,22 @@ final class ChatStateSmokeTests: E2ETestCase {
 
         summary.start("c")
         try XCTContext.runActivity(named: "step c: app leaves, conversation shows Leaving…") { _ in
+            // gim-core members commit a leave Proposal during sync; with both peers paused the app stays leaving.
+            for member in [peer, bystander] {
+                try waitForPeer("step c: \(member.session.handle) pauses sync", app) { try await member.pauseSync() }
+            }
             try leaveGroup("step c", app)
-            // The peers commit quickly, so Leaving… may already have turned into the left banner.
-            let banner = readOnlyBanner(app)
-            try require(banner.waitForExistence(timeout: networkTimeout), "step c: read-only banner", app)
-            print("[e2e] step c: banner after leaving: '\(banner.label)'")
-            try require(
-                banner.label.contains("Leaving…") || banner.label.contains("You can no longer send"),
-                "step c: banner says Leaving…, found '\(banner.label)'", app)
+            try waitForLabel(readOnlyBanner(app), containing: "Leaving…", "step c: Leaving… banner", app)
             try require(!app.textViews["composer.text"].exists, "step c: composer hidden while leaving", app)
+            try require(!app.buttons["composer.send"].exists, "step c: no send button while leaving", app)
         }
         summary.finish("c")
 
         summary.start("d")
         try XCTContext.runActivity(named: "step d: a peer commits the removal, the chat is left") { _ in
+            for member in [peer, bystander] {
+                try waitForPeer("step d: \(member.session.handle) resumes sync", app) { try await member.resumeSync() }
+            }
             try waitForLabel(
                 readOnlyBanner(app), containing: "You can no longer send messages in this chat.",
                 timeout: commitTimeout, "step d: left banner after a peer committed the leave", app)

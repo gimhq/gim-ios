@@ -2,7 +2,8 @@ import XCTest
 
 /// Chat state and failed sends against the demo client (`-GIMUseFakeCore YES`), no hub needed: a send the hub rejects
 /// for good (403 `not_member`, armed with `-GIMFakeRejectFirstSend YES`) shows Not sent at once with Retry and Delete,
-/// and leaving a group shows Leaving… and then the left banner.
+/// and leaving a group ends in the left banner. The demo client commits a leave after 2 s, often before the UI can be
+/// checked, so Leaving… is checked against the hub (ChatStateSmokeTests step c).
 ///
 /// The real hub has no deterministic way to make a send fail with a 4xx: the app learns a removal from sync as soon
 /// as it runs, and only a send that races sync gets the rejection (ChatStateSmokeTests step e accepts both outcomes).
@@ -50,10 +51,10 @@ final class ChatStateFakeTests: E2ETestCase {
         summary.finish("b")
 
         summary.start("c")
-        try XCTContext.runActivity(named: "step c: leaving shows Leaving…, then the left banner") { _ in
+        try XCTContext.runActivity(named: "step c: leaving ends in the left banner") { _ in
             try leaveGroup("step c", app)
-            try waitForLabel(readOnlyBanner(app), containing: "Leaving…", "step c: Leaving… banner", app)
-            try require(!app.textViews["composer.text"].exists, "step c: composer hidden while leaving", app)
+            try require(readOnlyBanner(app).waitForExistence(timeout: networkTimeout), "step c: read-only banner", app)
+            try require(!app.textViews["composer.text"].exists, "step c: composer hidden", app)
             try waitForLabel(
                 readOnlyBanner(app), containing: "You can no longer send messages in this chat.",
                 "step c: left banner", app)

@@ -82,6 +82,16 @@ final class ScriptedPeer: Sendable {
     func removeMember(chatId: String, userId: String) async throws {
         try await client.removeMember(chatId: chatId, userId: userId)
     }
+
+    /// Pauses sync: the peer neither receives events nor commits pending Proposals (such as a leave) until
+    /// `resumeSync()`.
+    func pauseSync() async throws {
+        try await client.stopSync()
+    }
+
+    func resumeSync() async throws {
+        try await client.startSync()
+    }
 }
 
 /// A fresh gim-core client in the UI test runner that links itself as a new device of the app's user: it plays the
