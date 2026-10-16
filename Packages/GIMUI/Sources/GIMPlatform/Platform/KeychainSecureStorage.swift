@@ -3,7 +3,8 @@ import GIMClientKit
 import Security
 
 /// The secure store half of `PlatformHooks`: generic-password Keychain items in an access group shared with the
-/// Notification Service Extension, readable while the device is locked after the first unlock.
+/// Notification Service Extension, readable while the device is locked after the first unlock, never leaving this
+/// device.
 public final class KeychainSecureStorage: Sendable {
     private let service: String
     private let accessGroup: String?
@@ -34,7 +35,7 @@ public final class KeychainSecureStorage: Sendable {
     public func secureStoreSet(key: String, value: Data) throws {
         let attributes: [String: Any] = [
             kSecValueData as String: value,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
         ]
         var status = SecItemUpdate(baseQuery(key: key) as CFDictionary, attributes as CFDictionary)
         if status == errSecItemNotFound {

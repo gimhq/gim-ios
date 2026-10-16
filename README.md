@@ -40,7 +40,7 @@ placeholder (`New message`, `mutable-content: 1`); the hub's payload is under `g
 
 - Shared state: the app and the extension share the App Group `group.im.g.apps`. gim-core's data directory is
   `<group container>/gim`, the Keychain items use the App Group as their access group with
-  `kSecAttrAccessibleAfterFirstUnlock`, and the last used server is in the group's `UserDefaults`. Moving the data
+  `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` (readable while locked after the first unlock, not in backups), and the last used server is in the group's `UserDefaults`. Moving the data
   directory there reset the local state once: the old `Application Support/gim` is removed, not migrated.
 - App: after each sign-in and at launch when signed in it asks for notification authorization (alert, sound, badge)
   and, when the Info.plist `GIMPushProvider` is `mock-ios-sim` (`GIM_PUSH_PROVIDER`, Debug; empty in Release, which
