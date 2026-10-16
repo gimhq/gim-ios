@@ -28,7 +28,9 @@ import Synchronization
 /// Push: `registerPush` keeps the registration (`pushRegistration`) until `unregisterPush` or `signOut`.
 /// `processPush` understands `{"type":"message","chat_id":…,"body":…}` (a displayed `message`); any other JSON
 /// object gives the generic content (`New message`, displayed). With `ClientMode.extension`, like gim-core,
-/// `startSync` throws `InvalidInput` and `registerPush`/`unregisterPush` do nothing.
+/// `startSync` and `signOut` throw `InvalidInput` and `registerPush`/`unregisterPush` do nothing. A sign-out deletes
+/// the local store of its data directory for every client created before it: their `processPush` then throws
+/// `Storage("the local store was deleted by sign-out")`.
 public actor FakeGimClient: GimClientAPI {
     struct Reaction: Sendable {
         var emoji: String
@@ -131,8 +133,13 @@ public actor FakeGimClient: GimClientAPI {
     public static let fakeOtherDeviceId = "device-tablet"
     static let linkQrPrefix = "gim-link:fake:"
 
+    /// Sign-outs per data directory, like the counter in gim-core's `gim.lock`.
+    private static let signOuts = Mutex<[String: Int]>([:])
+
     private let options: Options
     private let seedsDemoOnRegister: Bool
+    /// `signOuts` of the data directory when the client was created.
+    private let signOutsAtCreation: Int
     private let reachabilityUpdates: AsyncStream<Bool>.Continuation
     private let timeZoneUpdates: AsyncStream<(any LocalTimeZone)?>.Continuation
 
@@ -223,6 +230,7 @@ public actor FakeGimClient: GimClientAPI {
     init(options: Options, seed: Seed, seedsDemoOnRegister: Bool) {
         self.options = options
         self.seedsDemoOnRegister = seedsDemoOnRegister
+        signOutsAtCreation = Self.signOuts.withLock { $0[options.dataDirectory, default: 0] }
         let (updates, continuation) = AsyncStream.makeStream(of: Bool.self)
         reachabilityUpdates = continuation
         let (zoneUpdates, zoneContinuation) = AsyncStream.makeStream(of: (any LocalTimeZone)?.self)
@@ -412,6 +420,9 @@ public actor FakeGimClient: GimClientAPI {
     }
 
     public func signOut() async throws {
+        guard options.mode != .`extension` else {
+            throw GimError.InvalidInput(reason: "an app extension cannot sign out")
+        }
         session = nil
         awaitingLinkConfirmation = false
         pendingApprovals = []
@@ -430,6 +441,7 @@ public actor FakeGimClient: GimClientAPI {
         storedHubs = [Self.homeHub(url: options.homeHubUrl)]
         publishHubList()
         pushRegistration = nil
+        Self.signOuts.withLock { $0[options.dataDirectory, default: 0] += 1 }
     }
 
     // MARK: - Identity and devices
@@ -1150,6 +1162,9 @@ public actor FakeGimClient: GimClientAPI {
     }
 
     public func processPush(payload: String) async throws -> NotificationContent {
+        guard Self.signOuts.withLock({ $0[options.dataDirectory, default: 0] }) == signOutsAtCreation else {
+            throw GimError.Storage(reason: "the local store was deleted by sign-out")
+        }
         guard let data = payload.data(using: .utf8),
             let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else {
