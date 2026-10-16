@@ -2,12 +2,13 @@ import GIMCore
 import XCTest
 
 /// End-to-end hub management on two federated hubs (`scripts/e2e-hub.sh fed-start`): the app onboards on hub A (the
-/// `E2ETestCase` server URL) and creates a group with scripted peers on A, adds hub B
-/// (`TEST_RUNNER_GIM_E2E_SERVER_URL_B`), makes it primary, exchanges messages with the peers, then removes B again.
-/// Skipped without a hub B URL.
+/// `E2ETestCase` server URL) next to scripted peers on A (step a), adds hub B (`TEST_RUNNER_GIM_E2E_SERVER_URL_B`,
+/// step b) and makes it primary (step c), creates a group with the peers while B is primary and exchanges messages
+/// with them (step d), removes B again (step e; B owns the group, so this usually confirms the owned groups warning)
+/// and keeps messaging through A (step f). Skipped without a hub B URL.
 ///
-/// The group is created while A is primary: with B primary, inviting users of A failed with NotFound (KeyPackages
-/// claimed through B) against gim-hub 50b3401.
+/// gim-core creates the group on the primary hub B and claims the KeyPackages of the users of A through every listed
+/// hub.
 final class HubsSmokeTests: E2ETestCase {
     private let summary = StepSummary("HubsSmokeTests", steps: ["a", "b", "c", "d", "e", "f"])
     /// How step e's removal went, for the summary line: "removed", or "owned-groups" after the HubOwnsGroups
@@ -34,9 +35,7 @@ final class HubsSmokeTests: E2ETestCase {
         }
 
         summary.start("a")
-        let (peer, chatId) = try XCTContext.runActivity(
-            named: "step a: peers register on A, app onboarding, app creates \(groupName)"
-        ) { _ in
+        let (peer, bystander) = try XCTContext.runActivity(named: "step a: peers register on A, app onboarding") { _ in
             let peer = try waitForPeer("step a: peer registers as peer_\(suffix)", app) {
                 try await ScriptedPeer.register(
                     serverUrl: serverUrl, handle: "peer_\(suffix)", displayName: "Peer \(suffix)")
@@ -50,12 +49,7 @@ final class HubsSmokeTests: E2ETestCase {
             addTeardownBlock { await bystander.shutdown() }
             try launchToOnboarding(app, "step a")
             try createIdentity(displayName: "Alice \(suffix)", handle: "alice_\(suffix)", "step a", app)
-            // TODO(M2c core C4-T5): restore the original order (create the group while hub B is primary) once
-            // gim-core fixes the cross-hub KeyPackage claim returning NotFound.
-            try createGroup(groupName, members: [peer.session, bystander.session], "step a", app)
-            let chatId = try eventually("step a: peer joins \(groupName)", app) { peer.chatId(named: groupName) }
-            try tap(backButton(app), "step a: back to Chats", app)
-            return (peer, chatId)
+            return (peer, bystander)
         }
         summary.finish("a")
 
@@ -80,8 +74,11 @@ final class HubsSmokeTests: E2ETestCase {
         summary.finish("c")
 
         summary.start("d")
-        try XCTContext.runActivity(named: "step d: messaging with the peer on A keeps working") { _ in
-            try tap(chatRow(groupName, in: app), "step d: \(groupName) row", app)
+        let chatId = try XCTContext.runActivity(
+            named: "step d: app creates \(groupName) with the peers on A while B is primary, messaging works"
+        ) { _ in
+            try createGroup(groupName, members: [peer.session, bystander.session], "step d", app)
+            let chatId = try eventually("step d: peer joins \(groupName)", app) { peer.chatId(named: groupName) }
             let appText = "Through B \(suffix)"
             try send(appText, "step d", app)
             _ = try eventually("step d: peer receives \"\(appText)\"", app) {
@@ -96,6 +93,7 @@ final class HubsSmokeTests: E2ETestCase {
                 messageText(peerText, in: app).waitForExistence(timeout: networkTimeout),
                 "step d: app shows the peer's text", app)
             try tap(backButton(app), "step d: back to Chats", app)
+            return chatId
         }
         summary.finish("d")
 

@@ -176,6 +176,18 @@ actor RecordingClient: GimClientAPI {
     func hubList(listener: any HubListListener) async throws -> TaskHandle {
         try await fake.hubList(listener: listener)
     }
+
+    func registerPush(registration: PushRegistration) async throws {
+        try await fake.registerPush(registration: registration)
+    }
+
+    func unregisterPush() async throws {
+        try await fake.unregisterPush()
+    }
+
+    func processPush(payload: String) async throws -> NotificationContent {
+        try await fake.processPush(payload: payload)
+    }
 }
 
 /// A message for composer and menu tests; only the fields the rules look at matter.

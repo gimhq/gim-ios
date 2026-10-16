@@ -172,6 +172,7 @@ public protocol GimClientAPI: AnyObject, Sendable {
     /// Releases the handle claimed with `claimHandle`; `InvalidInput` if there is none.
     func releaseHandle() async throws
 
+    /// `InvalidInput` in `ClientMode.extension`.
     func startSync() async throws
     func stopSync() async throws
     /// Synchronous and never throws.
@@ -257,6 +258,20 @@ public protocol GimClientAPI: AnyObject, Sendable {
     func setPrimaryHub(hubId: String) async throws
     /// Subscribes to the user's hubs; the first callback carries the current list.
     func hubList(listener: any HubListListener) async throws -> TaskHandle
+
+    // Push (gim-core docs/API.md, "Push").
+
+    /// Stores the registration on the device and sends it to every verified hub (gim-core sends it again by itself
+    /// when hubs change, after sign-in, restore or link). Call it whenever the platform hands out a new token.
+    /// `InvalidInput` for a malformed field, `Server(400)` if a hub rejects it. Does nothing in `ClientMode.extension`.
+    func registerPush(registration: PushRegistration) async throws
+    /// Removes the registration from every hub, then the local copy (removed even if a hub failed; the first hub
+    /// failure is thrown). Does nothing in `ClientMode.extension`.
+    func unregisterPush() async throws
+    /// For the notification extension: processes the push data payload exactly as delivered and returns what to show,
+    /// within about 15 s. Content that cannot be processed comes back `generic` (`New message`, displayed).
+    /// `InvalidInput` only if `payload` is not a JSON object.
+    func processPush(payload: String) async throws -> NotificationContent
 }
 
 /// Creates the client. Opens (or creates) local state under `hooks.dataDir()`; does not touch the network.
@@ -267,7 +282,7 @@ public func createClient(config: ClientConfig, hooks: any PlatformHooks) async t
     try validateServerUrl(config.serverUrl)
     return FakeGimClient.demo(
         dataDirectory: hooks.dataDir(), registered: false, networkReachable: hooks.isNetworkReachable(),
-        homeHubUrl: config.serverUrl)
+        homeHubUrl: config.serverUrl, mode: config.mode)
 }
 
 /// Same rules as gim-core: an `http` or `https` URL with a host. `what` prefixes the `InvalidInput` reason.

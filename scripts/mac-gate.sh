@@ -2,21 +2,25 @@
 # Builds and tests a commit on the shared macOS build host from station.
 #
 #   scripts/mac-gate.sh build-test [--sha <commit>] [--keep]
-#   scripts/mac-gate.sh e2e --hub-url <url> [--hub-b-url <url>] [--sha <commit>] [--keep]
+#   scripts/mac-gate.sh e2e --hub-url <url> [--hub-b-url <url>] [--push-mock-url <url>] [--sha <commit>] [--keep]
 #
 # Ships `git archive <sha>` (default HEAD, which needs a clean tree) to ~/gim-ci/<id>-<short sha>/ on the Mac
 # (GIM_MAC_HOST, default a@100.99.1.8; id = GIM_GATE_ID, default the last component of the branch name). There, under
 # the shared lock ~/gim-ci/.lock-xcode and on a dedicated simulator created for the run, `build-test` runs xcodegen,
 # builds the GIM app and runs the GIMKit and GIMUI package tests; `e2e` additionally runs GIMUITests against the hub
 # at <url> (as seen from the Mac, e.g. from scripts/e2e-hub.sh; --hub-b-url adds the second hub of
-# `e2e-hub.sh fed-start` for HubsSmokeTests, which is skipped without it). Raw xcodebuild logs, the xcbeautify output, the
+# `e2e-hub.sh fed-start` for HubsSmokeTests, which is skipped without it). With --push-mock-url (`e2e-hub.sh push-url`)
+# a helper on the Mac hands every new mock-ios-sim delivery of that push mock to `xcrun simctl push` on the run's
+# simulator while GIMUITests run (logged to push-helper.log), and the tests get the URL as
+# TEST_RUNNER_GIM_E2E_PUSH_MOCK_URL. Raw xcodebuild logs, the xcbeautify output, the
 # `[e2e-summary]` line and the zipped xcresult bundles are copied to .tmp/mac/<short sha>/. Prints one
 # `[mac-gate] ...` summary line and exits non-zero on any failure. The Mac work dir is removed on success and kept on
 # failure or with --keep.
 set -euo pipefail
 
 usage() {
-    echo "usage: $0 build-test|e2e [--sha <commit>] [--hub-url <url>] [--hub-b-url <url>] [--keep]" >&2
+    echo "usage: $0 build-test|e2e [--sha <commit>] [--hub-url <url>] [--hub-b-url <url>] [--push-mock-url <url>]" \
+        "[--keep]" >&2
     exit 2
 }
 
@@ -27,6 +31,7 @@ shift
 sha=
 hub_url=
 hub_b_url=
+push_mock_url=
 keep=
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -43,6 +48,11 @@ while [[ $# -gt 0 ]]; do
     --hub-b-url)
         [[ $# -ge 2 ]] || usage
         hub_b_url=$2
+        shift 2
+        ;;
+    --push-mock-url)
+        [[ $# -ge 2 ]] || usage
+        push_mock_url=$2
         shift 2
         ;;
     --keep)
@@ -79,12 +89,12 @@ mac() {
     ssh -o BatchMode=yes -o ServerAliveInterval=30 "$host" "$@"
 }
 
-# Runs on the Mac with /bin/bash (3.2) as `gate.sh <mode> <name> <short sha> [hub url] [hub B url]` from the work
-# dir.
+# Runs on the Mac with /bin/bash (3.2) as `gate.sh <mode> <name> <short sha> [hub url] [hub B url] [push mock url]` from
+# the work dir.
 # shellcheck disable=SC2016
 remote_script='
 set -uo pipefail
-mode=$1 name=$2 short=$3 hub_url=${4:-} hub_b_url=${5:-}
+mode=$1 name=$2 short=$3 hub_url=${4:-} hub_b_url=${5:-} push_mock_url=${6:-}
 eval "$(/opt/homebrew/bin/brew shellenv)"
 work=$PWD
 out=$work/.tmp/gate
@@ -93,12 +103,16 @@ derived=$work/.tmp/DerivedData
 lock=$HOME/gim-ci/.lock-xcode
 owner="$name pid=$$ since $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 signing="CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM="
-locked="" sim=""
+locked="" sim="" helper=""
 build=fail kit=fail ui=fail e2e=n/a
 [ "$mode" = e2e ] && e2e=fail
 mkdir -p "$out" "$results"
 
 cleanup() {
+    if [ -n "$helper" ]; then
+        pkill -P "$helper" >/dev/null 2>&1
+        kill "$helper" >/dev/null 2>&1 && echo "[mac-gate] stopped push helper $helper"
+    fi
     if [ -n "$sim" ]; then
         xcrun simctl shutdown "$sim" >/dev/null 2>&1
         xcrun simctl delete "$sim" && echo "[mac-gate] deleted simulator $sim"
@@ -153,6 +167,31 @@ run() {
     "$@" 2>&1 | tee "$out/$log.log" | xcbeautify --disable-colored-output | tee "$out/$log.xcbeautify.log"
 }
 
+# docs/push-mock.md (gim-hub) section 3: long-polls the push mock for mock-ios-sim deliveries after $1 and hands each
+# to `xcrun simctl push` on the run simulator, logging seq, delivery_id, bundle_id and the simctl exit code.
+push_helper() {
+    since=$1
+    while true; do
+        resp=$(curl -fsS --max-time 40 "$push_mock_url/deliveries?provider=mock-ios-sim&since=$since&wait=30") || {
+            sleep 2
+            continue
+        }
+        since=$(jq -r .next <<<"$resp")
+        jq -c ".deliveries[]" <<<"$resp" | while read -r delivery; do
+            seq=$(jq -r .seq <<<"$delivery")
+            file=$out/push-$seq.json
+            jq .simctl.payload <<<"$delivery" >"$file"
+            bundle=$(jq -r .simctl.bundle_id <<<"$delivery")
+            id=$(jq -r .delivery_id <<<"$delivery")
+            xcrun simctl push "$sim" "$bundle" "$file" </dev/null >>"$out/push-helper.log" 2>&1
+            rc=$?
+            echo "[push-helper] $(date -u +%H:%M:%S) seq=$seq delivery_id=$id bundle_id=$bundle simctl_exit=$rc" \
+                >>"$out/push-helper.log"
+            rm -f "$file"
+        done
+    done
+}
+
 # Multi-product packages expose their tests via the "<name>-Package" scheme.
 package_test() {
     (
@@ -180,8 +219,20 @@ if [ "$mode" = e2e ] && [ "$build" = ok ]; then
     xcrun simctl boot "$sim"
     xcrun simctl bootstatus "$sim" -b >/dev/null
     xcrun simctl addmedia "$sim" GIM/UITests/Fixtures/photo-library-seed.png
+    if [ -n "$push_mock_url" ]; then
+        # Starts after the current deliveries, so older ones are not replayed.
+        if next=$(curl -fsS --max-time 10 "$push_mock_url/deliveries?provider=mock-ios-sim" | jq -er .next); then
+            echo "[push-helper] $push_mock_url since=$next sim=$sim" >"$out/push-helper.log"
+            push_helper "$next" &
+            helper=$!
+            echo "[mac-gate] push helper $helper polling $push_mock_url since $next"
+        else
+            echo "[mac-gate] error: push mock $push_mock_url not reachable" | tee "$out/push-helper.log" >&2
+        fi
+    fi
     # shellcheck disable=SC2086
-    TEST_RUNNER_GIM_E2E_SERVER_URL=$hub_url TEST_RUNNER_GIM_E2E_SERVER_URL_B=$hub_b_url run e2e xcodebuild test -project GIM.xcodeproj -scheme GIM \
+    TEST_RUNNER_GIM_E2E_SERVER_URL=$hub_url TEST_RUNNER_GIM_E2E_SERVER_URL_B=$hub_b_url \
+        TEST_RUNNER_GIM_E2E_PUSH_MOCK_URL=$push_mock_url run e2e xcodebuild test -project GIM.xcodeproj -scheme GIM \
         -only-testing:GIMUITests -destination "$destination" -derivedDataPath "$derived" \
         -resultBundlePath "$results/GIM-e2e.xcresult" $signing && e2e=ok
     grep -o "\[e2e-summary\].*" "$out/e2e.log" >"$out/e2e-summary.txt"
@@ -205,7 +256,8 @@ printf '%s' "$remote_script" | mac "cat >~/$work/.tmp/gate.sh"
 
 status=0
 # shellcheck disable=SC2029
-mac "cd ~/$work && /bin/bash .tmp/gate.sh $mode $name $short $(printf '%q' "$hub_url") $(printf '%q' "$hub_b_url")" </dev/null || status=$?
+mac "cd ~/$work && /bin/bash .tmp/gate.sh $mode $name $short $(printf '%q' "$hub_url") $(printf '%q' "$hub_b_url") \
+    $(printf '%q' "$push_mock_url")" </dev/null || status=$?
 
 rm -rf "$local_out"
 mkdir -p "$local_out"

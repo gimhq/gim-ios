@@ -7,6 +7,7 @@
 #   scripts/e2e-hub.sh fed-start [--run <id>] [--sha <hub sha>] [--port-a <port>] [--port-b <port>]
 #   scripts/e2e-hub.sh fed-stop [--run <id>]
 #   scripts/e2e-hub.sh fed-url a|b [--run <id>]
+#   scripts/e2e-hub.sh push-url [--run <id>]
 #
 # The image `ai-agent/gim-hub:<short sha>` is built from `git archive` of the gim-hub repo (GIM_HUB_REPO, default
 # /srv/gimhq/im-client/hub) at the pinned commit (GIM_HUB_SHA or --sha) if it is missing. Every hub publishes its
@@ -23,9 +24,16 @@
 # free ones from 18181. It waits until both are healthy and have bound each other, then prints GIM_E2E_HUB_A=<url>
 # and GIM_E2E_HUB_B=<url> (plus GIM_E2E_HUB_ID_A/B). Containers, network and volumes carry the labels
 # ai-agent=true and ai-agent-run=gim-ios-e2e-<run>; `fed-stop` removes exactly those.
+#
+# Both `start` and `fed-start` also run one gim-push-mock (docs/push-mock.md of the hub repo) for the run, from the
+# image `ai-agent/gim-push-mock:<short sha>` built from Dockerfile.push-mock of the same commit. It runs on the traefik
+# network (and the federation network) with a published port (the first free one from 18190) and a random secret kept
+# in the run's state dir (.tmp/e2e-hub-<run>/ or .tmp/e2e-fed-<run>/, push.env); every hub of the run sends its push
+# webhook to it. Start returns once its /healthz is OK. `push-url` prints its URL as seen from the Mac,
+# http://<GIM_E2E_HUB_HOST>:<port> (the federated run's mock if there is one, else the standalone one).
 set -euo pipefail
 
-default_hub_sha=50b3401726c99781e30b7c0311f5c63a56bc5657
+default_hub_sha=bd8c9ca29f4dc8804eac2f22a9f771319c00070c
 
 repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 hub_repo=${GIM_HUB_REPO:-/srv/gimhq/im-client/hub}
@@ -41,7 +49,7 @@ usage() {
     {
         echo "usage: $0 start [--sha <hub sha>] [--port <port>] | stop | url [--port <port>]"
         echo "       $0 fed-start [--run <id>] [--sha <hub sha>] [--port-a <port>] [--port-b <port>]"
-        echo "       $0 fed-stop [--run <id>] | fed-url a|b [--run <id>]"
+        echo "       $0 fed-stop [--run <id>] | fed-url a|b [--run <id>] | push-url [--run <id>]"
     } >&2
     exit 2
 }
@@ -81,18 +89,26 @@ build_image() {
     local full_sha
     full_sha=$(git -C "$hub_repo" rev-parse --verify "$hub_sha^{commit}")
     image=ai-agent/gim-hub:${full_sha:0:12}
+    mock_image=ai-agent/gim-push-mock:${full_sha:0:12}
     if ! docker image inspect "$image" >/dev/null 2>&1; then
         echo "Building $image from $hub_repo at $full_sha" >&2
         git -C "$hub_repo" archive "$full_sha" |
             docker build --label ai-agent=true --label "gim.hub.commit=$full_sha" -t "$image" - >&2
     fi
+    if ! docker image inspect "$mock_image" >/dev/null 2>&1; then
+        echo "Building $mock_image from $hub_repo at $full_sha" >&2
+        git -C "$hub_repo" archive "$full_sha" |
+            docker build --label ai-agent=true --label "gim.hub.commit=$full_sha" \
+                --build-arg "GIM_HUB_BUILD_REV=$full_sha" -f Dockerfile.push-mock -t "$mock_image" - >&2
+    fi
 }
 
-# Waits up to 60 s for /healthz of container $1; `gim-hub healthcheck` probes it from inside the container.
+# Waits up to 60 s for /healthz of container $1; `<binary $2, default gim-hub> healthcheck` probes it from inside the
+# container.
 wait_healthy() {
     local _
     for _ in $(seq 1 60); do
-        if docker exec "$1" gim-hub healthcheck >/dev/null 2>&1; then
+        if docker exec "$1" "${2:-gim-hub}" healthcheck >/dev/null 2>&1; then
             return 0
         fi
         sleep 1
@@ -102,27 +118,70 @@ wait_healthy() {
     return 1
 }
 
+# Starts the push mock container $1 with labels $2... on the traefik network, with a new secret in
+# <state dir $state>/push.env (GIM_PUSH_MOCK_SECRET for the mock, GIM_HUB_PUSH_WEBHOOK_SECRET for the hubs, never
+# printed), and waits for its /healthz.
+start_push_mock() {
+    local name=$1 mock_port secret
+    shift
+    # Skips the hub ports of the run (fed_start's hub_port), which are bound after the mock.
+    mock_port=$(free_port 18190 "${hub_port[@]:-}" "$port")
+    mkdir -p "$state"
+    secret=$(od -An -tx1 -N32 /dev/urandom | tr -d ' \n')
+    (
+        umask 077
+        printf 'GIM_PUSH_MOCK_SECRET=%s\nGIM_HUB_PUSH_WEBHOOK_SECRET=%s\n' "$secret" "$secret" >"$state/push.env"
+    )
+    docker run -d "$@" --name "$name" \
+        --network traefik \
+        -p "$mock_port:8090" \
+        --env-file "$state/push.env" \
+        "$mock_image" >/dev/null
+    wait_healthy "$name" gim-push-mock || return 1
+    echo "gim-push-mock $mock_image ready in $name at $(hub_url "$mock_port")"
+}
+
+# Public URL of the running push mock container $1, empty if it is not running.
+mock_url() {
+    local p
+    p=$(docker port "$1" 8090/tcp 2>/dev/null | head -1 | sed 's/.*://')
+    [[ -n $p ]] && hub_url "$p"
+}
+
 container=ai-agent-gim-ios-hub-$id
+mock=$container-push-mock
+state=$repo/.tmp/e2e-hub-$id
 
 stop() {
-    if docker container inspect "$container" >/dev/null 2>&1; then
-        docker rm -f "$container" >/dev/null
-        echo "Stopped $container"
-    fi
+    local c
+    for c in "$container" "$mock"; do
+        if docker container inspect "$c" >/dev/null 2>&1; then
+            docker rm -f "$c" >/dev/null
+            echo "Stopped $c"
+        fi
+    done
+    rm -rf "$state"
 }
 
 start() {
+    local labels=(--label ai-agent=true --label "ai-run=gim-ios-e2e-$id")
     port=${port:-18080}
     stop
     require_free_port "$port"
     build_image
+    if ! start_push_mock "$mock" --rm "${labels[@]}"; then
+        stop
+        exit 1
+    fi
     docker run -d --rm \
-        --label ai-agent=true \
-        --label "ai-run=gim-ios-e2e-$id" \
+        "${labels[@]}" \
         --name "$container" \
+        --network traefik \
         -p "$port:8080" \
+        --env-file "$state/push.env" \
         -e RUST_LOG=info \
         -e "GIM_HUB_PUBLIC_URL=$(hub_url "$port")" \
+        -e "GIM_HUB_PUSH_WEBHOOK_URL=http://$mock:8090/push" \
         "$image" >/dev/null
 
     if ! wait_healthy "$container"; then
@@ -171,6 +230,7 @@ fed_start() {
     local -A hub_id hub_port
     prefix=$(fed_prefix)
     dir=$repo/.tmp/e2e-fed-$id
+    state=$dir
     fed_stop
     [[ -n $port_a ]] && require_free_port "$port_a"
     [[ -n $port_b ]] && require_free_port "$port_b"
@@ -202,11 +262,15 @@ fed_start() {
     chmod 0755 "$dir"
     chmod 0644 "$dir"/*
 
+    start_push_mock "$prefix-push-mock" "${labels[@]}" || exit 1
+    docker network connect "$prefix" "$prefix-push-mock"
     for hub in a b; do
         docker run -d "${labels[@]}" --name "$prefix-$hub" \
             --network "$prefix" --network-alias "hub-$hub" \
             -p "${hub_port[$hub]}:8080" \
             -v "$prefix-$hub:/data" -v "$dir:/config:ro" \
+            --env-file "$dir/push.env" \
+            -e "GIM_HUB_PUSH_WEBHOOK_URL=http://$prefix-push-mock:8090/push" \
             -e RUST_LOG=info \
             -e "GIM_HUB_PUBLIC_URL=$(hub_url "${hub_port[$hub]}")" \
             -e GIM_HUB_FEDERATION=true \
@@ -231,6 +295,7 @@ fed_start() {
     echo "GIM_E2E_HUB_B=$(container_url "$prefix-b")"
     echo "GIM_E2E_HUB_ID_A=${hub_id[a]}"
     echo "GIM_E2E_HUB_ID_B=${hub_id[b]}"
+    echo "GIM_E2E_PUSH_MOCK_URL=$(mock_url "$prefix-push-mock")"
 }
 
 fed_url() {
@@ -238,6 +303,16 @@ fed_url() {
     u=$(container_url "$(fed_prefix)-$fed_hub")
     if [[ -z $u ]]; then
         echo "error: hub $fed_hub of run $id is not running" >&2
+        exit 1
+    fi
+    echo "$u"
+}
+
+push_url() {
+    local u
+    u=$(mock_url "$(fed_prefix)-push-mock" || mock_url "$mock")
+    if [[ -z $u ]]; then
+        echo "error: no push mock of run $id is running" >&2
         exit 1
     fi
     echo "$u"
@@ -269,8 +344,11 @@ while [[ $# -gt 0 ]]; do
         shift 2
         ;;
     --run)
-        [[ $# -ge 2 && $cmd == fed-* ]] || usage
+        [[ $# -ge 2 && ($cmd == fed-* || $cmd == push-url) ]] || usage
         id=$2
+        container=ai-agent-gim-ios-hub-$id
+        mock=$container-push-mock
+        state=$repo/.tmp/e2e-hub-$id
         shift 2
         ;;
     *)
@@ -286,5 +364,6 @@ url) url ;;
 fed-start) fed_start ;;
 fed-stop) fed_stop ;;
 fed-url) fed_url ;;
+push-url) push_url ;;
 *) usage ;;
 esac
