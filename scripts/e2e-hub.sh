@@ -13,7 +13,7 @@
 # default the last component of the branch name.
 set -euo pipefail
 
-default_hub_sha=fa19ec2020a58eba5c020055fad43a73ce363ef7
+default_hub_sha=18afc7bdde8cd643e4f4e21a35758fdb3a0bc155
 
 repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 hub_repo=${GIM_HUB_REPO:-/srv/gimhq/im-client/hub}
