@@ -119,4 +119,24 @@ actor IdentityStubClient: GimClientAPI {
     func typing(chatId: String, listener: any TypingListener) async throws -> TaskHandle {
         try await fake.typing(chatId: chatId, listener: listener)
     }
+
+    func hubs() async throws -> [HubInfo] {
+        try await fake.hubs()
+    }
+
+    func addHub(url: String) async throws -> HubInfo {
+        try await fake.addHub(url: url)
+    }
+
+    func removeHub(hubId: String, confirmOwnedGroups: Bool) async throws {
+        try await fake.removeHub(hubId: hubId, confirmOwnedGroups: confirmOwnedGroups)
+    }
+
+    func setPrimaryHub(hubId: String) async throws {
+        try await fake.setPrimaryHub(hubId: hubId)
+    }
+
+    func hubList(listener: any HubListListener) async throws -> TaskHandle {
+        try await fake.hubList(listener: listener)
+    }
 }

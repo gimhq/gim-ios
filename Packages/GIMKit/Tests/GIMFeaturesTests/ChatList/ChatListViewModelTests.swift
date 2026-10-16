@@ -245,4 +245,24 @@ private final class FailingChatListClient: GimClientAPI {
     func typing(chatId: String, listener: any TypingListener) async throws -> TaskHandle {
         throw GimError.NotRegistered
     }
+
+    func hubs() async throws -> [HubInfo] {
+        throw GimError.NotRegistered
+    }
+
+    func addHub(url: String) async throws -> HubInfo {
+        throw GimError.NotRegistered
+    }
+
+    func removeHub(hubId: String, confirmOwnedGroups: Bool) async throws {
+        throw GimError.NotRegistered
+    }
+
+    func setPrimaryHub(hubId: String) async throws {
+        throw GimError.NotRegistered
+    }
+
+    func hubList(listener: any HubListListener) async throws -> TaskHandle {
+        throw GimError.NotRegistered
+    }
 }

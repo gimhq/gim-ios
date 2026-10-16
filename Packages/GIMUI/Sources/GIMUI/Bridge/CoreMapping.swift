@@ -48,6 +48,11 @@ extension GIMClientKit.GimError {
         case .Internal(let reason): self = .Internal(reason: reason)
         case .ChatNotActive(let chatId, let state):
             self = .ChatNotActive(chatId: chatId, state: GIMClientKit.ChatState(state))
+        case .HubNotVerified(let reason): self = .HubNotVerified(reason: reason)
+        case .HubOwnsGroups(let hubId, let groupCount): self = .HubOwnsGroups(hubId: hubId, groupCount: groupCount)
+        case .LastHub(let hubId): self = .LastHub(hubId: hubId)
+        case .HomeHub(let hubId): self = .HomeHub(hubId: hubId)
+        case .HubNotDrained(let hubId, let reason): self = .HubNotDrained(hubId: hubId, reason: reason)
         }
     }
 }
@@ -70,6 +75,11 @@ extension GIMCore.GimError {
         case .Internal(let reason): self = .Internal(reason: reason)
         case .ChatNotActive(let chatId, let state):
             self = .ChatNotActive(chatId: chatId, state: GIMCore.ChatState(state))
+        case .HubNotVerified(let reason): self = .HubNotVerified(reason: reason)
+        case .HubOwnsGroups(let hubId, let groupCount): self = .HubOwnsGroups(hubId: hubId, groupCount: groupCount)
+        case .LastHub(let hubId): self = .LastHub(hubId: hubId)
+        case .HomeHub(let hubId): self = .HomeHub(hubId: hubId)
+        case .HubNotDrained(let hubId, let reason): self = .HubNotDrained(hubId: hubId, reason: reason)
         }
     }
 }
@@ -110,6 +120,24 @@ extension GIMClientKit.DeviceInfo {
     init(_ core: GIMCore.DeviceInfo) {
         self.init(
             deviceId: core.deviceId, createdAtMs: core.createdAtMs, isCurrent: core.isCurrent, revoked: core.revoked)
+    }
+}
+
+extension GIMClientKit.HubState {
+    init(_ core: GIMCore.HubState) {
+        switch core {
+        case .unverified: self = .unverified
+        case .verified: self = .verified
+        case .removed: self = .removed
+        }
+    }
+}
+
+extension GIMClientKit.HubInfo {
+    init(_ core: GIMCore.HubInfo) {
+        self.init(
+            hubId: core.hubId, url: core.url, state: GIMClientKit.HubState(core.state), priority: core.priority,
+            isPrimary: core.isPrimary, isHome: core.isHome, signedIn: core.signedIn)
     }
 }
 

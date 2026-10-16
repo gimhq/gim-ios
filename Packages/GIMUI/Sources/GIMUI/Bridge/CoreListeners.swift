@@ -101,6 +101,21 @@ final class CoreTypingListener: GIMCore.TypingListener {
     }
 }
 
+final class CoreHubListListener: GIMCore.HubListListener {
+    private let listener: any GIMClientKit.HubListListener
+    private let relay: MainQueueRelay
+
+    init(_ listener: any GIMClientKit.HubListListener, relay: MainQueueRelay) {
+        self.listener = listener
+        self.relay = relay
+    }
+
+    func onUpdate(hubs: [GIMCore.HubInfo]) {
+        let hubs = hubs.map { GIMClientKit.HubInfo($0) }
+        relay.deliver { [listener] in listener.onUpdate(hubs: hubs) }
+    }
+}
+
 /// Passes the app's `PlatformHooks` (Keychain, data directory, reachability) to gim-core. Called on gim-core's
 /// callback thread, which waits for the answer: each method answers directly (a Keychain call, a constant, a locked
 /// read) and never calls back into the client.
