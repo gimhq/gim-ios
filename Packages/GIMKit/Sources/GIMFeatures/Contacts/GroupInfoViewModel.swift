@@ -43,12 +43,11 @@ public final class GroupInfoViewModel {
     public var editedName = ""
     public private(set) var isSavingName = false
     public private(set) var isLeaving = false
-    /// Set once `leaveChat` returned (the chat is leaving until the own `Left` change arrives); the screen should
-    /// close.
+    /// Set once `leaveChat` returned (the chat is `leaving` until another member commits the removal); the screen
+    /// should close.
     public private(set) var hasLeft = false
 
     private let client: any GimClientAPI
-    private let leavingChats: LeavingChats?
     @ObservationIgnored private var chatList: [ChatSummary] = []
     @ObservationIgnored private var selfUserId: String?
     @ObservationIgnored private var loadGeneration = 0
@@ -57,11 +56,9 @@ public final class GroupInfoViewModel {
     @ObservationIgnored private var listTask: Task<Void, Never>?
     @ObservationIgnored private var timelineTask: Task<Void, Never>?
 
-    /// - Parameter leavingChats: records the chat as leaving after `leave()`.
-    public init(client: any GimClientAPI, chatId: String, leavingChats: LeavingChats? = nil) {
+    public init(client: any GimClientAPI, chatId: String) {
         self.client = client
         self.chatId = chatId
-        self.leavingChats = leavingChats
     }
 
     deinit {
@@ -70,10 +67,14 @@ public final class GroupInfoViewModel {
     }
 
     public var isGroup: Bool { summary?.kind == .group }
-    /// Members can only be added in groups.
-    public var canEditMembers: Bool { isGroup }
+    /// Whether the user is still an active member; a leaving or left chat can only be viewed.
+    public var isActive: Bool { summary?.state == .active }
+    /// Members can only be added in active groups.
+    public var canEditMembers: Bool { isGroup && isActive }
     /// Removal needs the member list.
-    public var canRemoveMembers: Bool { isGroup && !membersUnavailable }
+    public var canRemoveMembers: Bool { canEditMembers && !membersUnavailable }
+    /// Only an active group can be left.
+    public var canLeave: Bool { isGroup && isActive }
 
     /// Follows the chat list (for the summary) and the timeline (for membership changes). Call `load()` for the
     /// first member query.
@@ -136,7 +137,7 @@ public final class GroupInfoViewModel {
 
     /// Whether the result of query `generation` may be applied; records it as the newest applied one.
     private func claimResult(_ generation: Int) -> Bool {
-        // Leaving removes the chat; queries still in flight would only report it missing.
+        // The screen closes once the user left; queries still in flight are dropped.
         guard generation > appliedGeneration, !isLeaving, !hasLeft else { return false }
         appliedGeneration = generation
         return true
@@ -186,7 +187,7 @@ public final class GroupInfoViewModel {
     /// The trimmed `editedName` when it differs from the current name.
     public var nameToSave: String? {
         let name = editedName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard isGroup, !name.isEmpty, name != summary?.name else { return nil }
+        guard isGroup, isActive, !name.isEmpty, name != summary?.name else { return nil }
         return name
     }
 
@@ -204,16 +205,12 @@ public final class GroupInfoViewModel {
     }
 
     public func leave() async {
-        guard isGroup, !isLeaving else { return }
+        guard canLeave, !isLeaving else { return }
         isLeaving = true
         errorMessage = nil
         defer { isLeaving = false }
         do {
-            if let leavingChats {
-                try await leavingChats.leave(chatId: chatId)
-            } else {
-                try await client.leaveChat(chatId: chatId)
-            }
+            try await client.leaveChat(chatId: chatId)
             stop()
             hasLeft = true
             errorMessage = nil

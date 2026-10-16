@@ -4,30 +4,23 @@ import SwiftUI
 
 /// Chat details and, for groups, the name, member management and leaving. Pushed from the chat screen.
 public struct GroupInfoScreen: View {
-    private let onLeft: () -> Void
-
     @State private var viewModel: GroupInfoViewModel
     @State private var confirmsLeave = false
+    @Environment(\.dismiss) private var dismiss
 
-    /// - Parameters:
-    ///   - leavingChats: records the chat as leaving once the user left it.
-    ///   - onLeft: called after the user left the group.
-    public init(
-        client: any GimClientAPI, chatId: String, leavingChats: LeavingChats? = nil, onLeft: @escaping () -> Void = {}
-    ) {
-        self.onLeft = onLeft
-        _viewModel = State(
-            initialValue: GroupInfoViewModel(client: client, chatId: chatId, leavingChats: leavingChats))
+    /// The screen closes once the user left the group.
+    public init(client: any GimClientAPI, chatId: String) {
+        _viewModel = State(initialValue: GroupInfoViewModel(client: client, chatId: chatId))
     }
 
     public var body: some View {
         Form {
             if let summary = viewModel.summary {
                 header(summary)
-                if viewModel.isGroup { nameSection }
+                if viewModel.isGroup && viewModel.isActive { nameSection }
                 membersSection(summary)
                 if viewModel.canEditMembers { addMemberSection }
-                if viewModel.isGroup { leaveSection }
+                if viewModel.canLeave { leaveSection }
             } else if viewModel.errorMessage == nil {
                 ProgressView().frame(maxWidth: .infinity)
             }
@@ -48,7 +41,7 @@ public struct GroupInfoScreen: View {
         }
         .onDisappear { viewModel.stop() }
         .onChange(of: viewModel.hasLeft) { _, hasLeft in
-            if hasLeft { onLeft() }
+            if hasLeft { dismiss() }
         }
         .confirmationDialog(
             "Remove \(viewModel.pendingRemoval.map { UserLabel.name(for: $0.user) } ?? "member") from the group?",
@@ -153,6 +146,7 @@ public struct GroupInfoScreen: View {
         Section {
             Button("Leave Group", role: .destructive) { confirmsLeave = true }
                 .disabled(viewModel.isLeaving)
+                .accessibilityIdentifier("groupInfo.leave")
         }
     }
 

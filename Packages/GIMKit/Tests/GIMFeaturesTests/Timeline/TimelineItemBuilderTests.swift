@@ -81,13 +81,13 @@ final class TimelineItemBuilderTests: XCTestCase {
             message("5", bob, at: start + 14 * minute),
         ]
 
-        let built = makeBuilder().build(items, isGroup: true, typingText: nil)
+        let built = makeBuilder().build(items, isGroup: true, typingText: nil, names: [alice.userId: "Alice"])
         let messageRows = rows(built)
 
         XCTAssertEqual(messageRows.map(\.isFirstInRun), [true, false, true, true, true])
         XCTAssertEqual(messageRows.map(\.hasTail), [false, true, true, true, true])
         XCTAssertEqual(messageRows.map(\.senderName), ["Alice", nil, "Alice", "Bob", "Bob"])
-        XCTAssertEqual(built[4].kind, .membership("Carol was added"))
+        XCTAssertEqual(built[4].kind, .membership("Alice added Carol"))
     }
 
     func testSenderNamesOnlyInGroupsAndNeverForOwnMessages() {
@@ -191,9 +191,37 @@ final class TimelineItemBuilderTests: XCTestCase {
 
         let built = makeBuilder().build(items, isGroup: true, typingText: nil)
 
-        XCTAssertEqual(built.first?.kind, .membership("qqqqqqqq… was removed"))
+        // Without a name the actor is shown by its (short) user id.
+        XCTAssertEqual(built.first?.kind, .membership("u-alice removed qqqqqqqq…"))
         XCTAssertEqual(rows(built).map(\.senderName), ["qqqqqqqq…", "Alice"])
         XCTAssertEqual(rows(built).last?.reply?.senderName, "qqqqqqqq…")
+    }
+
+    func testMembershipChangesNameActorAndUser() {
+        let names = [alice.userId: "Alice", bob.userId: "Bob", "u-me": "Me"]
+        func text(_ change: MembershipChangeKind, user: String, actor: String?, userName: String = "Bob") -> String? {
+            let item = TimelineItem.membershipChange(
+                userName: userName, change: change, atMs: nowMs, userId: user, actorUserId: actor)
+            let built = makeBuilder().build([item], isGroup: true, typingText: nil, ownUserId: "u-me", names: names)
+            guard case .membership(let text) = built.first?.kind else { return nil }
+            return text
+        }
+
+        XCTAssertEqual(text(.added, user: bob.userId, actor: alice.userId), "Alice added Bob")
+        XCTAssertEqual(text(.removed, user: bob.userId, actor: alice.userId), "Alice removed Bob")
+        XCTAssertEqual(text(.left, user: bob.userId, actor: bob.userId), "Bob left")
+        XCTAssertEqual(text(.left, user: "u-me", actor: "u-me"), "You left")
+        XCTAssertEqual(text(.removed, user: "u-me", actor: alice.userId), "You were removed by Alice")
+        XCTAssertEqual(text(.added, user: bob.userId, actor: "u-me"), "You added Bob")
+        XCTAssertEqual(text(.removed, user: bob.userId, actor: "u-me"), "You removed Bob")
+        XCTAssertEqual(text(.added, user: "u-me", actor: alice.userId), "Alice added you")
+        // Unknown actor: passive form.
+        XCTAssertEqual(text(.removed, user: bob.userId, actor: nil), "Bob was removed")
+        XCTAssertEqual(text(.added, user: bob.userId, actor: nil), "Bob was added")
+        XCTAssertEqual(text(.removed, user: "u-me", actor: nil), "You were removed")
+        // Users missing from `names`: the change's own name for its user, a short id for the actor.
+        let carolId = "u" + String(repeating: "c", count: 55)
+        XCTAssertEqual(text(.removed, user: "u-carol", actor: carolId, userName: "Carol"), "cccccccc… removed Carol")
     }
 
     func testUnavailableMediaIsMarked() {

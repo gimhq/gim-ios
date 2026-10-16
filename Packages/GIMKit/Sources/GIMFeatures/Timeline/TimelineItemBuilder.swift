@@ -41,8 +41,11 @@ public final class TimelineItemBuilder {
     ///   - items: the gim-core timeline, oldest first.
     ///   - typingText: adds the typing row at the bottom when set.
     ///   - unavailableMedia: ids of the messages whose attachment couldn't be downloaded for now.
+    ///   - ownUserId: the signed-in user, named "you" in membership changes.
+    ///   - names: display names by user id (see `UserLabel`) for the users membership changes refer to.
     public func build(
-        _ items: [TimelineItem], isGroup: Bool, typingText: String?, unavailableMedia: Set<String> = []
+        _ items: [TimelineItem], isGroup: Bool, typingText: String?, unavailableMedia: Set<String> = [],
+        ownUserId: String? = nil, names: [String: String] = [:]
     ) -> [TimelineDisplayItem] {
         var result: [TimelineDisplayItem] = []
         result.reserveCapacity(items.count + 1)
@@ -71,8 +74,11 @@ public final class TimelineItemBuilder {
                 append(TimelineDisplayItem.id(forMessage: message.messageId), .message(row))
             case .dateSeparator(let dayStartMs):
                 append("day:\(dayStartMs)", .dateSeparator(dayLabel(dayStartMs)))
-            case .membershipChange(let userName, let change, let atMs, _, _):
-                append("member:\(atMs):\(userName):\(change)", .membership(Self.membershipText(userName, change)))
+            case .membershipChange(let userName, let change, let atMs, let userId, let actorUserId):
+                let text = Self.membershipText(
+                    userName: userName, change: change, userId: userId, actorUserId: actorUserId,
+                    ownUserId: ownUserId, names: names)
+                append("member:\(atMs):\(userId):\(change)", .membership(text))
             }
         }
         if let typingText {
@@ -107,11 +113,29 @@ public final class TimelineItemBuilder {
         }
     }
 
-    static func membershipText(_ userName: String, _ change: MembershipChangeKind) -> String {
+    /// "Alice added Bob", "Alice removed Bob", "Bob left"; the signed-in user is "you" ("You added Bob", "You were
+    /// removed by Alice", "You left"). Without a known actor other than the user the change is passive ("Bob was
+    /// removed"). Users are named from `names`, else the change's `userName` for its user, else a short user id.
+    static func membershipText(
+        userName: String, change: MembershipChangeKind, userId: String, actorUserId: String?, ownUserId: String?,
+        names: [String: String]
+    ) -> String {
+        func name(_ id: String) -> String {
+            names[id] ?? (id == userId ? UserLabel.name(userName) : UserLabel.shortUserId(id))
+        }
+        let isOwn = userId == ownUserId
+        let user = isOwn ? "you" : name(userId)
+        let actor = actorUserId.flatMap { $0 == userId ? nil : $0 }
         switch change {
-        case .added: "\(UserLabel.name(userName)) was added"
-        case .removed: "\(UserLabel.name(userName)) was removed"
-        case .left: "\(UserLabel.name(userName)) left"
+        case .left:
+            return isOwn ? "You left" : "\(user) left"
+        case .added:
+            guard let actor else { return isOwn ? "You were added" : "\(user) was added" }
+            return actor == ownUserId ? "You added \(user)" : "\(name(actor)) added \(user)"
+        case .removed:
+            guard let actor else { return isOwn ? "You were removed" : "\(user) was removed" }
+            if isOwn { return "You were removed by \(name(actor))" }
+            return actor == ownUserId ? "You removed \(user)" : "\(name(actor)) removed \(user)"
         }
     }
 

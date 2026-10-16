@@ -32,6 +32,27 @@ final class MessageActionsViewModelTests: XCTestCase {
         XCTAssertEqual(MessageActionsViewModel.quickReactions.count, 6)
     }
 
+    func testReadOnlyChatOffersCopyAndDeleteOfUnsentMessages() {
+        XCTAssertEqual(MessageActionsViewModel.actions(for: makeMessage(), isReadOnly: true), [.copy])
+        XCTAssertEqual(MessageActionsViewModel.actions(for: makeMessage(isOwn: false), isReadOnly: true), [.copy])
+        XCTAssertEqual(
+            MessageActionsViewModel.actions(for: makeMessage(sendState: .failed(reason: "x")), isReadOnly: true),
+            [.copy, .delete])
+        XCTAssertEqual(
+            MessageActionsViewModel.actions(for: makeMessage(sendState: .pending), isReadOnly: true), [.copy, .delete])
+    }
+
+    @MainActor
+    func testChatNotActiveShowsNoError() async {
+        let client = await makeClient()
+        let viewModel = MessageActionsViewModel(client: client, chatId: chatId)
+        await client.failNext(with: .ChatNotActive(chatId: chatId, state: .left))
+
+        await viewModel.toggleReaction("👍", on: makeMessage())
+
+        XCTAssertNil(viewModel.errorMessage)
+    }
+
     @MainActor
     func testToggleReaction() async {
         let client = await makeClient()

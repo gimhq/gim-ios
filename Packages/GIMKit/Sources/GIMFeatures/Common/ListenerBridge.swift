@@ -2,7 +2,7 @@ import GIMClientKit
 
 /// Turns gim-core listener callbacks into `AsyncStream`s for ViewModels.
 ///
-/// gim-core calls listeners on a Rust background thread. The listeners only enqueue into the stream, which keeps
+/// gim-core calls listeners on its single `gim-callbacks` thread. The listeners only enqueue into the stream, which keeps
 /// the callback order; a ViewModel iterating the stream from a `@MainActor` task receives every batch on the main
 /// actor. Each stream starts with the current state (the subscription's initial `reset` or value). The stream keeps
 /// the `TaskHandle` alive; ending iteration (or cancelling the consuming task) cancels the subscription.

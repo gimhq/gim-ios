@@ -278,28 +278,42 @@ final class GroupInfoViewModelTests: XCTestCase {
     func testLeaveGroup() async throws {
         let (client, scheduler) = await connected(makeDemoClient())
         let chatId = try await client.createGroupChat(name: "Regatta", memberUserIds: ["user-sofia", "user-luca"])
-        let leavingChats = LeavingChats(client: client, now: { fixedNow })
-        let viewModel = GroupInfoViewModel(client: client, chatId: chatId, leavingChats: leavingChats)
+        let viewModel = GroupInfoViewModel(client: client, chatId: chatId)
         viewModel.start()
         await viewModel.load()
         await eventually { viewModel.summary != nil }
+        XCTAssertTrue(viewModel.canLeave)
 
         await viewModel.leave()
 
         XCTAssertTrue(viewModel.hasLeft)
         XCTAssertNil(viewModel.errorMessage)
-        XCTAssertTrue(leavingChats.contains(chatId))
-        // The chat stays until another member commits the leave.
-        let idsWhileLeaving = try await chatIds(client)
-        XCTAssertTrue(idsWhileLeaving.contains(chatId))
+        let leavingState = try await client.chatState(chatId: chatId)
+        XCTAssertEqual(leavingState, .leaving)
         await settle()
         await scheduler.advance(by: FakeGimClient.leaveCommitDelay)
-        await eventually { !leavingChats.contains(chatId) }
         // The left chat keeps its history.
         let idsAfterLeft = try await chatIds(client)
         XCTAssertTrue(idsAfterLeft.contains(chatId))
         let state = try await client.chatState(chatId: chatId)
         XCTAssertEqual(state, .left)
+    }
+
+    @MainActor
+    func testLeftGroupCanOnlyBeViewed() async throws {
+        let (client, viewModel) = try await startedGroup()
+        XCTAssertTrue(viewModel.canEditMembers)
+        viewModel.editedName = "Autumn Regatta"
+        XCTAssertNotNil(viewModel.nameToSave)
+
+        try await client.simulateRemoval(chatId: viewModel.chatId, by: "user-sofia")
+
+        await eventually { viewModel.summary?.state == .left }
+        XCTAssertFalse(viewModel.isActive)
+        XCTAssertFalse(viewModel.canEditMembers)
+        XCTAssertFalse(viewModel.canRemoveMembers)
+        XCTAssertFalse(viewModel.canLeave)
+        XCTAssertNil(viewModel.nameToSave)
     }
 
     @MainActor

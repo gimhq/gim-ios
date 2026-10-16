@@ -31,15 +31,28 @@ public final class MessageActionsViewModel {
         self.chatId = chatId
     }
 
-    /// The actions for `message`, in menu order.
-    public nonisolated static func actions(for message: MessageItem) -> [MessageAction] {
+    /// The actions for `message`, in menu order. A read-only chat (leaving or left) only offers Copy and, for unsent
+    /// own messages, Delete (which removes them from the outbox).
+    public nonisolated static func actions(for message: MessageItem, isReadOnly: Bool = false) -> [MessageAction] {
         if case .deleted = message.content { return [] }
+        guard !isReadOnly else {
+            var actions: [MessageAction] = copyText(for: message) != nil ? [.copy] : []
+            if isUnsent(message) { actions.append(.delete) }
+            return actions
+        }
         var actions: [MessageAction] = [.reply, .react]
         if copyText(for: message) != nil { actions.append(.copy) }
         if ComposerViewModel.canEdit(message) { actions.append(.edit) }
         if message.isOwn { actions.append(.delete) }
         if case .failed = message.sendState { actions.append(.retry) }
         return actions
+    }
+
+    private nonisolated static func isUnsent(_ message: MessageItem) -> Bool {
+        switch message.sendState {
+        case .pending, .failed: message.isOwn
+        default: false
+        }
     }
 
     /// Text placed on the pasteboard by Copy: the body or the caption.
@@ -65,7 +78,7 @@ public final class MessageActionsViewModel {
                 try await client.react(chatId: chatId, messageId: message.messageId, emoji: emoji)
             }
         } catch {
-            errorMessage = ErrorPresenter.message(for: error)
+            fail(error)
         }
     }
 
@@ -83,18 +96,24 @@ public final class MessageActionsViewModel {
     public func delete(_ message: MessageItem) async {
         pendingDelete = nil
         do {
-            switch message.sendState {
-            case .pending, .failed:
+            if Self.isUnsent(message) {
                 try await client.cancelSend(chatId: chatId, messageId: message.messageId)
-            default:
+            } else {
                 try await client.deleteMessage(chatId: chatId, messageId: message.messageId)
             }
         } catch {
-            errorMessage = ErrorPresenter.message(for: error)
+            fail(error)
         }
     }
 
     public func dismissError() {
         errorMessage = nil
+    }
+
+    /// `ChatNotActive` shows no error: gim-core moved the chat out of `active`, so the chat list and timeline bring
+    /// the new state and the conversation turns read-only.
+    private func fail(_ error: any Error) {
+        if case .ChatNotActive = error as? GimError { return }
+        errorMessage = ErrorPresenter.message(for: error)
     }
 }

@@ -67,6 +67,112 @@ class E2ETestCase: XCTestCase {
         return recoveryCode
     }
 
+    /// Creates a group from the chat list with `members` (added by handle) and waits for its conversation.
+    @MainActor
+    func createGroup(_ name: String, members: [Session], _ step: String, _ app: XCUIApplication) throws {
+        try tap(app.buttons["chatList.newChat"], "\(step): New Chat button", app)
+        try tap(app.buttons["newChat.newGroup"], "\(step): New Group row", app)
+        try type(name, into: app.textFields["newGroup.name"], "\(step): group name field", app)
+        for member in members {
+            try type(member.handle, into: app.textFields["newGroup.memberHandle"], "\(step): member handle field", app)
+            try tap(app.buttons["newGroup.addMember"], "\(step): Add button for \(member.handle)", app)
+            // The chip shows the display name (the hub directory may report the handle as the display name), or
+            // @handle when the directory has no display name.
+            let chip = app.buttons
+                .matching(
+                    NSPredicate(
+                        format: "label IN %@",
+                        ["Remove \(member.displayName)", "Remove \(member.handle)", "Remove @\(member.handle)"])
+                )
+                .firstMatch
+            try require(
+                chip.waitForExistence(timeout: networkTimeout),
+                "\(step): \(member.handle) added as member chip (footer: \(footerTexts(app)))", app)
+        }
+        try tap(app.buttons["newGroup.create"], "\(step): Create button (footer: \(footerTexts(app)))", app)
+        try require(
+            app.textViews["composer.text"].waitForExistence(timeout: networkTimeout),
+            "\(step): conversation with composer opened", app)
+    }
+
+    /// Types `text` into the composer and taps Send.
+    @MainActor
+    func send(_ text: String, _ step: String, _ app: XCUIApplication) throws {
+        try type(text, into: app.textViews["composer.text"], "\(step): composer text view", app)
+        try tap(app.buttons["composer.send"], "\(step): Send button", app)
+    }
+
+    /// Taps the timeline's jump button when the newest messages are scrolled out of view.
+    @MainActor
+    func scrollToLatest(_ app: XCUIApplication) {
+        let jump = app.buttons["timeline.jumpToLatest"]
+        if jump.exists && jump.isHittable { jump.tap() }
+    }
+
+    /// Long-presses a message bubble and waits for its context menu (identified by `firstItem`).
+    @MainActor
+    func openMenu(
+        on message: XCUIElement, firstItem: String = "Reply", _ step: String, _ app: XCUIApplication
+    ) throws {
+        scrollToLatest(app)
+        try require(message.waitForExistence(timeout: networkTimeout), "\(step): message bubble visible", app)
+        message.press(forDuration: 1.2)
+        try require(menuItem(firstItem, in: app).waitForExistence(timeout: 5), "\(step): context menu open", app)
+    }
+
+    /// A context-menu or pull-down-menu item by its title; UIKit exposes these as buttons, menu items or cells
+    /// depending on the OS version and element size.
+    @MainActor
+    func menuItem(_ title: String, in app: XCUIApplication) -> XCUIElement {
+        let types = [XCUIElement.ElementType.button, .menuItem, .cell, .staticText].map { NSNumber(value: $0.rawValue) }
+        return app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label == %@ AND elementType IN %@", title, types as NSArray))
+            .firstMatch
+    }
+
+    /// The body label of the timeline bubble showing `text`.
+    @MainActor
+    func messageText(_ text: String, in app: XCUIApplication) -> XCUIElement {
+        app.staticTexts.matching(NSPredicate(format: "identifier == 'timeline.message.text' AND label == %@", text))
+            .firstMatch
+    }
+
+    /// The composer's banner of a leaving or left chat.
+    @MainActor
+    func readOnlyBanner(_ app: XCUIApplication) -> XCUIElement {
+        app.descendants(matching: .any)["composer.readOnly"]
+    }
+
+    /// Waits until `element` exists with a label containing `text`, ignoring case.
+    @MainActor
+    func waitForLabel(
+        _ element: XCUIElement, containing text: String, timeout: TimeInterval? = nil, _ check: String,
+        _ app: XCUIApplication
+    ) throws {
+        let matches = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "exists == true AND label CONTAINS[c] %@", text), object: element)
+        let found = XCTWaiter().wait(for: [matches], timeout: timeout ?? networkTimeout) == .completed
+        try require(
+            found, found ? "" : "\(check) (found \(element.exists ? "'\(element.label)'" : "no element"))", app)
+    }
+
+    /// The chat list row of the chat named `title`; its label also holds the subtitle.
+    @MainActor
+    func chatRow(_ title: String, in app: XCUIApplication) -> XCUIElement {
+        app.buttons.matching(NSPredicate(format: "identifier == 'chatList.row' AND label BEGINSWITH %@", title))
+            .firstMatch
+    }
+
+    /// The form footers' texts (validation and error messages), for failure messages.
+    @MainActor
+    func footerTexts(_ app: XCUIApplication) -> String {
+        let labels = app.cells.staticTexts.allElementsBoundByIndex.map(\.label)
+        let footers = labels.filter {
+            $0.hasPrefix("Add ") || $0.hasPrefix("No ") || $0.hasPrefix("You ") || $0.hasPrefix("Couldn't")
+        }
+        return footers.isEmpty ? "none" : footers.joined(separator: " | ")
+    }
+
     /// Fails fast when the hub is not reachable from the test runner. An App Transport Security rejection is only
     /// logged: the runner has no ATS exception, and the peer's registration checks the hub anyway.
     @MainActor

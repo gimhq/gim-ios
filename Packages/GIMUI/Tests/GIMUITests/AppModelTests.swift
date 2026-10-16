@@ -229,6 +229,31 @@ final class AppModelTests: XCTestCase {
         #endif
     }
 
+    func testFakeRejectFirstSendLaunchArgumentArmsTheDemoClient() async throws {
+        let defaults = makeDefaults()
+        defaults.set(true, forKey: AppModel.useFakeCoreKey)
+        defaults.set(true, forKey: AppModel.fakeRejectFirstSendKey)
+        #if DEBUG
+            let client = try await AppModel.defaultFactory(defaults: defaults)
+                .make(config: ClientConfig(serverUrl: "http://localhost:8080"), hooks: MemoryHooks())
+            _ = try await client.createIdentity(displayName: "Alex")
+            let chatId = FakeGimClient.demoGroupChatId
+            let messageId = try await client.sendText(chatId: chatId, body: "Hello", replyTo: nil)
+            var items: [TimelineItem] = []
+            for await diffs in try await ListenerBridge.timeline(client, chatId: chatId) {
+                try DiffApplier.apply(diffs, to: &items)
+                break
+            }
+            let sendStates = items.compactMap { item -> SendState? in
+                guard case .message(let message) = item, message.messageId == messageId else { return nil }
+                return message.sendState
+            }
+            XCTAssertEqual(sendStates, [.failed(reason: "rejected (403 not_member)")])
+        #else
+            XCTAssertTrue(AppModel.defaultFactory(defaults: defaults) is RealGimClientFactory)
+        #endif
+    }
+
     @MainActor
     func testFirstLaunchShowsOnboardingAndRegistrationShowsReady() async throws {
         let factory = ClientFactory(FakeGimClient())

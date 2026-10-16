@@ -64,7 +64,6 @@ private struct SignedInView: View {
 
     @State private var path: [String] = []
     @State private var drafts = ComposerDrafts()
-    @State private var leavingChats: LeavingChats
     @State private var showsSettings = false
 
     init(
@@ -76,17 +75,16 @@ private struct SignedInView: View {
         self.serverUrl = serverUrl
         self.refreshSession = refreshSession
         self.signOut = signOut
-        _leavingChats = State(initialValue: LeavingChats(client: client))
     }
 
     var body: some View {
         NavigationStack(path: $path) {
             ChatListScreen(
-                client: client, leavingChats: leavingChats, onOpen: { path.append($0) },
+                client: client, onOpen: { path.append($0) },
                 onOpenSettings: { showsSettings = true }
             )
             .navigationDestination(for: String.self) { chatId in
-                ConversationScreen(client: client, chatId: chatId, drafts: drafts, leavingChats: leavingChats)
+                ConversationScreen(client: client, chatId: chatId, drafts: drafts)
             }
         }
         .sheet(isPresented: $showsSettings) {

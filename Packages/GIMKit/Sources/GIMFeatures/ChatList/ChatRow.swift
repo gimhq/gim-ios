@@ -15,6 +15,8 @@ public struct ChatRow: Sendable, Hashable, Identifiable {
     public let unreadCount: UInt32
     /// `nil` when nothing is unread, otherwise the count capped at "99+".
     public let unreadText: String?
+    /// Where this device stands in the chat.
+    public let state: ChatState
 
     public init(summary: ChatSummary, dateFormatter: RelativeDateFormatter) {
         id = summary.chatId
@@ -25,6 +27,7 @@ public struct ChatRow: Sendable, Hashable, Identifiable {
         time = summary.lastMessage.map { dateFormatter.string(from: Date(epochMilliseconds: $0.sentAtMs)) }
         unreadCount = summary.unreadCount
         unreadText = Self.unreadText(for: summary.unreadCount)
+        state = summary.state
     }
 
     /// gim-core already renders the last message as text ("Photo", "File: report.pdf", "Message deleted", …).
