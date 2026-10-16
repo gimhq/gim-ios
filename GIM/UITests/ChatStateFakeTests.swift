@@ -81,7 +81,12 @@ extension E2ETestCase {
     @MainActor
     func leaveGroup(_ step: String, _ app: XCUIApplication) throws {
         try tap(app.navigationBars.buttons["Group Info"], "\(step): Group Info button", app)
-        try tap(app.buttons["groupInfo.leave"], "\(step): Leave Group button", app)
+        // The button is the form's last row, below the member list.
+        let leave = app.buttons["groupInfo.leave"]
+        for _ in 0..<5 where !(leave.exists && leave.isHittable) {
+            app.collectionViews.firstMatch.swipeUp()
+        }
+        try tap(leave, "\(step): Leave Group button", app)
         // The confirmation dialog's button has the same title.
         let confirm = app.buttons
             .matching(NSPredicate(format: "label == 'Leave Group' AND identifier != 'groupInfo.leave'"))
