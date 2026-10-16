@@ -20,7 +20,11 @@ final class ErrorPresenterTests: XCTestCase {
             ),
             (
                 .RetryLater(status: 429, retryAfterSecs: 30, reason: "rate_limited"),
-                "The server is busy. Please try again in 30 seconds."
+                "The server is busy. Try again in 30 s."
+            ),
+            (
+                .RetryLater(status: 503, retryAfterSecs: 10, reason: "peer_unavailable"),
+                "Another server is unavailable. Try again in 10 s."
             ),
             (.Cancelled, "The operation was cancelled."),
             (.NotImplemented, "This isn't available in this version yet."),

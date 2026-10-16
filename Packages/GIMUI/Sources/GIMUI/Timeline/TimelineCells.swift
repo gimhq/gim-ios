@@ -15,12 +15,16 @@ enum TimelineColors {
 /// Text, image or file message: the bubble with sender name, reply preview, body, footer and reaction chips. Frames
 /// come from the precomputed `MessageLayout`; the cell measures nothing.
 final class MessageCell: UICollectionViewCell {
+    /// Shown instead of an attachment that couldn't be downloaded for now; tapping it fetches it again.
+    static let mediaRetryText = "Couldn't load — Tap to retry"
+
     let bubbleView = UIView()
     private let bubbleShape = CAShapeLayer()
     private let senderLabel = UILabel()
     private let replyView = ReplyPreviewView()
     private let bodyLabel = UILabel()
     private let imageView = UIImageView()
+    private let mediaRetryLabel = UILabel()
     private let fileView = FileRowView()
     private let footerLabel = UILabel()
     private let statusView = StatusTicksView()
@@ -58,6 +62,16 @@ final class MessageCell: UICollectionViewCell {
         imageView.accessibilityIdentifier = "timeline.message.image"
         // Image views are not accessibility elements by default; the label and traits above need one.
         imageView.isAccessibilityElement = true
+        mediaRetryLabel.text = Self.mediaRetryText
+        mediaRetryLabel.textAlignment = .center
+        mediaRetryLabel.numberOfLines = 0
+        mediaRetryLabel.textColor = .secondaryLabel
+        mediaRetryLabel.font = .preferredFont(forTextStyle: .footnote)
+        mediaRetryLabel.backgroundColor = UIColor.secondarySystemBackground.withAlphaComponent(0.85)
+        mediaRetryLabel.layer.cornerRadius = 8
+        mediaRetryLabel.clipsToBounds = true
+        mediaRetryLabel.isAccessibilityElement = false
+        imageView.addSubview(mediaRetryLabel)
         replyView.accessibilityIdentifier = "timeline.message.reply"
         statusView.accessibilityIdentifier = "timeline.message.status"
         for view in [replyView, imageView, fileView, statusView] as [UIView] {
@@ -160,13 +174,16 @@ final class MessageCell: UICollectionViewCell {
         case .image(_, _, _, let caption):
             imageView.isHidden = false
             imageView.frame = layout.media ?? .zero
-            imageView.accessibilityLabel = caption ?? "Photo"
+            mediaRetryLabel.isHidden = !row.isMediaUnavailable
+            mediaRetryLabel.frame = imageView.bounds.insetBy(dx: 8, dy: 8)
+            imageView.accessibilityLabel = row.isMediaUnavailable ? Self.mediaRetryText : caption ?? "Photo"
             bodyLabel.font = fonts.body
             bodyLabel.text = caption
         case .file(_, let fileName, let sizeText, let caption):
             fileView.isHidden = false
             fileView.frame = layout.media ?? .zero
-            fileView.configure(name: fileName, size: sizeText, fonts: fonts)
+            fileView.configure(
+                name: fileName, size: row.isMediaUnavailable ? Self.mediaRetryText : sizeText, fonts: fonts)
             bodyLabel.font = fonts.body
             bodyLabel.text = caption
         }

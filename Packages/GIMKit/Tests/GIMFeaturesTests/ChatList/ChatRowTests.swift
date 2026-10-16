@@ -65,4 +65,17 @@ final class ChatRowTests: XCTestCase {
         XCTAssertEqual(row.unreadCount, 120)
         XCTAssertEqual(row.unreadText, "99+")
     }
+
+    func testUserIdNamesAreShortened() {
+        let userId = "u" + String(repeating: "k", count: 55)
+        let summary = ChatSummary(
+            chatId: "chat-1", kind: .group, name: userId, avatar: nil,
+            lastMessage: MessagePreview(senderName: userId, text: "Hi", sentAtMs: sentAtMs, isOwn: false),
+            unreadCount: 0, updatedAtMs: sentAtMs, memberCount: 3)
+
+        let row = ChatRow(summary: summary, dateFormatter: makeFormatter())
+
+        XCTAssertEqual(row.title, "kkkkkkkk…")
+        XCTAssertEqual(row.preview, "kkkkkkkk…: Hi")
+    }
 }

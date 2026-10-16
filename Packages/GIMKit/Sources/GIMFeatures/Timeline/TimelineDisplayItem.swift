@@ -43,10 +43,14 @@ public struct TimelineMessageRow: Sendable, Hashable {
     public var timeText: String
     /// Own messages only.
     public var status: MessageStatus?
+    /// The attachment couldn't be downloaded for now (the uploader's server is unreachable or refusing): the cell
+    /// offers a retry instead of the media.
+    public var isMediaUnavailable: Bool
 
     public init(
         message: MessageItem, body: MessageBody, senderName: String?, isFirstInRun: Bool, hasTail: Bool,
-        reply: ReplyPreview?, reactions: [ReactionGroup], isEdited: Bool, timeText: String, status: MessageStatus?
+        reply: ReplyPreview?, reactions: [ReactionGroup], isEdited: Bool, timeText: String, status: MessageStatus?,
+        isMediaUnavailable: Bool = false
     ) {
         self.message = message
         self.body = body
@@ -58,6 +62,7 @@ public struct TimelineMessageRow: Sendable, Hashable {
         self.isEdited = isEdited
         self.timeText = timeText
         self.status = status
+        self.isMediaUnavailable = isMediaUnavailable
     }
 
     public var isOwn: Bool { message.isOwn }

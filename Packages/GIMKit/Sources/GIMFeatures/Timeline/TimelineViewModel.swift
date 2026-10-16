@@ -40,6 +40,8 @@ public final class TimelineViewModel {
     @ObservationIgnored private var typingUserIds: [String] = []
     /// Display names by user id, from the members and the loaded messages.
     @ObservationIgnored private var names: [String: String] = [:]
+    /// Messages whose attachment couldn't be downloaded for now; see `isTemporaryMediaFailure(_:)`.
+    @ObservationIgnored private var unavailableMedia: Set<String> = []
     @ObservationIgnored private var tasks: [Task<Void, Never>] = []
 
     /// - Parameter mediaDirectory: where fetched media files are kept; defaults to the caches directory.
@@ -160,10 +162,34 @@ public final class TimelineViewModel {
     }
 
     /// Local path of the decrypted attachment, fetched on first use. `fileName` keeps the extension QuickLook needs.
+    /// A temporary failure marks the message's row `isMediaUnavailable` until `retryMedia(messageId:)`.
     public func mediaFilePath(for media: MediaRef, fileName: String?) async throws -> String {
         let destination = try mediaPath(media, name: fileName.map(Self.safeComponent) ?? "media")
         if FileManager.default.fileExists(atPath: destination) { return destination }
-        return try await client.fetchMedia(chatId: media.chatId, messageId: media.messageId, destPath: destination)
+        do {
+            return try await client.fetchMedia(chatId: media.chatId, messageId: media.messageId, destPath: destination)
+        } catch {
+            if Self.isTemporaryMediaFailure(error), unavailableMedia.insert(media.messageId).inserted {
+                rebuild(isReset: false)
+            }
+            throw error
+        }
+    }
+
+    /// Clears the row's `isMediaUnavailable` so the cell fetches the attachment again.
+    public func retryMedia(messageId: String) {
+        guard unavailableMedia.remove(messageId) != nil else { return }
+        rebuild(isReset: false)
+    }
+
+    /// gim-core fetches a blob uploaded on another hub through the own hub and gives up with `RetryLater(503)` while
+    /// that hub stays unreachable or `Server(502)` while it keeps refusing; both may succeed later.
+    public nonisolated static func isTemporaryMediaFailure(_ error: any Error) -> Bool {
+        switch error as? GimError {
+        case .RetryLater: true
+        case .Server(let status, _): status == 502 || status == 503
+        default: false
+        }
     }
 
     // MARK: - Private
@@ -186,7 +212,7 @@ public final class TimelineViewModel {
         }
         isLoading = false
         for case .message(let message) in source where names[message.sender.userId] == nil {
-            names[message.sender.userId] = message.sender.displayName
+            names[message.sender.userId] = UserLabel.name(for: message.sender)
         }
         rebuild(isReset: change.isReset)
     }
@@ -203,7 +229,7 @@ public final class TimelineViewModel {
     }
 
     private func learnNames(_ users: [UserProfile]) {
-        for user in users { names[user.userId] = user.displayName }
+        for user in users { names[user.userId] = UserLabel.name(for: user) }
         if !typingUserIds.isEmpty { rebuild(isReset: false) }
     }
 
@@ -220,7 +246,8 @@ public final class TimelineViewModel {
 
     private func rebuild(isReset: Bool) {
         typingText = TimelineItemBuilder.typingText(names: typingUserIds.map { names[$0] ?? "Someone" })
-        let newItems = builder.build(source, isGroup: isGroup, typingText: typingText)
+        let newItems = builder.build(
+            source, isGroup: isGroup, typingText: typingText, unavailableMedia: unavailableMedia)
         let change = TimelineChangeSet(from: items, to: newItems, isReset: isReset)
         guard !change.isEmpty else { return }
         items = newItems

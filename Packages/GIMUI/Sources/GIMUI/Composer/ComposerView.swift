@@ -5,7 +5,8 @@ import SwiftUI
 /// The message input of a chat: growing text field, send button, attachments, and the reply or edit bar.
 ///
 /// `replyingTo` and `editing` are the chat screen's targets (set from the message menu); the composer adopts them
-/// and clears them when the message is sent or the bar is cancelled.
+/// and clears them when the message is sent or the bar is cancelled. While the user is leaving the chat it only says
+/// so.
 public struct ComposerView: View {
     @Binding private var replyingTo: MessageItem?
     @Binding private var editing: MessageItem?
@@ -15,51 +16,26 @@ public struct ComposerView: View {
     @State private var showsDocumentPicker = false
     @State private var isPreparingAttachment = false
 
+    /// - Parameter leavingChats: the chats the user is leaving; the composer is disabled in them.
     public init(
-        client: any GimClientAPI, chatId: String, drafts: ComposerDrafts, replyingTo: Binding<MessageItem?>,
-        editing: Binding<MessageItem?>
+        client: any GimClientAPI, chatId: String, drafts: ComposerDrafts, leavingChats: LeavingChats? = nil,
+        replyingTo: Binding<MessageItem?>, editing: Binding<MessageItem?>
     ) {
         _replyingTo = replyingTo
         _editing = editing
-        _viewModel = State(initialValue: ComposerViewModel(client: client, chatId: chatId, drafts: drafts))
+        _viewModel = State(
+            initialValue: ComposerViewModel(
+                client: client, chatId: chatId, drafts: drafts, leavingChats: leavingChats))
     }
 
     public var body: some View {
         VStack(spacing: 0) {
             Divider()
-            if let message = viewModel.editTarget {
-                TargetBar(
-                    systemImage: "pencil", title: "Edit Message", text: ComposerViewModel.previewText(for: message)
-                ) {
-                    viewModel.cancelEdit()
-                }
-            } else if let message = viewModel.replyTarget {
-                TargetBar(
-                    systemImage: "arrowshape.turn.up.left",
-                    title: message.isOwn ? "Reply to Yourself" : "Reply to \(message.sender.displayName)",
-                    text: ComposerViewModel.previewText(for: message)
-                ) {
-                    viewModel.setReplyTarget(nil)
-                }
+            if viewModel.isLeaving {
+                leavingBar
+            } else {
+                input
             }
-            HStack(alignment: .bottom, spacing: 8) {
-                attachButton
-                ZStack(alignment: .topLeading) {
-                    GrowingTextView(text: viewModel.text) { viewModel.textChanged($0) }
-                    if viewModel.text.isEmpty {
-                        Text("Message")
-                            .foregroundStyle(.tertiary)
-                            .padding(.horizontal, 9)
-                            .padding(.vertical, 8)
-                            .allowsHitTesting(false)
-                            .accessibilityHidden(true)
-                    }
-                }
-                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 18))
-                sendButton
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
         }
         .background(.bar)
         .onChange(of: replyingTo, initial: true) { _, message in
@@ -101,6 +77,55 @@ public struct ComposerView: View {
         } message: {
             Text(viewModel.errorMessage ?? "")
         }
+    }
+
+    @ViewBuilder
+    private var input: some View {
+        if let message = viewModel.editTarget {
+            TargetBar(
+                systemImage: "pencil", title: "Edit Message", text: ComposerViewModel.previewText(for: message)
+            ) {
+                viewModel.cancelEdit()
+            }
+        } else if let message = viewModel.replyTarget {
+            TargetBar(
+                systemImage: "arrowshape.turn.up.left",
+                title: message.isOwn ? "Reply to Yourself" : "Reply to \(UserLabel.name(for: message.sender))",
+                text: ComposerViewModel.previewText(for: message)
+            ) {
+                viewModel.setReplyTarget(nil)
+            }
+        }
+        HStack(alignment: .bottom, spacing: 8) {
+            attachButton
+            ZStack(alignment: .topLeading) {
+                GrowingTextView(text: viewModel.text) { viewModel.textChanged($0) }
+                if viewModel.text.isEmpty {
+                    Text("Message")
+                        .foregroundStyle(.tertiary)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 8)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+            }
+            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 18))
+            sendButton
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+    }
+
+    private var leavingBar: some View {
+        HStack(spacing: 8) {
+            ProgressView()
+            Text("Leaving…")
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, minHeight: 36)
+        .padding(.vertical, 6)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("composer.leaving")
     }
 
     @ViewBuilder

@@ -174,6 +174,36 @@ final class TimelineItemBuilderTests: XCTestCase {
 
         XCTAssertEqual(makeBuilder().build(items, isGroup: false, typingText: nil).map(\.id), ["msg:1", "msg:1#2"])
     }
+
+    func testUserIdsAndMissingNamesAreShortened() {
+        let userId = "u" + String(repeating: "q", count: 55)
+        let remote = UserProfile(userId: userId, handle: "", displayName: userId)
+        let items: [TimelineItem] = [
+            .membershipChange(userName: userId, change: .removed, atMs: nowMs - 2 * minute),
+            message("a", remote, at: nowMs - minute),
+            message(
+                "b", alice, at: nowMs,
+                replyTo: ReplyPreview(messageId: "a", senderName: userId, text: "hi")),
+        ]
+
+        let built = makeBuilder().build(items, isGroup: true, typingText: nil)
+
+        XCTAssertEqual(built.first?.kind, .membership("qqqqqqqq… was removed"))
+        XCTAssertEqual(rows(built).map(\.senderName), ["qqqqqqqq…", "Alice"])
+        XCTAssertEqual(rows(built).last?.reply?.senderName, "qqqqqqqq…")
+    }
+
+    func testUnavailableMediaIsMarked() {
+        let media = MediaRef(chatId: "chat", messageId: "a", mime: "image/png", size: 1, hasThumbnail: true)
+        let items = [
+            message("a", alice, at: nowMs, content: .image(media: media, width: nil, height: nil, caption: nil)),
+            message("b", alice, at: nowMs),
+        ]
+
+        let built = makeBuilder().build(items, isGroup: false, typingText: nil, unavailableMedia: ["a"])
+
+        XCTAssertEqual(rows(built).map(\.isMediaUnavailable), [true, false])
+    }
 }
 
 final class TimelineChangeSetTests: XCTestCase {

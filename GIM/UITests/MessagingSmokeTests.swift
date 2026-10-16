@@ -59,11 +59,15 @@ final class MessagingSmokeTests: E2ETestCase {
                 try type(
                     member.handle, into: app.textFields["newGroup.memberHandle"], "step b: member handle field", app)
                 try tap(app.buttons["newGroup.addMember"], "step b: Add button for \(member.handle)", app)
-                // The chip shows the display name, or the handle when the hub directory has no display name.
+                // The chip shows the display name (the hub directory may report the handle as the display name), or
+                // @handle when the directory has no display name.
                 let chip = app.buttons
                     .matching(
                         NSPredicate(
-                            format: "label IN %@", ["Remove \(member.displayName)", "Remove \(member.handle)"])
+                            format: "label IN %@",
+                            [
+                                "Remove \(member.displayName)", "Remove \(member.handle)", "Remove @\(member.handle)",
+                            ])
                     )
                     .firstMatch
                 try require(

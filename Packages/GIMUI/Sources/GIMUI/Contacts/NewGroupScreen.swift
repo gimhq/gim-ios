@@ -93,9 +93,10 @@ private struct MemberChip: View {
     let remove: () -> Void
 
     var body: some View {
+        let name = UserLabel.name(for: user)
         HStack(spacing: 6) {
-            AvatarView(id: user.userId, name: user.displayName, avatarPath: nil, size: 24)
-            Text(user.displayName)
+            AvatarView(id: user.userId, name: name, avatarPath: nil, size: 24)
+            Text(name)
                 .font(.subheadline)
                 .lineLimit(1)
             Button(action: remove) {
@@ -103,7 +104,7 @@ private struct MemberChip: View {
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.borderless)
-            .accessibilityLabel("Remove \(user.displayName)")
+            .accessibilityLabel("Remove \(name)")
         }
         .padding(.leading, 4)
         .padding(.trailing, 8)

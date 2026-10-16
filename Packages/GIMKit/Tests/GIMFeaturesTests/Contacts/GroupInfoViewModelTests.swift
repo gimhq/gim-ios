@@ -275,16 +275,48 @@ final class GroupInfoViewModelTests: XCTestCase {
 
     @MainActor
     func testLeaveGroup() async throws {
-        let (client, viewModel) = try await startedGroup()
+        let (client, scheduler) = await connected(makeDemoClient())
+        let chatId = try await client.createGroupChat(name: "Regatta", memberUserIds: ["user-sofia", "user-luca"])
+        let leavingChats = LeavingChats(client: client, now: { fixedNow })
+        let viewModel = GroupInfoViewModel(client: client, chatId: chatId, leavingChats: leavingChats)
+        viewModel.start()
+        await viewModel.load()
+        await eventually { viewModel.summary != nil }
 
         await viewModel.leave()
 
         XCTAssertTrue(viewModel.hasLeft)
         XCTAssertNil(viewModel.errorMessage)
+        XCTAssertTrue(leavingChats.contains(chatId))
+        // The chat stays until another member commits the leave.
+        let idsWhileLeaving = try await chatIds(client)
+        XCTAssertTrue(idsWhileLeaving.contains(chatId))
+        await settle()
+        await scheduler.advance(by: FakeGimClient.leaveCommitDelay)
+        let idsAfterLeft = try await chatIds(client)
+        XCTAssertFalse(idsAfterLeft.contains(chatId))
+        await eventually { !leavingChats.contains(chatId) }
+    }
+
+    @MainActor
+    func testAddMemberWithoutDeviceShowsNotFound() async throws {
+        let (client, viewModel) = try await startedGroup()
+        await client.addRemoteUser(UserProfile(userId: "user-kai", handle: "kai", displayName: "Kai"), hasDevice: false)
+
+        viewModel.memberHandle = "kai"
+        await viewModel.addMember()
+
+        XCTAssertEqual(viewModel.errorMessage, "None of these users could be found")
+        XCTAssertEqual(viewModel.memberHandle, "kai")
+        XCTAssertEqual(viewModel.members?.count, 3)
+    }
+
+    @MainActor
+    private func chatIds(_ client: FakeGimClient) async throws -> [String] {
         let list = await first(try await ListenerBridge.chatList(client))
         var chats: [ChatSummary] = []
         try DiffApplier.apply(try XCTUnwrap(list), to: &chats)
-        XCTAssertFalse(chats.contains { $0.chatId == viewModel.chatId })
+        return chats.map(\.chatId)
     }
 }
 

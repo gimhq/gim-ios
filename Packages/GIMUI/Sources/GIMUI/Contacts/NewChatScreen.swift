@@ -83,17 +83,19 @@ public struct NewChatScreen: View {
     }
 }
 
-/// Avatar, display name and handle of one user.
+/// Avatar, name and handle of one user. A user without a handle (remote users may have none) shows the short user
+/// id instead.
 struct UserRow: View {
     let user: UserProfile
     var detail: String?
 
     var body: some View {
+        let name = UserLabel.name(for: user)
         HStack(spacing: 12) {
-            AvatarView(id: user.userId, name: user.displayName, avatarPath: nil, size: 40)
+            AvatarView(id: user.userId, name: name, avatarPath: nil, size: 40)
             VStack(alignment: .leading) {
-                Text(user.displayName).foregroundStyle(.primary)
-                Text(detail ?? "@\(user.handle)")
+                Text(name).foregroundStyle(.primary)
+                Text(detail ?? UserLabel.detail(for: user))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }

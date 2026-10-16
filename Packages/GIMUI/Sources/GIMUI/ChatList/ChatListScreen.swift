@@ -11,12 +11,17 @@ public struct ChatListScreen: View {
     @State private var viewModel: ChatListViewModel
     @State private var showsNewChat = false
 
-    /// - Parameter onOpenSettings: shows a settings button in the toolbar when set.
-    public init(client: any GimClientAPI, onOpen: @escaping (String) -> Void, onOpenSettings: (() -> Void)? = nil) {
+    /// - Parameters:
+    ///   - leavingChats: the chats the user is leaving; their rows say so.
+    ///   - onOpenSettings: shows a settings button in the toolbar when set.
+    public init(
+        client: any GimClientAPI, leavingChats: LeavingChats? = nil, onOpen: @escaping (String) -> Void,
+        onOpenSettings: (() -> Void)? = nil
+    ) {
         self.client = client
         self.onOpen = onOpen
         self.onOpenSettings = onOpenSettings
-        _viewModel = State(initialValue: ChatListViewModel(client: client))
+        _viewModel = State(initialValue: ChatListViewModel(client: client, leavingChats: leavingChats))
     }
 
     public var body: some View {
@@ -24,7 +29,7 @@ public struct ChatListScreen: View {
             Button {
                 onOpen(row.id)
             } label: {
-                ChatRowView(row: row)
+                ChatRowView(row: row, subtitle: viewModel.subtitle(for: row))
             }
         }
         .listStyle(.plain)
@@ -91,6 +96,7 @@ public struct ChatListScreen: View {
 
 private struct ChatRowView: View {
     let row: ChatRow
+    let subtitle: String
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -109,7 +115,7 @@ private struct ChatRowView: View {
                     }
                 }
                 HStack(alignment: .top) {
-                    Text(row.preview ?? "No messages yet")
+                    Text(subtitle)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .lineLimit(2, reservesSpace: true)

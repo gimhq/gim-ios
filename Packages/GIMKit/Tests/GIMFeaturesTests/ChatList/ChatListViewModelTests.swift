@@ -126,6 +126,26 @@ final class ChatListViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.isLoading)
         XCTAssertEqual(viewModel.errorMessage, ErrorPresenter.message(for: GimError.NotRegistered))
     }
+
+    @MainActor
+    func testLeavingChatSubtitle() async throws {
+        let (client, scheduler) = await connected(makeDemoClient())
+        let leavingChats = LeavingChats(client: client, now: { fixedNow })
+        let viewModel = ChatListViewModel(client: client, dateFormatter: makeFormatter(), leavingChats: leavingChats)
+        viewModel.start()
+        await eventually { viewModel.rows.count == 2 }
+        let group = viewModel.rows[0]
+        XCTAssertEqual(viewModel.subtitle(for: group), "Nikos Papadopoulos: Me, grilled octopus 🐙")
+
+        try await leavingChats.leave(chatId: group.id)
+
+        XCTAssertEqual(viewModel.subtitle(for: group), "Leaving…")
+        XCTAssertEqual(viewModel.subtitle(for: viewModel.rows[1]), viewModel.rows[1].preview)
+        await settle()
+        await scheduler.advance(by: FakeGimClient.leaveCommitDelay)
+        await eventually { viewModel.rows.map(\.id) == [FakeGimClient.demoDirectChatId] }
+        await eventually { !leavingChats.contains(group.id) }
+    }
 }
 
 /// Client whose chat list listener fails; the connection state listener works.

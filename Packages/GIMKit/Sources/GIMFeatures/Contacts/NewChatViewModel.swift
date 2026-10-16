@@ -15,6 +15,8 @@ public final class NewChatViewModel {
     }
 
     public static let defaultDebounce: Duration = .milliseconds(300)
+    /// `createDirectChat` fails with `NotFound` when the user does not exist or has no device.
+    public static let notFoundMessage = "User not found"
 
     /// Typing restarts the debounced search.
     public var query = "" {
@@ -55,6 +57,9 @@ public final class NewChatViewModel {
         defer { isStarting = false }
         do {
             return try await client.createDirectChat(userId: user.userId)
+        } catch GimError.NotFound {
+            startError = Self.notFoundMessage
+            return nil
         } catch {
             startError = ErrorPresenter.message(for: error)
             return nil
