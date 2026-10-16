@@ -3,7 +3,7 @@
 `Packages/GIMKit/Sources/GIMClientKit` mirrors the UniFFI Swift bindings of gim-core so that switching to the real
 `GIMCore.xcframework` is a mechanical swap.
 
-- Mirrored commit: gim-core `3724543` (`bindings/gim-ffi/src/`, generated
+- Mirrored commit: gim-core `7077421` (`bindings/gim-ffi/src/`, generated
   `bindings/gim-ffi/generated/swift/GIMCore.swift`, contract in `docs/API.md`).
 - Mirror sources: `GimClientAPI.swift` (objects, callback interfaces, hooks, `createClient`) and `Models.swift`
   (records, enums, diffs, errors).
@@ -55,6 +55,7 @@ on its declaration) and conforms to `Error, Sendable, Hashable, LocalizedError` 
 | `ConnectionStateListener` | `ConnectionStateListener` | `onChange(state: ConnectionState)` |
 | `TypingListener` | `TypingListener` | `onUpdate(userIds: [String])` |
 | `PlatformHooks` | `PlatformHooks` | `secureStoreGet(key:) throws -> Data?`, `secureStoreSet(key:value:) throws`, `secureStoreDelete(key:)`, `dataDir() -> String`, `isNetworkReachable() -> Bool` |
+| `LocalTimeZone` | `LocalTimeZone` | `utcOffsetSecs(atMs: Int64) -> Int32` |
 
 All are `AnyObject, Sendable` protocols in both. The mirror spells parameter types `any ChatListListener`; the
 generated code writes the bare protocol name, which is the same type.
@@ -70,11 +71,12 @@ generated code writes the bare protocol name, which is the same type.
 | `final class TaskHandle` | `open class TaskHandle: TaskHandleProtocol` | Intentional: concrete class with `init(onCancel:)`. `cancel()`, `isFinished() -> Bool`; releasing the last reference cancels, like the Rust `Drop`. No `TaskHandleProtocol` mirror. |
 | `createClient(config:hooks:) async throws -> any GimClientAPI` | `createClient(config:hooks:) async throws -> GimClient` | Mirror validates the URL like gim-core (`InvalidInput(reason: "server_url: …")`) and returns a demo `FakeGimClient` without a session that seeds the demo chats on `createIdentity`. |
 | — | `coreVersion()`, `ciphersuiteName()` | Not mirrored; nothing uses them yet. |
+| — | `LocalTimeZoneImpl` | Generated wrapper for a Rust-implemented zone; gim-core never hands one to the app. |
 | — | `*Impl` classes, `NoHandle`, `uniffi*` | Generated plumbing, not mirrored. |
 
 ## GimClient methods
 
-Every method of `GimClientProtocol` at `3724543`, with identical labels, argument types and `async`/`throws`. The
+Every method of `GimClientProtocol` at `7077421`, with identical labels, argument types and `async`/`throws`. The
 only type differences are `any Timeline` / `any LinkSession` / `any PendingApproval` (generated: the classes) and the
 listener parameter spelling above.
 
@@ -123,6 +125,7 @@ listener parameter spelling above.
 | `fetchThumbnail(chatId:messageId:destPath:) async throws -> String?` | same |
 | `chatList(listener:) async throws -> TaskHandle` | same |
 | `timeline(chatId:) async throws -> any Timeline` | `-> Timeline` |
+| `setLocalTimeZone(zone: (any LocalTimeZone)?)` | `zone: LocalTimeZone?` (synchronous, never throws) |
 | `connectionState(listener:) async throws -> TaskHandle` | same |
 | `typing(chatId:listener:) async throws -> TaskHandle` | same |
 
@@ -131,6 +134,37 @@ a `TimelineItem.membershipChange` arrives. When a query fails before any list ha
 `ChatSummary.memberCount` (no member list, no removal); a list that loaded before stays on later failures.
 Renaming a group goes `GroupInfoViewModel.saveName()` → `GimClientAPI.setGroupInfo(name:)` →
 `RealGimClient` → `GIMCore.GimClient.setGroupInfo`.
+
+## Changes since `3724543`
+
+`7077421` (vendored with `scripts/sync-gim-core.sh 38830392117`; local database schema v3, migrated by gim-core).
+Diff of the generated `GIMCore.swift`:
+
+- Added `GimClientProtocol.setLocalTimeZone(zone: LocalTimeZone?)` (synchronous, never throws) and the callback
+  interface `LocalTimeZone` (`utcOffsetSecs(atMs: Int64) -> Int32`, the offset from UTC in effect at that instant,
+  DST included). `nil` is UTC, the default.
+- `TimelineItem.dateSeparator(dayStartMs:)` is now the start of a local calendar day in that zone (was: UTC day).
+  Changing the zone moves the separators of open timelines through their listeners as ordinary diffs.
+- Doc-only (checksums changed): `createIdentity`, `restoreFromRecovery` and `waitLink` keep nothing of a failed
+  attempt (gim-core `docs/API.md`, "Retrying onboarding"). `waitLink` on a `LinkSession` that already received a
+  bundle fails with `InvalidInput` (gim-core `crates/gim-sdk/src/link.rs`); before a bundle arrived the same session
+  can wait again.
+- Federation behaviour (hosting record, pending invites, peer retries) needs no new API; no record, enum or error
+  case changed.
+
+App adaptations:
+
+- `AppModel` wraps its factory so that every client (gim-core or demo) is attached to `TimeZoneMonitor`, which sets
+  a new `SystemLocalTimeZone` (`TimeZone.current` at creation) right after creation and again on
+  `NSSystemTimeZoneDidChange`. `RealGimClient` passes it through `CoreLocalTimeZone`, answered on gim-core's thread.
+  The app never re-bucketed separators; `TimelineItemBuilder` still only formats `dayStartMs`.
+- `FakeGimClient` buckets its date separators with the zone set by `setLocalTimeZone` (UTC when `nil`), with gim-core's
+  rule (offsets at the start of the UTC hour, day start at local midnight), and republishes open timelines on a change.
+  Its `calendar` parameter is gone.
+- Onboarding retries no longer skip calls when the client has a user: `CreateIdentityViewModel` calls
+  `createIdentity` again (new user and code), `RestoreViewModel` calls `restoreFromRecovery` again, and
+  `LinkThisDeviceViewModel` waits again on the same `LinkSession`, starting a new one when that fails with
+  `InvalidInput` (bundle already received). `confirmLink(false)` still wipes the device and discards the client.
 
 ## Changes since `2d08f38`
 

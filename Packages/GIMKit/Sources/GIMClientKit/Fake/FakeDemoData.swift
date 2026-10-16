@@ -16,13 +16,12 @@ extension FakeGimClient {
         scheduler: any FakeScheduler = RealDelayFakeScheduler(),
         dataDirectory: String = FakeGimClient.defaultDataDirectory,
         now: @escaping @Sendable () -> Date = { Date() },
-        calendar: Calendar = .autoupdatingCurrent,
         autoReply: Bool = true,
         registered: Bool = true,
         networkReachable: Bool = true
     ) -> FakeGimClient {
         let options = Options(
-            scheduler: scheduler, dataDirectory: dataDirectory, now: now, calendar: calendar, autoReply: autoReply,
+            scheduler: scheduler, dataDirectory: dataDirectory, now: now, autoReply: autoReply,
             networkReachable: networkReachable)
         guard registered else {
             return FakeGimClient(

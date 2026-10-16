@@ -6,7 +6,7 @@ import Synchronization
 /// Emits the same diff semantics as gim-core (eyeball-im `VectorDiff`): the chat list is ordered by `updatedAtMs`
 /// descending, ties by chat id; each timeline is ordered oldest first, exposes a window of the newest items that
 /// `paginateBackwards` grows at the front, and has a `dateSeparator` before the first item of each local calendar
-/// day (in `calendar`). Sync only runs between `startSync()` and `stopSync()`; own messages wait in the outbox until
+/// day (in the zone set with `setLocalTimeZone`, UTC until then). Sync only runs between `startSync()` and `stopSync()`; own messages wait in the outbox until
 /// the client is connected. Delayed behaviour (connecting, send state progression, peer typing and replies) runs
 /// through `FakeScheduler`.
 ///
@@ -79,7 +79,6 @@ public actor FakeGimClient: GimClientAPI {
         var scheduler: any FakeScheduler
         var dataDirectory: String
         var now: @Sendable () -> Date
-        var calendar: Calendar
         var autoReply: Bool
         var networkReachable: Bool
     }
@@ -96,6 +95,7 @@ public actor FakeGimClient: GimClientAPI {
     private let options: Options
     private let seedsDemoOnRegister: Bool
     private let reachabilityUpdates: AsyncStream<Bool>.Continuation
+    private let timeZoneUpdates: AsyncStream<(any LocalTimeZone)?>.Continuation
 
     private var session: Session? {
         didSet { sessionUserId.withLock { $0 = session?.userId } }
@@ -118,6 +118,8 @@ public actor FakeGimClient: GimClientAPI {
     private var publishedChatList: [ChatSummary] = []
     private var publishedTimelines: [String: [TimelineItem]] = [:]
     private var networkReachable: Bool
+    /// Splits the timelines into days; `nil` is UTC.
+    private var localTimeZone: (any LocalTimeZone)?
     private var syncRunning = false
     private var connection: ConnectionState = .offline
     /// Bumped on every connection change so stale scheduled steps do nothing.
@@ -136,7 +138,6 @@ public actor FakeGimClient: GimClientAPI {
     private var typingSubscribers: [String: [Subscriber<any TypingListener>]] = [:]
 
     /// - Parameters:
-    ///   - calendar: decides the local calendar days of `dateSeparator` items.
     ///   - autoReply: peers type and reply in direct chats after each own send.
     ///   - networkReachable: initial reachability, as `PlatformHooks.isNetworkReachable()` reports it.
     ///   - users: directory of users `findUser` can return.
@@ -146,7 +147,6 @@ public actor FakeGimClient: GimClientAPI {
         scheduler: any FakeScheduler = ImmediateFakeScheduler(),
         dataDirectory: String = FakeGimClient.defaultDataDirectory,
         now: @escaping @Sendable () -> Date = { Date() },
-        calendar: Calendar = .autoupdatingCurrent,
         autoReply: Bool = false,
         networkReachable: Bool = true,
         users: [UserProfile] = [],
@@ -159,8 +159,8 @@ public actor FakeGimClient: GimClientAPI {
         }
         self.init(
             options: Options(
-                scheduler: scheduler, dataDirectory: dataDirectory, now: now, calendar: calendar,
-                autoReply: autoReply, networkReachable: networkReachable),
+                scheduler: scheduler, dataDirectory: dataDirectory, now: now, autoReply: autoReply,
+                networkReachable: networkReachable),
             seed: seed, seedsDemoOnRegister: false)
     }
 
@@ -169,6 +169,8 @@ public actor FakeGimClient: GimClientAPI {
         self.seedsDemoOnRegister = seedsDemoOnRegister
         let (updates, continuation) = AsyncStream.makeStream(of: Bool.self)
         reachabilityUpdates = continuation
+        let (zoneUpdates, zoneContinuation) = AsyncStream.makeStream(of: (any LocalTimeZone)?.self)
+        timeZoneUpdates = zoneContinuation
         networkReachable = options.networkReachable
         session = seed.session
         sessionUserId.withLock { $0 = seed.session?.userId }
@@ -185,17 +187,23 @@ public actor FakeGimClient: GimClientAPI {
         chats = Dictionary(uniqueKeysWithValues: seed.chats.map { ($0.id, $0) })
         media = seed.media
         publishedChatList = Self.sortedSummaries(chats: chats, users: users, session: seed.session)
-        publishedTimelines = chats.mapValues { Self.timelineItems(of: $0, calendar: options.calendar) }
-        // `setNetworkReachable` is synchronous; this keeps its updates in call order.
+        publishedTimelines = chats.mapValues { Self.timelineItems(of: $0, zone: nil) }
+        // `setNetworkReachable` and `setLocalTimeZone` are synchronous; this keeps their updates in call order.
         Task { [weak self] in
             for await reachable in updates {
                 await self?.simulateNetworkReachable(reachable)
+            }
+        }
+        Task { [weak self] in
+            for await zone in zoneUpdates {
+                await self?.simulateLocalTimeZone(zone)
             }
         }
     }
 
     deinit {
         reachabilityUpdates.finish()
+        timeZoneUpdates.finish()
     }
 
     public static var defaultDataDirectory: String {
@@ -238,6 +246,15 @@ public actor FakeGimClient: GimClientAPI {
             reconnect()
         } else {
             setConnection(.offline)
+        }
+    }
+
+    /// Applies a time zone change immediately; `setLocalTimeZone(zone:)` does the same asynchronously. Open timelines
+    /// move their date separators through their listeners.
+    public func simulateLocalTimeZone(_ zone: (any LocalTimeZone)?) {
+        localTimeZone = zone
+        for chatId in chats.keys {
+            publishTimelineChange(chatId)
         }
     }
 
@@ -488,6 +505,10 @@ public actor FakeGimClient: GimClientAPI {
 
     public nonisolated func setNetworkReachable(reachable: Bool) {
         reachabilityUpdates.yield(reachable)
+    }
+
+    public nonisolated func setLocalTimeZone(zone: (any LocalTimeZone)?) {
+        timeZoneUpdates.yield(zone)
     }
 
     private func reconnect() {
@@ -1026,7 +1047,7 @@ public actor FakeGimClient: GimClientAPI {
     /// Emits the diffs that move the published timeline of `chatId` to its current state.
     private func publishTimelineChange(_ chatId: String) {
         guard let chat = chats[chatId] else { return }
-        let items = Self.timelineItems(of: chat, calendar: options.calendar)
+        let items = Self.timelineItems(of: chat, zone: localTimeZone)
         let diffs = Self.timelineDiffs(from: publishedTimelines[chatId] ?? [], to: items)
         publishedTimelines[chatId] = items
         guard !diffs.isEmpty else { return }
@@ -1115,13 +1136,13 @@ public actor FakeGimClient: GimClientAPI {
         }
     }
 
-    /// The loaded window of `chat` with a `dateSeparator` before the first item of each local calendar day.
-    static func timelineItems(of chat: StoredChat, calendar: Calendar) -> [TimelineItem] {
+    /// The loaded window of `chat` with a `dateSeparator` before the first item of each local calendar day in `zone`
+    /// (UTC when `nil`).
+    static func timelineItems(of chat: StoredChat, zone: (any LocalTimeZone)?) -> [TimelineItem] {
         var items: [TimelineItem] = []
         var currentDay: UInt64?
         for entry in chat.entries.suffix(chat.loadedCount) {
-            let date = Date(timeIntervalSince1970: TimeInterval(entry.atMs) / 1000)
-            let day = milliseconds(calendar.startOfDay(for: date))
+            let day = dayStartMs(of: entry.atMs, zone: zone)
             if day != currentDay {
                 items.append(.dateSeparator(dayStartMs: day))
                 currentDay = day
@@ -1129,6 +1150,22 @@ public actor FakeGimClient: GimClientAPI {
             items.append(entry.timelineItem)
         }
         return items
+    }
+
+    /// Start of the local calendar day containing `atMs`, like gim-core: offsets are taken at the start of the UTC
+    /// hour, and the day starts at local midnight with the offset in effect at midnight.
+    static func dayStartMs(of atMs: UInt64, zone: (any LocalTimeZone)?) -> UInt64 {
+        /// `value` rounded down to a multiple of `unit`, also for negative values.
+        func floor(_ value: Int64, to unit: Int64) -> Int64 {
+            value - ((value % unit) + unit) % unit
+        }
+        func offsetMs(_ at: Int64) -> Int64 {
+            guard let zone else { return 0 }
+            return Int64(zone.utcOffsetSecs(atMs: floor(at, to: 3_600_000))) * 1000
+        }
+        let at = Int64(clamping: atMs)
+        let midnight = floor(at + offsetMs(at), to: 86_400_000)
+        return UInt64(clamping: midnight - offsetMs(midnight - offsetMs(midnight)))
     }
 
     /// Diffs from `old` to `new` that keep the common prefix and suffix and replace the middle.

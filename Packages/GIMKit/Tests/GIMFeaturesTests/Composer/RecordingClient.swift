@@ -116,6 +116,7 @@ actor RecordingClient: GimClientAPI {
     func startSync() async throws { try await fake.startSync() }
     func stopSync() async throws { try await fake.stopSync() }
     nonisolated func setNetworkReachable(reachable: Bool) { fake.setNetworkReachable(reachable: reachable) }
+    nonisolated func setLocalTimeZone(zone: (any LocalTimeZone)?) { fake.setLocalTimeZone(zone: zone) }
     func findUser(handle: String) async throws -> UserProfile? { try await fake.findUser(handle: handle) }
     func createDirectChat(userId: String) async throws -> String { try await fake.createDirectChat(userId: userId) }
     func createGroupChat(name: String, memberUserIds: [String]) async throws -> String {

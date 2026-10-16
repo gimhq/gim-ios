@@ -31,23 +31,28 @@ actor LinkGate {
 }
 
 /// Forwards to a `FakeGimClient` and records the link calls as `"<name>.<call>"` once they returned. `waitLink`
-/// waits for `waitLinkGate` and throws the next of `waitLinkErrors` first.
+/// waits for `waitLinkGate` and throws the next of `waitLinkErrors` first. With `waitLinkFailsAfterBundle` those
+/// failures happen after the bundle arrived: like gim-core, waiting again on that link session throws `InvalidInput`.
 actor LinkRecordingClient: GimClientAPI {
     let fake: FakeGimClient
     let name: String
     let log: LinkCallLog
     let waitLinkGate: LinkGate?
+    let waitLinkFailsAfterBundle: Bool
     private var waitLinkErrors: [GimError]
+    /// QR strings of the link sessions a failure after the bundle used up.
+    private var usedUpLinks: Set<String> = []
 
     init(
         _ fake: FakeGimClient = FakeGimClient(), name: String, log: LinkCallLog, waitLinkGate: LinkGate? = nil,
-        waitLinkErrors: [GimError] = []
+        waitLinkErrors: [GimError] = [], waitLinkFailsAfterBundle: Bool = false
     ) {
         self.fake = fake
         self.name = name
         self.log = log
         self.waitLinkGate = waitLinkGate
         self.waitLinkErrors = waitLinkErrors
+        self.waitLinkFailsAfterBundle = waitLinkFailsAfterBundle
     }
 
     nonisolated func startLink(hubs: [String]) throws -> any LinkSession {
@@ -57,8 +62,13 @@ actor LinkRecordingClient: GimClientAPI {
     }
     func waitLink(link: any LinkSession) async throws -> String {
         await waitLinkGate?.wait()
+        if usedUpLinks.contains(link.qrString()) {
+            log.append("\(name).waitLink used up")
+            throw GimError.InvalidInput(reason: "the link session was used; start a new one")
+        }
         if !waitLinkErrors.isEmpty {
             log.append("\(name).waitLink failed")
+            if waitLinkFailsAfterBundle { usedUpLinks.insert(link.qrString()) }
             throw waitLinkErrors.removeFirst()
         }
         let sas = try await fake.waitLink(link: link)
@@ -102,6 +112,7 @@ actor LinkRecordingClient: GimClientAPI {
     func startSync() async throws { try await fake.startSync() }
     func stopSync() async throws { try await fake.stopSync() }
     nonisolated func setNetworkReachable(reachable: Bool) { fake.setNetworkReachable(reachable: reachable) }
+    nonisolated func setLocalTimeZone(zone: (any LocalTimeZone)?) { fake.setLocalTimeZone(zone: zone) }
     func findUser(handle: String) async throws -> UserProfile? { try await fake.findUser(handle: handle) }
     func createDirectChat(userId: String) async throws -> String { try await fake.createDirectChat(userId: userId) }
     func createGroupChat(name: String, memberUserIds: [String]) async throws -> String {

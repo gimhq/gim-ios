@@ -8,7 +8,8 @@ import SwiftUI
 ///
 /// The server URL is part of `ClientConfig`, so the client is created for the last used server (stored in
 /// `defaults`) or by onboarding for the URL the user types. Sync runs while the scene is active. Signing out drops
-/// the client; onboarding creates a new one.
+/// the client; onboarding creates a new one. Every client created through the factory gets the system time zone
+/// for its date separators (`TimeZoneMonitor`), also when it changes.
 @MainActor
 @Observable
 public final class AppModel {
@@ -44,17 +45,20 @@ public final class AppModel {
     @ObservationIgnored private var isSyncing = false
 
     /// - Parameters:
-    ///   - factory: the single swap point between `createClient` and test clients; see `defaultFactory()`.
+    ///   - factory: the single swap point between `createClient` and test clients; see `defaultFactory()`. Wrapped so
+    ///     that every client it makes is attached to `timeZones`.
     ///   - defaults: remembers the last server URL; its argument domain may hold `defaultServerUrlKey`.
     ///   - bundledServerUrl: the Info.plist `defaultServerUrlKey` value.
     ///   - makeHooks: builds the platform hooks handed to the factory (once per process).
+    ///   - timeZones: sets the system time zone on each new client and on time zone changes.
     public init(
         factory: any GimClientFactory = AppModel.defaultFactory(),
         defaults: UserDefaults = .standard,
         bundledServerUrl: String? = Bundle.main.object(forInfoDictionaryKey: AppModel.defaultServerUrlKey) as? String,
-        makeHooks: @escaping @MainActor () throws -> any PlatformHooks = AppModel.defaultHooks
+        makeHooks: @escaping @MainActor () throws -> any PlatformHooks = AppModel.defaultHooks,
+        timeZones: TimeZoneMonitor = TimeZoneMonitor()
     ) {
-        self.factory = factory
+        self.factory = TimeZoneAttachingFactory(base: factory, timeZones: timeZones)
         self.defaults = defaults
         self.bundledServerUrl = bundledServerUrl
         self.makeHooks = makeHooks
@@ -194,5 +198,18 @@ public final class AppModel {
             // Retried on the next scene phase change.
             isSyncing = !start
         }
+    }
+}
+
+/// Attaches every client `base` creates to `timeZones`, so the real and the demo client bucket their date separators
+/// in the system time zone.
+private struct TimeZoneAttachingFactory: GimClientFactory {
+    let base: any GimClientFactory
+    let timeZones: TimeZoneMonitor
+
+    func make(config: ClientConfig, hooks: any PlatformHooks) async throws -> any GimClientAPI {
+        let client = try await base.make(config: config, hooks: hooks)
+        timeZones.attach(client)
+        return client
     }
 }

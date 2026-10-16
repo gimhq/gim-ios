@@ -17,8 +17,8 @@ public final class CreateIdentityViewModel {
     private let context: OnboardingContext
     private let onCreated: @MainActor (any GimClientAPI, String?) -> Void
 
-    /// - Parameter onCreated: receives the client and the recovery code; the code is `nil` when the client already
-    ///   had an identity (a retry after the code was shown), so it can't be shown again.
+    /// - Parameter onCreated: receives the client and the recovery code of the call that succeeded. A failed
+    ///   `createIdentity` keeps nothing, so a retry creates a new user with a new code on the same client.
     public init(
         context: OnboardingContext,
         onCreated: @escaping @MainActor (_ client: any GimClientAPI, _ recoveryCode: String?) -> Void
@@ -43,7 +43,6 @@ public final class CreateIdentityViewModel {
         defer { isSubmitting = false }
         do {
             let client = try await context.client()
-            guard client.userId() == nil else { return onCreated(client, nil) }
             let recoveryCode = try await client.createIdentity(
                 displayName: OnboardingValidation.normalizedDisplayName(displayName))
             onCreated(client, recoveryCode)

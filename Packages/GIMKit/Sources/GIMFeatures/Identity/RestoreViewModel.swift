@@ -55,12 +55,10 @@ public final class RestoreViewModel {
         defer { isSubmitting = false }
         do {
             let client = try await context.client()
-            // A retry after the restore itself succeeded: the client already has the identity.
-            if client.userId() == nil {
-                try await client.restoreFromRecovery(
-                    userId: Self.normalized(userId), recoveryCode: Self.normalized(recoveryCode),
-                    revokeOthers: revokeOthers)
-            }
+            // A failed restore keeps nothing, so a retry calls it again on the same client.
+            try await client.restoreFromRecovery(
+                userId: Self.normalized(userId), recoveryCode: Self.normalized(recoveryCode),
+                revokeOthers: revokeOthers)
             guard let session = try await client.session() else { throw GimError.NotRegistered }
             recoveryCode = ""
             registration = Registration(client: client, config: context.config, session: session)

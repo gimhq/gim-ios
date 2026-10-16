@@ -213,6 +213,10 @@ public final class RealGimClient: GimClientAPI {
         try await bridged { try await RealTimeline(core.timeline(chatId: chatId)) }
     }
 
+    public func setLocalTimeZone(zone: (any GIMClientKit.LocalTimeZone)?) {
+        core.setLocalTimeZone(zone: zone.map { CoreLocalTimeZone($0) })
+    }
+
     public func connectionState(
         listener: any GIMClientKit.ConnectionStateListener
     ) async throws -> GIMClientKit.TaskHandle {

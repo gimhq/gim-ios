@@ -28,6 +28,14 @@ public protocol TypingListener: AnyObject, Sendable {
     func onUpdate(userIds: [String])
 }
 
+/// The local time zone timeline date separators split calendar days in, set with
+/// `GimClientAPI.setLocalTimeZone(zone:)`. Called from any thread (gim-core: a Rust background thread); do not call
+/// back into the client from it.
+public protocol LocalTimeZone: AnyObject, Sendable {
+    /// The offset from UTC in seconds in effect at `atMs` (milliseconds since the epoch), DST included.
+    func utcOffsetSecs(atMs: Int64) -> Int32
+}
+
 /// Services the app provides to gim-core, passed to `createClient`. Methods may be called from any thread.
 public protocol PlatformHooks: AnyObject, Sendable {
     /// Reads a secret from the platform keystore; `nil` when the key does not exist. Throws when the keystore can't
@@ -82,7 +90,8 @@ public protocol Timeline: AnyObject, Sendable {
 }
 
 /// A link offer of a new device: show `qrString()` as a QR code, then pass it to `GimClientAPI.waitLink(link:)`.
-/// Accepts a single bundle; start a new one after a failed `waitLink`.
+/// Accepts a single bundle: after a `waitLink` failure before the bundle arrived, wait again with the same session;
+/// once a bundle arrived it is used up (`waitLink` fails with `InvalidInput`), start a new one.
 public protocol LinkSession: AnyObject, Sendable {
     /// The string to encode in the QR code the old device scans.
     func qrString() -> String
@@ -112,17 +121,20 @@ public protocol GimClientAPI: AnyObject, Sendable {
     // Identity and devices (gim-core docs/API.md, "Identity and devices").
 
     /// Creates a new identity with this device as its first one and signs in. Returns the recovery code, which is
-    /// stored nowhere and must be shown to the user once. `InvalidInput` with a session.
+    /// stored nowhere and must be shown to the user once. `InvalidInput` with a session. A failure keeps nothing of
+    /// the attempt: call it again, which creates a new user.
     func createIdentity(displayName: String) async throws -> String
     /// Restores the user on this fresh device from its recovery code: `InvalidInput` for a malformed code, `Crypto`
     /// for a wrong one, `NotFound` if the hub has no DeviceList of the user, `RetryLater` while the hub throttles.
-    /// `revokeOthers` revokes every previously listed device. Chats are not rejoined automatically.
+    /// `revokeOthers` revokes every previously listed device. Chats are not rejoined automatically. A failure keeps
+    /// nothing of the attempt: call it again with the same arguments.
     func restoreFromRecovery(userId: String, recoveryCode: String, revokeOthers: Bool) async throws
     /// New device: starts a link; show `LinkSession.qrString()` and call `waitLink`. `hubs` are the hub URLs the old
     /// device may post the bundle to. Synchronous.
     func startLink(hubs: [String]) throws -> any LinkSession
     /// New device: waits (up to 10 minutes) for the old device to approve the link, then signs in as a new device of
-    /// that user. Returns the SAS to compare with the old device's; finish with `confirmLink`.
+    /// that user. Returns the SAS to compare with the old device's; finish with `confirmLink`. A failure keeps nothing
+    /// of the attempt: if no bundle arrived, call it again with the same `link`; otherwise `link` is used up.
     func waitLink(link: any LinkSession) async throws -> String
     /// New device: the user compared the SAS. `false` wipes the device like `signOut()`; create a new client
     /// afterwards.
@@ -194,6 +206,10 @@ public protocol GimClientAPI: AnyObject, Sendable {
 
     func chatList(listener: any ChatListListener) async throws -> TaskHandle
     func timeline(chatId: String) async throws -> any Timeline
+    /// Sets the time zone date separators split calendar days in; `nil` (the default) is UTC. Call it again when the
+    /// system time zone changes: open timelines move their date separators through their listeners. Synchronous and
+    /// never throws.
+    func setLocalTimeZone(zone: (any LocalTimeZone)?)
     func connectionState(listener: any ConnectionStateListener) async throws -> TaskHandle
     func typing(chatId: String, listener: any TypingListener) async throws -> TaskHandle
 }
