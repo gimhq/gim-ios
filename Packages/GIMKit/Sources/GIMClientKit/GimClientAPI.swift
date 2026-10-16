@@ -4,8 +4,10 @@ import Foundation
 // callback interfaces, platform hooks and `createClient` (`bindings/gim-ffi/src/`). Method names and argument labels match the generated
 // `GIMCore.swift`; see docs/gim-core-mapping.md for the symbol table and the intentional differences.
 //
-// Callbacks may arrive on any thread (gim-core calls them from a Rust background thread). Hop to the main actor
-// before touching UI state and keep their order.
+// Callbacks may arrive on any thread (gim-core calls every listener, `LocalTimeZone` and `PlatformHooks` method on its
+// single `gim-callbacks` thread, one call at a time). Copy the data and return: hop to the main actor (or a private
+// queue) for anything else, keep their order, never call back into the client or block from inside a callback
+// (gim-core docs/API.md, "Threading of platform callbacks").
 
 /// Receives chat list changes, most recently updated chat first. The first callback is a `reset`.
 public protocol ChatListListener: AnyObject, Sendable {
@@ -29,14 +31,15 @@ public protocol TypingListener: AnyObject, Sendable {
 }
 
 /// The local time zone timeline date separators split calendar days in, set with
-/// `GimClientAPI.setLocalTimeZone(zone:)`. Called from any thread (gim-core: a Rust background thread); do not call
-/// back into the client from it.
+/// `GimClientAPI.setLocalTimeZone(zone:)`. Called from any thread (gim-core: its callback thread); do not call back
+/// into the client from it.
 public protocol LocalTimeZone: AnyObject, Sendable {
     /// The offset from UTC in seconds in effect at `atMs` (milliseconds since the epoch), DST included.
     func utcOffsetSecs(atMs: Int64) -> Int32
 }
 
-/// Services the app provides to gim-core, passed to `createClient`. Methods may be called from any thread.
+/// Services the app provides to gim-core, passed to `createClient`. Methods may be called from any thread (gim-core:
+/// its callback thread); do not call back into the client from them.
 public protocol PlatformHooks: AnyObject, Sendable {
     /// Reads a secret from the platform keystore; `nil` when the key does not exist. Throws when the keystore can't
     /// be read (e.g. locked before first unlock), so gim-core fails the call instead of treating the secret as absent.
@@ -87,6 +90,8 @@ public protocol Timeline: AnyObject, Sendable {
     func addListener(listener: any TimelineListener) async -> TaskHandle
     /// Loads up to `count` older items (delivered through the listeners). Returns whether more history exists.
     func paginateBackwards(count: UInt16) async throws -> Bool
+    /// The chat's current state, from local state; `nil` while the chat is not known locally. Synchronous.
+    func chatState() -> ChatState?
 }
 
 /// A link offer of a new device: show `qrString()` as a QR code, then pass it to `GimClientAPI.waitLink(link:)`.
@@ -115,7 +120,9 @@ public protocol GimClientAPI: AnyObject, Sendable {
     /// Whether opening this client discarded an existing local database (undecryptable or incompatible). The session
     /// is gone with it: show onboarding and tell the user that local history was lost. Synchronous.
     func localStateReset() -> Bool
-    /// Stops sync and deletes the session, local data and keystore secrets. Create a new client afterwards.
+    /// Stops sync and the listeners and deletes the session, local data and keystore secrets. Returns only after every
+    /// callback in flight returned (gim-core waits at most 5 s for one); no callback runs once it returned. Create a
+    /// new client afterwards.
     func signOut() async throws
 
     // Identity and devices (gim-core docs/API.md, "Identity and devices").
@@ -174,9 +181,18 @@ public protocol GimClientAPI: AnyObject, Sendable {
     func chatMembers(chatId: String) async throws -> [UserProfile]
     func addMembers(chatId: String, userIds: [String]) async throws
     func removeMember(chatId: String, userId: String) async throws
+    /// Starts leaving the chat; returns once the hub accepted the request, with the chat `ChatState.leaving`. Calling
+    /// it again while leaving re-sends the request. A leave the hub refuses for good returns the chat to `active` and
+    /// throws the rejection; `ChatNotActive(left)` once left.
     func leaveChat(chatId: String) async throws
+    /// Where this device stands in the chat, from local state (no network call, so it is available right after a
+    /// restart). `NotFound` for an unknown chat.
+    func chatState(chatId: String) async throws -> ChatState
     /// `nil` leaves a field unchanged.
     func setGroupInfo(chatId: String, name: String?, avatarFilePath: String?) async throws
+
+    // Sends and changes to a `leaving` or `left` chat (`sendText` … `retrySend`, `setGroupInfo`, `addMembers`,
+    // `removeMember`) throw `ChatNotActive(chatId:state:)`.
 
     /// Returns the message id; the message appears in the timeline immediately as `SendState.pending`.
     func sendText(chatId: String, body: String, replyTo: String?) async throws -> String

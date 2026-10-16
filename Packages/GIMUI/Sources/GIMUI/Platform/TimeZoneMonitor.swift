@@ -36,7 +36,7 @@ public final class TimeZoneMonitor: @unchecked Sendable {
     }
 }
 
-/// The system time zone when it was created. gim-core calls it from a Rust background thread; it only reads
+/// The system time zone when it was created. gim-core calls it on its callback thread; it only reads
 /// Foundation's time zone data and never calls back into the client.
 final class SystemLocalTimeZone: LocalTimeZone {
     private let zone = TimeZone.current

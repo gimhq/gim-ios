@@ -5,7 +5,7 @@ import Observation
 /// Chats the user is leaving, shared by all screens of the signed-in session.
 ///
 /// `leaveChat` only submits a leave Proposal; another member commits it and the chat then shows the user's own
-/// `Left` change. Until then (also across restarts) gim-core refuses sends to the chat with `InvalidInput`. A chat is
+/// `Left` change. Until then (also across restarts) gim-core refuses sends to the chat with `ChatNotActive`. A chat is
 /// leaving after `leave(chatId:)` returns, or after a send to it was refused for that reason (see
 /// `isLeavingRefusal(_:)`), and stops leaving once its timeline shows the own `Left` change or the chat is gone.
 @MainActor
@@ -47,12 +47,14 @@ public final class LeavingChats {
         return true
     }
 
-    /// gim-core refuses sends to a chat it is leaving with `InvalidInput("invalid state: leaving chat <id>")`. The
-    /// reason text is not part of the API contract, so this is best effort: without it only `leave(chatId:)` marks a
-    /// chat as leaving.
+    /// gim-core refuses sends to a chat it is leaving with `ChatNotActive(state: .leaving)` (before `d5ead6d`:
+    /// `InvalidInput("invalid state: leaving chat <id>")`, still recognized).
     public nonisolated static func isLeavingRefusal(_ error: any Error) -> Bool {
-        guard case .InvalidInput(let reason) = error as? GimError else { return false }
-        return reason.contains("leaving chat")
+        switch error as? GimError {
+        case .ChatNotActive(_, .leaving): true
+        case .InvalidInput(let reason): reason.contains("leaving chat")
+        default: false
+        }
     }
 
     private func markLeaving(_ chatId: String, since: Date) {
@@ -79,7 +81,7 @@ public final class LeavingChats {
         for await diffs in stream {
             guard (try? DiffApplier.apply(diffs, to: &items)) != nil else { continue }
             let hasLeft = items.contains { item in
-                guard case .membershipChange(let userName, .left, let atMs) = item else { return false }
+                guard case .membershipChange(let userName, .left, let atMs, _, _) = item else { return false }
                 return atMs >= sinceMs && ownNames.contains(userName)
             }
             if hasLeft { return }

@@ -143,8 +143,11 @@ final class ChatListViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.subtitle(for: viewModel.rows[1]), viewModel.rows[1].preview)
         await settle()
         await scheduler.advance(by: FakeGimClient.leaveCommitDelay)
-        await eventually { viewModel.rows.map(\.id) == [FakeGimClient.demoDirectChatId] }
         await eventually { !leavingChats.contains(group.id) }
+        // A left chat stays in the list with its history.
+        XCTAssertEqual(Set(viewModel.rows.map(\.id)), [group.id, FakeGimClient.demoDirectChatId])
+        let state = try await client.chatState(chatId: group.id)
+        XCTAssertEqual(state, .left)
     }
 }
 
@@ -182,6 +185,7 @@ private final class FailingChatListClient: GimClientAPI {
     func addMembers(chatId: String, userIds: [String]) async throws {}
     func removeMember(chatId: String, userId: String) async throws {}
     func leaveChat(chatId: String) async throws {}
+    func chatState(chatId: String) async throws -> ChatState { .active }
     func setGroupInfo(chatId: String, name: String?, avatarFilePath: String?) async throws {}
     func sendText(chatId: String, body: String, replyTo: String?) async throws -> String {
         throw GimError.NotRegistered
