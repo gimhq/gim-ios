@@ -19,11 +19,12 @@ extension FakeGimClient {
         autoReply: Bool = true,
         registered: Bool = true,
         networkReachable: Bool = true,
-        homeHubUrl: String = FakeGimClient.defaultHomeHubUrl
+        homeHubUrl: String = FakeGimClient.defaultHomeHubUrl,
+        mode: ClientMode? = nil
     ) -> FakeGimClient {
         let options = Options(
             scheduler: scheduler, dataDirectory: dataDirectory, now: now, autoReply: autoReply,
-            networkReachable: networkReachable, homeHubUrl: homeHubUrl)
+            networkReachable: networkReachable, homeHubUrl: homeHubUrl, mode: mode)
         guard registered else {
             return FakeGimClient(
                 options: options, seed: Seed(users: FakeDemoData.peers), seedsDemoOnRegister: true)
