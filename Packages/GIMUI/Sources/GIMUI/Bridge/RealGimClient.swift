@@ -264,6 +264,18 @@ public final class RealGimClient: GimClientAPI {
         }
         return relay.handle(handle)
     }
+
+    public func registerPush(registration: GIMClientKit.PushRegistration) async throws {
+        try await bridged { try await core.registerPush(registration: GIMCore.PushRegistration(registration)) }
+    }
+
+    public func unregisterPush() async throws {
+        try await bridged { try await core.unregisterPush() }
+    }
+
+    public func processPush(payload: String) async throws -> GIMClientKit.NotificationContent {
+        try await bridged { try await GIMClientKit.NotificationContent(core.processPush(payload: payload)) }
+    }
 }
 
 /// Adapts gim-core's generated `Timeline` object to the mirror `Timeline` protocol.

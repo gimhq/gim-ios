@@ -7,9 +7,94 @@ import Foundation
 public struct ClientConfig: Sendable, Hashable {
     /// Base URL of the hub, `http://` or `https://`.
     public var serverUrl: String
+    /// The process kind; `nil` is `ClientMode.app`.
+    public var mode: ClientMode?
 
-    public init(serverUrl: String) {
+    public init(serverUrl: String, mode: ClientMode? = nil) {
         self.serverUrl = serverUrl
+        self.mode = mode
+    }
+}
+
+/// The kind of process a client runs in (gim-core docs/API.md, "App extensions").
+public enum ClientMode: Sendable, Hashable {
+    /// The app: sync, outbox, KeyPackages, push registration and maintenance.
+    case app
+    /// An app extension such as the Notification Service Extension: no sync loop (`startSync()` throws
+    /// `InvalidInput`), `registerPush`/`unregisterPush` do nothing, and local state is never reset.
+    case `extension`
+}
+
+/// A push token for the hubs, passed to `GimClientAPI.registerPush(registration:)`.
+public struct PushRegistration: Sendable, Hashable {
+    /// `apns`, `fcm`, `unifiedpush`, …: 1-64 characters of `a-z 0-9 . _ -`.
+    public var provider: String
+    /// 1-4096 bytes, no control characters.
+    public var token: String
+    /// 1-255 characters of `A-Z a-z 0-9 . - _ :`, e.g. the bundle id.
+    public var appId: String?
+    /// APNs sandbox environment.
+    public var sandbox: Bool?
+    /// Web Push key, 1-256 characters of base64url.
+    public var p256dh: String?
+    /// Web Push auth secret, 1-256 characters of base64url.
+    public var auth: String?
+
+    public init(provider: String, token: String, appId: String?, sandbox: Bool?, p256dh: String?, auth: String?) {
+        self.provider = provider
+        self.token = token
+        self.appId = appId
+        self.sandbox = sandbox
+        self.p256dh = p256dh
+        self.auth = auth
+    }
+}
+
+/// What a push is about.
+public enum NotificationKind: Sendable, Hashable {
+    /// A new text or media message (also the silent edit or delete of one).
+    case message
+    /// A new reaction; `NotificationContent.messageId` is the reacted-to message.
+    case reaction
+    /// This device joined a chat; `NotificationContent.senderUserId` added it.
+    case invite
+    /// Members were added or removed; never displayed.
+    case membership
+    /// The content is unknown, or there is nothing to show.
+    case generic
+}
+
+/// What to show for a push, returned by `GimClientAPI.processPush(payload:)`. Show it only if `shouldDisplay`.
+public struct NotificationContent: Sendable, Hashable {
+    public var chatId: String?
+    /// The group name, or the other user's name in a direct chat.
+    public var chatTitle: String?
+    public var senderUserId: String?
+    public var senderDisplayName: String?
+    /// Text, caption, `Photo`, `File: <name>`, `reacted <emoji>`, or `New message` for generic content.
+    public var body: String
+    public var messageId: String?
+    /// The platform collapse key (`apns-collapse-id`): every hub of the user may push the same message.
+    public var collapseId: String?
+    public var kind: NotificationKind
+    /// `false` for own messages, edits, deletes, receipts, member changes and messages already read.
+    public var shouldDisplay: Bool
+    public var timestamp: UInt64
+
+    public init(
+        chatId: String?, chatTitle: String?, senderUserId: String?, senderDisplayName: String?, body: String,
+        messageId: String?, collapseId: String?, kind: NotificationKind, shouldDisplay: Bool, timestamp: UInt64
+    ) {
+        self.chatId = chatId
+        self.chatTitle = chatTitle
+        self.senderUserId = senderUserId
+        self.senderDisplayName = senderDisplayName
+        self.body = body
+        self.messageId = messageId
+        self.collapseId = collapseId
+        self.kind = kind
+        self.shouldDisplay = shouldDisplay
+        self.timestamp = timestamp
     }
 }
 
