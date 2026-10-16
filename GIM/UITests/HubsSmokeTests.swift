@@ -50,6 +50,8 @@ final class HubsSmokeTests: E2ETestCase {
             addTeardownBlock { await bystander.shutdown() }
             try launchToOnboarding(app, "step a")
             try createIdentity(displayName: "Alice \(suffix)", handle: "alice_\(suffix)", "step a", app)
+            // TODO(M2c core C4-T5): restore the original order (create the group while hub B is primary) once
+            // gim-core fixes the cross-hub KeyPackage claim returning NotFound.
             try createGroup(groupName, members: [peer.session, bystander.session], "step a", app)
             let chatId = try eventually("step a: peer joins \(groupName)", app) { peer.chatId(named: groupName) }
             try tap(backButton(app), "step a: back to Chats", app)
