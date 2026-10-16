@@ -9,7 +9,8 @@ struct HubsScreen: View {
     let client: any GimClientAPI
 
     @State private var viewModel: HubsViewModel
-    @State private var showsAddHub = false
+    /// The Add Hub screen's model while it is shown; a new one each time, so no URL or error is left over.
+    @State private var addHub: AddHubViewModel?
 
     init(client: any GimClientAPI) {
         self.client = client
@@ -43,7 +44,7 @@ struct HubsScreen: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    showsAddHub = true
+                    addHub = AddHubViewModel(client: client)
                 } label: {
                     Image(systemName: "plus")
                 }
@@ -51,8 +52,10 @@ struct HubsScreen: View {
                 .accessibilityIdentifier("hubs.add")
             }
         }
-        .navigationDestination(isPresented: $showsAddHub) {
-            AddHubScreen(viewModel: AddHubViewModel(client: client))
+        .navigationDestination(isPresented: addHubPresented) {
+            if let addHub {
+                AddHubScreen(viewModel: addHub).id(ObjectIdentifier(addHub))
+            }
         }
         .confirmationDialog(
             "Remove this hub?", isPresented: removalDialogPresented, titleVisibility: .visible,
@@ -128,6 +131,10 @@ struct HubsScreen: View {
         .foregroundStyle(hub.state == .removed ? .secondary : .primary)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("hubs.row.\(key)")
+    }
+
+    private var addHubPresented: Binding<Bool> {
+        Binding(get: { addHub != nil }, set: { if !$0 { addHub = nil } })
     }
 
     private var removalDialogPresented: Binding<Bool> {

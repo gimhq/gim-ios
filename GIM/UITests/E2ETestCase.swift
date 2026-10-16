@@ -221,15 +221,27 @@ class E2ETestCase: XCTestCase {
     /// Signs out from the chat list, or from Settings when it is already open.
     @MainActor
     func signOut(_ app: XCUIApplication) throws {
-        if !app.buttons["settings.signOut"].exists {
+        if !app.navigationBars["Settings"].exists {
             try tap(app.buttons["chatList.settings"], "sign-out: Settings button", app)
         }
-        try tap(app.buttons["settings.signOut"], "sign-out: Sign Out button", app)
+        // The button is the form's last row, which may be below the fold.
+        let signOut = app.buttons["settings.signOut"]
+        for _ in 0..<5 where !(signOut.waitForExistence(timeout: 1) && signOut.isHittable) {
+            scrollUpFrontmost(app)
+        }
+        try tap(signOut, "sign-out: Sign Out button", app)
         // The confirmation dialog's button has the same title.
         let confirm = app.buttons
             .matching(NSPredicate(format: "label == 'Sign Out' AND identifier != 'settings.signOut'"))
             .firstMatch
         try tap(confirm, "sign-out: confirmation button", app)
+    }
+
+    /// Scrolls the frontmost screen (also a sheet, unlike `collectionViews.firstMatch`) by one swipe up.
+    @MainActor
+    func scrollUpFrontmost(_ app: XCUIApplication) {
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.75))
+            .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35)))
     }
 
     @MainActor

@@ -112,7 +112,7 @@ extension E2ETestCase {
         try tap(app.buttons["chatList.settings"], "\(step): Settings button", app)
         let hubs = app.buttons["settings.hubs"]
         for _ in 0..<3 where !(hubs.waitForExistence(timeout: 2) && hubs.isHittable) {
-            app.collectionViews.firstMatch.swipeUp()
+            scrollUpFrontmost(app)
         }
         try tap(hubs, "\(step): Hubs row", app)
         try require(
