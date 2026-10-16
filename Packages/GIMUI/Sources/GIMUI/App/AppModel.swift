@@ -39,6 +39,8 @@ public final class AppModel {
     /// launching.
     public private(set) var launchError: String?
     public private(set) var onboarding: OnboardingViewModel?
+    /// Debug builds: sync stays stopped while the scene is active (`holdSync`).
+    public private(set) var isSyncHeld = false
 
     private let factory: any GimClientFactory
     private let defaults: UserDefaults
@@ -136,6 +138,15 @@ public final class AppModel {
         await updateSync()
     }
 
+    #if DEBUG
+        /// Debug builds: stops sync and keeps it stopped while `held`, even when the scene becomes active; releasing
+        /// starts it again if the scene is active. For `DebugPushURL.holdSyncURL`.
+        public func holdSync(_ held: Bool) async {
+            isSyncHeld = held
+            await updateSync()
+        }
+    #endif
+
     /// Signs out, wipes the platform keystore and data directory (`PlatformWiping`), drops the client and returns to
     /// onboarding. Returns the error text when signing out or wiping fails; a failed wipe still returns to onboarding.
     public func signOut() async -> String? {
@@ -202,8 +213,8 @@ public final class AppModel {
     }
 
     private func updateSync() async {
-        guard let client, session != nil, isActive != isSyncing else { return }
-        let start = isActive
+        let start = isActive && !isSyncHeld
+        guard let client, session != nil, start != isSyncing else { return }
         isSyncing = start
         do {
             if start {

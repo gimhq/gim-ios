@@ -37,7 +37,12 @@ public struct RootView: View {
         }
         #if DEBUG
             .onOpenURL { url in
-                Task { await debugPush.handle(url) }
+                Task { await debugPush.handle(url, model: model) }
+            }
+            .overlay(alignment: .bottom) {
+                if model.isSyncHeld {
+                    Text("Sync held").font(.caption2).accessibilityIdentifier("debug.sync.held")
+                }
             }
             .sheet(
                 isPresented: Binding(

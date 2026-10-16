@@ -4,9 +4,20 @@
     /// Debug builds only: `gim-debug://process-push?payload=<base64url JSON>` hands a push payload to the app, which
     /// runs the Notification Service Extension's `PushNotificationHandler` on it in-app. `simctl push` does not launch
     /// service extensions on the iOS 27 simulator, so the UI tests drive the extension's code path this way.
+    ///
+    /// `gim-debug://hold-sync` keeps the app's sync stopped until the next `process-push` has been handled, so that
+    /// push is processed as the extension would while the app is not running: opening the `process-push` URL
+    /// activates the app, and its own sync could otherwise join an invited chat first.
     public enum DebugPushURL {
         public static let scheme = "gim-debug"
         public static let host = "process-push"
+        public static let holdSyncHost = "hold-sync"
+        public static let holdSyncURL = URL(string: "\(scheme)://\(holdSyncHost)")!
+
+        /// Whether `url` is `holdSyncURL`.
+        public static func isHoldSync(_ url: URL) -> Bool {
+            url.scheme == scheme && url.host == holdSyncHost
+        }
 
         /// The URL carrying `payload` (JSON text), base64url-encoded without padding.
         public static func url(payload: String) -> URL {

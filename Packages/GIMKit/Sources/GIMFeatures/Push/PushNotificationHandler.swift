@@ -30,20 +30,38 @@ public struct NotificationPresentation: Sendable, Hashable {
         self.kind = kind
     }
 
-    /// The same mapping for every kind: the title is the chat title, or "<sender> in <chat>" when the sender's name
-    /// differs from the chat title (a group; in a direct chat the title is the other user's name); without a chat
-    /// title the sender's name. The body is gim-core's (`reacted 👍`, `Photo`, `New message`, …).
+    /// - Not displayed (`shouldDisplay == false`, e.g. own messages, receipts, member changes, read messages; also for
+    ///   an alert-priority push, since the hub coalesces pushes): empty title, body and thread, so the extension
+    ///   delivers empty content and the system shows nothing.
+    /// - `invite`: title = the group name (`chatTitle`), body = "<inviter> added you", the inviter being
+    ///   `senderDisplayName` (gim-core gives the handle until the inviter's profile is known), else `senderUserId`; with
+    ///   neither, gim-core's body.
+    /// - Any other kind: the title is the chat title, or "<sender> in <chat>" when the sender's name differs from the
+    ///   chat title (a group; in a direct chat the title is the other user's name); without a chat title the sender's
+    ///   name. The body is gim-core's (`reacted 👍`, `Photo`, and `New message` only for `generic`, …).
+    ///
+    /// The thread is the chat id.
     public init(_ content: NotificationContent) {
+        guard content.shouldDisplay else {
+            self.init(
+                isDisplayed: false, title: "", body: "", threadIdentifier: "", collapseId: content.collapseId,
+                kind: content.kind)
+            return
+        }
         let title: String
-        switch (content.chatTitle, content.senderDisplayName) {
-        case (let chat?, let sender?) where sender != chat: title = "\(sender) in \(chat)"
-        case (let chat?, _): title = chat
-        case (nil, let sender?): title = sender
-        case (nil, nil): title = ""
+        var body = content.body
+        switch (content.kind, content.chatTitle, content.senderDisplayName) {
+        case (.invite, let chat, _):
+            title = chat ?? ""
+            if let inviter = content.senderDisplayName ?? content.senderUserId { body = "\(inviter) added you" }
+        case (_, let chat?, let sender?) where sender != chat: title = "\(sender) in \(chat)"
+        case (_, let chat?, _): title = chat
+        case (_, nil, let sender?): title = sender
+        case (_, nil, nil): title = ""
         }
         self.init(
-            isDisplayed: content.shouldDisplay, title: title, body: content.body,
-            threadIdentifier: content.chatId ?? "", collapseId: content.collapseId, kind: content.kind)
+            isDisplayed: true, title: title, body: body, threadIdentifier: content.chatId ?? "",
+            collapseId: content.collapseId, kind: content.kind)
     }
 }
 

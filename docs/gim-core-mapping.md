@@ -3,7 +3,7 @@
 `Packages/GIMKit/Sources/GIMClientKit` mirrors the UniFFI Swift bindings of gim-core so that switching to the real
 `GIMCore.xcframework` is a mechanical swap.
 
-- Mirrored and vendored commit: gim-core `f8db42c`, GIMCore `0.1.0+f8db42c` (`bindings/gim-ffi/src/`, generated
+- Mirrored and vendored commit: gim-core `225b809`, GIMCore `0.1.0+225b809` (`bindings/gim-ffi/src/`, generated
   `bindings/gim-ffi/generated/swift/GIMCore.swift`, contract in `docs/API.md`).
 - Mirror sources: `GimClientAPI.swift` (objects, callback interfaces, hooks, `createClient`) and `Models.swift`
   (records, enums, diffs, errors).
@@ -85,7 +85,7 @@ generated code writes the bare protocol name, which is the same type.
 
 ## GimClient methods
 
-Every method of `GimClientProtocol` at `f8db42c`, with identical labels, argument types and `async`/`throws`. The
+Every method of `GimClientProtocol` at `225b809`, with identical labels, argument types and `async`/`throws`. The
 only type differences are `any Timeline` / `any LinkSession` / `any PendingApproval` (generated: the classes) and the
 listener parameter spelling above.
 
@@ -152,6 +152,17 @@ a `TimelineItem.membershipChange` arrives. When a query fails before any list ha
 `ChatSummary.memberCount` (no member list, no removal); a list that loaded before stays on later failures.
 Renaming a group goes `GroupInfoViewModel.saveName()` → `GimClientAPI.setGroupInfo(name:)` →
 `RealGimClient` → `GIMCore.GimClient.setGroupInfo`.
+
+## Changes since `f8db42c`
+
+`225b809` (built on the macOS host from gim-core `225b809` like `f8db42c` below, vendored with
+`scripts/sync-gim-core.sh --from-dir`). The generated bindings are identical (`GIMCore.swift` byte-identical, no
+mirror change). Behaviour only (gim-core `docs/API.md`, "Push"): `processPush` joins a chat this device was invited to
+for a chat invitation, a member change that added this device, a message in a chat not joined yet and a wake-up, and
+then describes it as `invite` (`chatTitle` = the group name, `senderUserId` = the inviter, `senderDisplayName` = the
+inviter's name, or handle until their profile is known); a push whose item shows nothing catches the chat up and shows
+the newest unread message from someone else, else the invitation, else nothing (`shouldDisplay = false`, also for an
+alert-priority push). `Generic` (`New message`) is left for a push that cannot be decrypted or processed in time.
 
 ## Changes since `5877765`
 

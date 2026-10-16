@@ -49,8 +49,12 @@ placeholder (`New message`, `mutable-content: 1`); the hub's payload is under `g
 - Extension: creates a client in `extension` mode per push, calls `processPush` and shows the result
   (`PushNotificationHandler`): title = chat title, or "<sender> in <chat>" when the sender's name differs from the chat
   title (groups), body = gim-core's body, thread = chat id, `userInfo["collapseId"]`; delivered notifications with the
-  same collapse id are removed first. If gim-core says not to display it, the extension delivers empty content. Any
-  failure, and running out of time, shows the generic "New message". Each push appends
+  same collapse id are removed first. An invitation (`invite`: gim-core joined the chat while processing the push) shows
+  title = the group name and body "<inviter> added you" (the inviter's name, or their handle until their profile is
+  known). If gim-core says not to display it (`shouldDisplay` false: own messages, receipts, member changes, messages
+  already read), the extension delivers empty content; since the hub coalesces pushes, an alert-priority push may
+  legitimately end silent this way. "New message" only appears when gim-core returns `generic`, and for any failure or
+  running out of time. Each push appends
   `nse seq=<n> footprint_bytes=<peak phys_footprint> elapsed_ms=<ms> kind=<kind>` to `<group container>/gim-nse.log`
   (copied back by the Mac gate as `nse.log`).
 - Simulator: `simctl push` does not launch Notification Service Extensions on the iOS 27 simulator. CoreSimulatorBridge
@@ -61,7 +65,10 @@ placeholder (`New message`, `mutable-content: 1`); the hub's payload is under `g
   `PushNotificationHandler` in-app with an extension-mode client on the App Group directory, next to the app's own
   client (gim-core's `flock` on `gim.lock` serializes the two clients as it does two processes). It shows the result
   in a sheet (`debug.push.title`, `.body`, `.shouldDisplay`, `.kind`) and posts it as a local notification 5 s later.
-  `PushSmokeTests` step e passes it the delivery's `simctl.payload.gim`. Release builds compile none of it; their URL
+  `PushSmokeTests` steps e and g pass it the delivery's `simctl.payload.gim`. `gim-debug://hold-sync` first stops the
+  app's sync until the next such push has been processed (`debug.sync.held` shows meanwhile), so a push is processed as
+  by the extension while the app is suspended; step g uses it so that the app's own sync, resumed by the activation,
+  cannot join the new group before the extension-mode client does. Release builds compile none of it; their URL
   type has an empty scheme. Launching the extension process and measuring its ~24 MB footprint need a device with
   APNs and are deferred.
 - The extension has the `com.apple.developer.usernotifications.filtering` entitlement so that empty content hides the

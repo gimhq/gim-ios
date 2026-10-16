@@ -6,7 +6,10 @@ import XCTest
 /// allows notifications (step a), a scripted peer opens a direct chat with it (step b), the app goes to the home screen
 /// (step c), the peer's text reaches the mock as a mock-ios-sim delivery for this app (step d), the Notification
 /// Service Extension's handler decrypts that delivery's payload in-app and Springboard shows the result (step e), and
-/// the chat shows the message (step f). Skipped without `TEST_RUNNER_GIM_E2E_PUSH_MOCK_URL`.
+/// the chat shows the message (step f). Then (step g) the app holds its sync and goes to the home screen, the peer
+/// creates a new group with the app's user and a bystander, and the invitation's delivery goes through the same in-app
+/// path: an `invite` named after the group whose body names the inviter, shown by Springboard. Skipped without
+/// `TEST_RUNNER_GIM_E2E_PUSH_MOCK_URL`.
 ///
 /// `simctl push` does not launch Notification Service Extensions on the iOS 27 simulator: it injects the notification
 /// through `UNUserNotificationCenter`, so Springboard shows the mock's own alert ("New message"), which the test
@@ -14,8 +17,14 @@ import XCTest
 /// to the Debug app's `gim-debug://process-push` entry point, which runs the extension's `PushNotificationHandler`
 /// with an extension-mode client on the App Group's data directory and posts the result as a local notification. The
 /// extension process itself and its memory footprint need a device with APNs.
+///
+/// Opening the URL activates the app, whose own sync would join the new group of step g as soon as it resumes, and
+/// gim-core shows the invitation only for a chat the processing client joins. Step g therefore first opens
+/// `gim-debug://hold-sync` (`DebugPushURL.holdSyncURL`, waiting for `debug.sync.held`): the app stops sync and keeps
+/// it stopped until the next push has been processed, so the extension-mode client joins the group as the extension
+/// would while the app is suspended. gim-core's store lock is not involved: the app's client simply does not sync.
 final class PushSmokeTests: E2ETestCase {
-    private let summary = StepSummary("PushSmokeTests", steps: ["a", "b", "c", "d", "e", "f"])
+    private let summary = StepSummary("PushSmokeTests", steps: ["a", "b", "c", "d", "e", "f", "g"])
     /// The push mock's own wait, plus the hub's dispatch and the helper's poll.
     private let pushTimeout: TimeInterval = 60
 
@@ -151,6 +160,60 @@ final class PushSmokeTests: E2ETestCase {
                 "step f: the chat shows \"\(text)\"", app)
         }
         summary.finish("f")
+
+        summary.start("g")
+        let groupName = "Invite \(suffix)"
+        try XCTContext.runActivity(named: "step g: peer adds the app to \(groupName), the push shows the invitation") {
+            _ in
+            let bystander = try waitForPeer("step g: bystander registers as bystander_\(suffix)", app) {
+                try await ScriptedPeer.register(
+                    serverUrl: serverUrl, handle: "bystander_\(suffix)", displayName: "Bystander \(suffix)")
+            }
+            addTeardownBlock { await bystander.shutdown() }
+            let done = app.buttons["debug.push.done"]
+            if done.exists { done.tap() }
+            app.open(URL(string: "gim-debug://hold-sync")!)
+            try require(
+                app.staticTexts["debug.sync.held"].waitForExistence(timeout: 10), "step g: the app holds its sync", app)
+            XCUIDevice.shared.press(.home)
+            let since = try waitForPeer("step g: push mock deliveries", app) {
+                try await Self.deliveries(pushMockUrl, since: nil).next
+            }
+            _ = try waitForPeer("step g: peer creates \(groupName) with the app and the bystander", app) {
+                try await peer.createGroup(name: groupName, handles: [appHandle, "bystander_\(suffix)"])
+            }
+            let delivery = try eventually("step g: mock-ios-sim delivery to im.g.apps after the group", app) {
+                try await Self.deliveries(pushMockUrl, since: since).deliveries.first {
+                    $0.appId == "im.g.apps" && $0.token.hasPrefix("sim-") && $0.gim != nil
+                }
+            }
+            print("[e2e] push mock delivery seq=\(delivery.seq) token=\(delivery.token) type=\(delivery.type)")
+
+            app.open(Self.debugPushURL(payload: String(decoding: delivery.gim ?? Data(), as: UTF8.self)))
+            let kind = app.staticTexts["debug.push.kind"]
+            try require(kind.waitForExistence(timeout: networkTimeout), "step g: the processed push is shown", app)
+            try require(kind.label == "invite", "step g: debug.push.kind invite (found \"\(kind.label)\")", app)
+            try require(
+                app.staticTexts["debug.push.shouldDisplay"].label == "true", "step g: debug.push.shouldDisplay true",
+                app)
+            let title = app.staticTexts["debug.push.title"].label
+            try require(title == groupName, "step g: debug.push.title \"\(groupName)\" (found \"\(title)\")", app)
+            // gim-core names the inviter by handle until the peer's profile announcement is known.
+            let body = app.staticTexts["debug.push.body"].label
+            try require(
+                [peerName, "peer_\(suffix)"].map { "\($0) added you" }.contains(body),
+                "step g: debug.push.body names the inviter (found \"\(body)\")", app)
+            let released = XCTNSPredicateExpectation(
+                predicate: NSPredicate(format: "exists == false"), object: app.staticTexts["debug.sync.held"])
+            try require(
+                XCTWaiter().wait(for: [released], timeout: 10) == .completed, "step g: the app resumes its sync", app)
+            print("[e2e] in-app extension path: kind=invite title=\(title) body=\(body)")
+            XCUIDevice.shared.press(.home)
+            try require(
+                springboardText(containing: body).waitForExistence(timeout: 20),
+                "step g: Springboard shows \"\(body)\"", app)
+        }
+        summary.finish("g")
     }
 
     /// The first Springboard element (a banner or a Notification Center entry) whose label contains `text`.

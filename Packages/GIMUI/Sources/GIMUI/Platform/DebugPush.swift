@@ -12,7 +12,9 @@
     /// directory next to the app's own client (gim-core's `gim.lock` serializes them like two processes). Shows the
     /// result in `DebugPushSheet` and posts it as a local notification after `notificationDelay`, so Springboard shows
     /// the decrypted body once the app is in the background. `simctl push` does not launch service extensions on the
-    /// iOS 27 simulator; the UI tests use this instead.
+    /// iOS 27 simulator; the UI tests use this instead. `DebugPushURL.holdSyncURL` holds the app's sync
+    /// (`AppModel.holdSync`) until the next push has been processed, so the extension-mode client sees the push as the
+    /// extension would while the app is not running (e.g. it joins an invited chat itself and shows the invitation).
     @MainActor
     @Observable
     final class DebugPushProcessor {
@@ -26,8 +28,14 @@
                 == PushRegistrar.mockSimulatorProvider
         }
 
-        func handle(_ url: URL) async {
-            guard Self.isEnabled, let payload = DebugPushURL.payload(from: url) else { return }
+        func handle(_ url: URL, model: AppModel) async {
+            guard Self.isEnabled else { return }
+            if DebugPushURL.isHoldSync(url) {
+                await model.holdSync(true)
+                print("[debug-push] sync held")
+                return
+            }
+            guard let payload = DebugPushURL.payload(from: url) else { return }
             let handler = PushNotificationHandler(
                 factory: AppModel.defaultFactory(),
                 makeHooks: { AppPlatformHooks(dataDirectory: try AppDirectories.dataDirectory.path) },
@@ -36,6 +44,10 @@
             let result = await handler.presentation(payload: payload)
             print("[debug-push] kind=\(result.kind) displayed=\(result.isDisplayed)")
             presentation = result
+            if model.isSyncHeld {
+                await model.holdSync(false)
+                print("[debug-push] sync released")
+            }
             guard result.isDisplayed else { return }
             let content = UNMutableNotificationContent()
             content.title = result.title
