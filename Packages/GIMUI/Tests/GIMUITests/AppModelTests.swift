@@ -29,11 +29,16 @@ final class AppModelTests: XCTestCase {
         }
     }
 
-    /// Forwards to a `FakeGimClient`, except that `signOut` can fail and `localStateReset` is configurable.
+    /// Forwards to a `FakeGimClient`, except that `signOut` can fail and `localStateReset` is configurable; records
+    /// the zones passed to `setLocalTimeZone`.
     private actor StubClient: GimClientAPI {
         let fake: FakeGimClient
         let signOutError: GimError?
         let reportsLocalStateReset: Bool
+        private nonisolated let zoneLock = NSLock()
+        private nonisolated(unsafe) var zones: [(any LocalTimeZone)?] = []
+
+        nonisolated var timeZones: [(any LocalTimeZone)?] { zoneLock.withLock { zones } }
 
         init(_ fake: FakeGimClient, signOutError: GimError? = nil, localStateReset: Bool = false) {
             self.fake = fake
@@ -74,6 +79,10 @@ final class AppModelTests: XCTestCase {
         func startSync() async throws { try await fake.startSync() }
         func stopSync() async throws { try await fake.stopSync() }
         nonisolated func setNetworkReachable(reachable: Bool) { fake.setNetworkReachable(reachable: reachable) }
+        nonisolated func setLocalTimeZone(zone: (any LocalTimeZone)?) {
+            zoneLock.withLock { zones.append(zone) }
+            fake.setLocalTimeZone(zone: zone)
+        }
         func findUser(handle: String) async throws -> UserProfile? { try await fake.findUser(handle: handle) }
         func createDirectChat(userId: String) async throws -> String { try await fake.createDirectChat(userId: userId) }
         func createGroupChat(name: String, memberUserIds: [String]) async throws -> String {
@@ -253,6 +262,31 @@ final class AppModelTests: XCTestCase {
         guard case .ready = model.phase else { return XCTFail("expected ready, got \(model.phase)") }
         XCTAssertEqual(factory.configs, [ClientConfig(serverUrl: "https://gim.example.eu")])
         XCTAssertEqual(model.session, session)
+    }
+
+    @MainActor
+    func testClientsGetTheSystemTimeZoneAgainWhenItChanges() async throws {
+        let client = StubClient(FakeGimClient(session: session))
+        let defaults = makeDefaults()
+        defaults.set("https://gim.example.eu", forKey: AppModel.serverUrlKey)
+        let center = NotificationCenter()
+        let hooks = MemoryHooks()
+        let model = AppModel(
+            factory: ClientFactory(client), defaults: defaults, bundledServerUrl: nil, makeHooks: { hooks },
+            timeZones: TimeZoneMonitor(notificationCenter: center))
+
+        await model.start()
+
+        XCTAssertEqual(client.timeZones.count, 1)
+        let first = try XCTUnwrap(client.timeZones.first ?? nil)
+        let offset = Int32(TimeZone.current.secondsFromGMT(for: Date(timeIntervalSince1970: 1_790_000)))
+        XCTAssertEqual(first.utcOffsetSecs(atMs: 1_790_000_000), offset)
+
+        center.post(name: .NSSystemTimeZoneDidChange, object: nil)
+
+        XCTAssertEqual(client.timeZones.count, 2)
+        let second = try XCTUnwrap(client.timeZones.last ?? nil)
+        XCTAssertFalse(first === second, "a fresh zone object, so gim-core drops its cached offsets")
     }
 
     @MainActor

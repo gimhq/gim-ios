@@ -105,6 +105,19 @@ final class TestClock: @unchecked Sendable {
     }
 }
 
+/// A `LocalTimeZone` answering with the offsets of a Foundation `TimeZone`.
+final class TimeZoneStub: LocalTimeZone {
+    let zone: TimeZone
+
+    init(_ zone: TimeZone) {
+        self.zone = zone
+    }
+
+    func utcOffsetSecs(atMs: Int64) -> Int32 {
+        Int32(zone.secondsFromGMT(for: Date(timeIntervalSince1970: Double(atMs) / 1000)))
+    }
+}
+
 extension XCTestCase {
     func makeTemporaryDirectory() throws -> String {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(

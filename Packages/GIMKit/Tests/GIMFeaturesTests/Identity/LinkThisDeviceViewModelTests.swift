@@ -99,7 +99,7 @@ final class LinkThisDeviceViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testWaitLinkErrorIsShownAndRetryStartsANewLinkSession() async {
+    func testWaitLinkErrorBeforeTheBundleIsShownAndRetryWaitsOnTheSameLinkSession() async {
         let log = LinkCallLog()
         let newClient = LinkRecordingClient(name: "new", log: log, waitLinkErrors: [.Network(reason: "timed out")])
         let (viewModel, outcome) = makeViewModel { newClient }
@@ -113,10 +113,31 @@ final class LinkThisDeviceViewModelTests: XCTestCase {
 
         XCTAssertEqual(viewModel.step, .comparing(sas: FakeGimClient.fakeSas))
         XCTAssertEqual(
+            log.calls, ["new.startLink(\(Self.serverUrl))", "new.waitLink failed", "new.waitLink"],
+            "no new link offer: the same QR code stays valid")
+        XCTAssertEqual(outcome.clientRequests, 2, "the cached client is reused through the context")
+    }
+
+    @MainActor
+    func testWaitLinkErrorAfterTheBundleIsShownAndRetryStartsANewLinkSession() async {
+        let log = LinkCallLog()
+        let newClient = LinkRecordingClient(
+            name: "new", log: log, waitLinkErrors: [.Network(reason: "offline")], waitLinkFailsAfterBundle: true)
+        let (viewModel, outcome) = makeViewModel { newClient }
+
+        await viewModel.start()
+
+        XCTAssertEqual(
+            viewModel.step, .failed(message: ErrorPresenter.message(for: GimError.Network(reason: "offline"))))
+
+        await viewModel.start()
+
+        XCTAssertEqual(viewModel.step, .comparing(sas: FakeGimClient.fakeSas))
+        XCTAssertEqual(
             log.calls,
             [
-                "new.startLink(\(Self.serverUrl))", "new.waitLink failed", "new.startLink(\(Self.serverUrl))",
-                "new.waitLink",
+                "new.startLink(\(Self.serverUrl))", "new.waitLink failed", "new.waitLink used up",
+                "new.startLink(\(Self.serverUrl))", "new.waitLink",
             ])
         XCTAssertEqual(outcome.clientRequests, 2, "the cached client is reused through the context")
     }

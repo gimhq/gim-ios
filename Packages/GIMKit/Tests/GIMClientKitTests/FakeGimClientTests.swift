@@ -34,8 +34,8 @@ final class FakeGimClientTests: XCTestCase {
     private func makeDemo(autoReply: Bool = false, synced: Bool = true) async throws -> FakeGimClient {
         let clock = clock
         let client = FakeGimClient.demo(
-            scheduler: scheduler, dataDirectory: try makeTemporaryDirectory(), now: { clock.now },
-            calendar: calendar, autoReply: autoReply)
+            scheduler: scheduler, dataDirectory: try makeTemporaryDirectory(), now: { clock.now }, autoReply: autoReply)
+        await client.simulateLocalTimeZone(TimeZoneStub(calendar.timeZone))
         if synced {
             try await client.startSync()
             await scheduler.runUntilIdle()
@@ -134,7 +134,7 @@ final class FakeGimClientTests: XCTestCase {
 
     func testUnregisteredDemoSeedsChatsAroundTheNewUser() async throws {
         let client = FakeGimClient.demo(
-            scheduler: scheduler, dataDirectory: try makeTemporaryDirectory(), calendar: calendar, registered: false)
+            scheduler: scheduler, dataDirectory: try makeTemporaryDirectory(), registered: false)
         let list = try await subscribeChatList(client)
         XCTAssertEqual(list.items, [])
 
@@ -233,15 +233,41 @@ final class FakeGimClientTests: XCTestCase {
         XCTAssertEqual(separators.count, 5)
         assertSeparatorsMatchDays(items)
 
-        // A UTC calendar puts the day boundaries elsewhere.
-        var utc = Calendar(identifier: .gregorian)
-        utc.timeZone = TimeZone(identifier: "UTC")!
+        // Without a zone the days are UTC days.
         let base = base
         let utcClient = FakeGimClient.demo(
-            scheduler: scheduler, dataDirectory: try makeTemporaryDirectory(), now: { base }, calendar: utc)
+            scheduler: scheduler, dataDirectory: try makeTemporaryDirectory(), now: { base })
         let (_, utcRecorder) = try await subscribeTimeline(utcClient, direct)
         let utcSeparators = utcRecorder.items.compactMap { if case .dateSeparator(let day) = $0 { day } else { nil } }
         XCTAssertTrue(utcSeparators.allSatisfy { $0 % 86_400_000 == 0 })
+    }
+
+    func testDaysFollowTheLocalTimeZoneAndMoveWhenItChanges() async throws {
+        let hour: UInt64 = 3_600_000
+        let midnight: UInt64 = 1_789_948_800_000  // 2026-09-21 00:00 UTC
+        let clock = clock
+        let client = FakeGimClient(
+            scheduler: scheduler, dataDirectory: try makeTemporaryDirectory(), now: { clock.now },
+            session: Session(userId: "user-kai", deviceId: "device-1", handle: "kai", displayName: "Kai"))
+        let chat = try await client.createGroupChat(name: "Watch", memberUserIds: [])
+        let (_, timeline) = try await subscribeTimeline(client, chat)
+        // 22:30 UTC on the 20th and 01:30 UTC on the 21st.
+        clock.now = Date(timeIntervalSince1970: TimeInterval(midnight - 90 * 60_000) / 1000)
+        _ = try await client.sendText(chatId: chat, body: "Late", replyTo: nil)
+        clock.now = Date(timeIntervalSince1970: TimeInterval(midnight + 90 * 60_000) / 1000)
+        _ = try await client.sendText(chatId: chat, body: "Early", replyTo: nil)
+        let separators = { @Sendable in
+            timeline.items.compactMap { if case .dateSeparator(let day) = $0 { day } else { nil } }
+        }
+        XCTAssertEqual(separators(), [midnight - 24 * hour, midnight], "UTC days by default")
+
+        // At +02:00 both messages are on the 21st, which starts at 22:00 UTC on the 20th.
+        await client.simulateLocalTimeZone(TimeZoneStub(TimeZone(secondsFromGMT: 7_200)!))
+        XCTAssertEqual(separators(), [midnight - 2 * hour])
+        XCTAssertEqual(timeline.items.count, 3)
+
+        client.setLocalTimeZone(zone: nil)
+        await eventually { separators() == [midnight - 24 * hour, midnight] }
     }
 
     func testSendOnANewDayAppendsASeparatorFirst() async throws {

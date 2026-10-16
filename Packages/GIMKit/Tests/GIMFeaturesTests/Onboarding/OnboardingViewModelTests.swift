@@ -199,7 +199,7 @@ final class OnboardingViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testClientWithAnIdentitySkipsTheCodeAndAsksForTheHandle() async throws {
+    func testClientWithAnIdentityShowsTheCoreErrorInsteadOfSkippingTheCode() async throws {
         let session = Session(userId: "user-sofia", deviceId: "device-1", handle: "", displayName: "Sofia")
         let client = FakeGimClient(session: session)
         let factory = RecordingFactory { _ in FakeGimClient() }
@@ -211,10 +211,10 @@ final class OnboardingViewModelTests: XCTestCase {
         await create.submit()
 
         XCTAssertTrue(factory.configs.isEmpty, "the existing client is used for its URL")
-        guard case .claimHandle = viewModel.stage else {
-            return XCTFail("expected the handle step, got \(String(describing: viewModel.stage))")
-        }
-        XCTAssertNil(create.errorMessage)
+        XCTAssertNil(viewModel.stage)
+        XCTAssertEqual(
+            create.errorMessage,
+            ErrorPresenter.message(for: GimError.InvalidInput(reason: "This device already has an identity")))
     }
 
     @MainActor

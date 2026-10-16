@@ -1,17 +1,21 @@
 import Foundation
 import GIMClientKit
 
-/// Forwards to a `FakeGimClient`; `createIdentity` and `claimHandle` throw the configured errors.
+/// Forwards to a `FakeGimClient`; `createIdentity` and `restoreFromRecovery` throw the next of their configured
+/// errors first (keeping nothing, like gim-core), `claimHandle` throws its configured error.
 actor IdentityStubClient: GimClientAPI {
     let fake: FakeGimClient
-    let createIdentityError: GimError?
     let claimHandleError: GimError?
+    private var createIdentityErrors: [GimError]
+    private var restoreErrors: [GimError]
 
     init(
-        _ fake: FakeGimClient = FakeGimClient(), createIdentityError: GimError? = nil, claimHandleError: GimError? = nil
+        _ fake: FakeGimClient = FakeGimClient(), createIdentityErrors: [GimError] = [], restoreErrors: [GimError] = [],
+        claimHandleError: GimError? = nil
     ) {
         self.fake = fake
-        self.createIdentityError = createIdentityError
+        self.createIdentityErrors = createIdentityErrors
+        self.restoreErrors = restoreErrors
         self.claimHandleError = claimHandleError
     }
 
@@ -20,10 +24,11 @@ actor IdentityStubClient: GimClientAPI {
     nonisolated func userId() -> String? { fake.userId() }
     nonisolated func localStateReset() -> Bool { fake.localStateReset() }
     func createIdentity(displayName: String) async throws -> String {
-        if let createIdentityError { throw createIdentityError }
+        if !createIdentityErrors.isEmpty { throw createIdentityErrors.removeFirst() }
         return try await fake.createIdentity(displayName: displayName)
     }
     func restoreFromRecovery(userId: String, recoveryCode: String, revokeOthers: Bool) async throws {
+        if !restoreErrors.isEmpty { throw restoreErrors.removeFirst() }
         try await fake.restoreFromRecovery(userId: userId, recoveryCode: recoveryCode, revokeOthers: revokeOthers)
     }
     nonisolated func startLink(hubs: [String]) throws -> any LinkSession { try fake.startLink(hubs: hubs) }
@@ -48,6 +53,7 @@ actor IdentityStubClient: GimClientAPI {
     func startSync() async throws { try await fake.startSync() }
     func stopSync() async throws { try await fake.stopSync() }
     nonisolated func setNetworkReachable(reachable: Bool) { fake.setNetworkReachable(reachable: reachable) }
+    nonisolated func setLocalTimeZone(zone: (any LocalTimeZone)?) { fake.setLocalTimeZone(zone: zone) }
     func findUser(handle: String) async throws -> UserProfile? { try await fake.findUser(handle: handle) }
     func createDirectChat(userId: String) async throws -> String { try await fake.createDirectChat(userId: userId) }
     func createGroupChat(name: String, memberUserIds: [String]) async throws -> String {

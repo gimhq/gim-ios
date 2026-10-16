@@ -66,10 +66,13 @@ final class CreateIdentityViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testCreateIdentityErrorIsPresentedAndRetryable() async {
-        let failing = IdentityStubClient(createIdentityError: .Network(reason: "offline"))
-        var clients: [any GimClientAPI] = [failing, FakeGimClient()]
-        let (viewModel, created) = makeViewModel { clients.removeFirst() }
+    func testCreateIdentityErrorIsPresentedAndRetryCreatesTheIdentityOnTheSameClient() async throws {
+        let client = IdentityStubClient(createIdentityErrors: [.Network(reason: "offline")])
+        var clientRequests = 0
+        let (viewModel, created) = makeViewModel {
+            clientRequests += 1
+            return client
+        }
         viewModel.displayName = "Sofia"
 
         await viewModel.submit()
@@ -80,7 +83,13 @@ final class CreateIdentityViewModelTests: XCTestCase {
 
         await viewModel.submit()
 
-        XCTAssertEqual(created.results.count, 1)
+        XCTAssertEqual(created.results.count, 1, "only the code of the call that succeeded is shown")
+        let result = try XCTUnwrap(created.results.first)
+        XCTAssertTrue(result.client === client)
+        XCTAssertNotNil(result.recoveryCode)
+        let session = try await client.session()
+        XCTAssertEqual(session?.displayName, "Sofia")
+        XCTAssertEqual(clientRequests, 2, "the cached client is reused through the context")
         XCTAssertNil(viewModel.errorMessage)
     }
 
@@ -96,7 +105,7 @@ final class CreateIdentityViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testClientWithAnIdentityIsNotCreatedAgain() async throws {
+    func testClientWithAnIdentityShowsTheCoreError() async throws {
         let session = Session(userId: "user-sofia", deviceId: "device-1", handle: "", displayName: "Sofia")
         let client = FakeGimClient(session: session)
         let (viewModel, created) = makeViewModel { client }
@@ -104,8 +113,10 @@ final class CreateIdentityViewModelTests: XCTestCase {
 
         await viewModel.submit()
 
-        let result = try XCTUnwrap(created.results.first)
-        XCTAssertNil(result.recoveryCode)
+        XCTAssertTrue(created.results.isEmpty)
+        XCTAssertEqual(
+            viewModel.errorMessage,
+            ErrorPresenter.message(for: GimError.InvalidInput(reason: "This device already has an identity")))
         let current = try await client.session()
         XCTAssertEqual(current, session)
     }

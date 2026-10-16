@@ -126,3 +126,16 @@ final class CorePlatformHooks: GIMCore.PlatformHooks {
         }
     }
 }
+
+/// Passes the app's `LocalTimeZone` to gim-core. Answers on the calling Rust background thread, without a hop.
+final class CoreLocalTimeZone: GIMCore.LocalTimeZone {
+    private let zone: any GIMClientKit.LocalTimeZone
+
+    init(_ zone: any GIMClientKit.LocalTimeZone) {
+        self.zone = zone
+    }
+
+    func utcOffsetSecs(atMs: Int64) -> Int32 {
+        zone.utcOffsetSecs(atMs: atMs)
+    }
+}
