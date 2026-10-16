@@ -3,7 +3,7 @@ import GIMFeatures
 import SwiftUI
 import UIKit
 
-/// Shows the identity and session, links to device management and lets the user sign out.
+/// Shows the identity and session, links to device and hub management and lets the user sign out.
 struct SettingsSheet: View {
     let client: any GimClientAPI
     let session: Session?
@@ -62,6 +62,10 @@ struct SettingsSheet: View {
                             .accessibilityIdentifier("settings.devices")
                         NavigationLink("Link a New Device") { ApproveLinkScreen(client: client) }
                             .accessibilityIdentifier("settings.linkDevice")
+                    }
+                    Section("Hubs") {
+                        NavigationLink("Hubs") { HubsScreen(client: client) }
+                            .accessibilityIdentifier("settings.hubs")
                     }
                     Section("Session") {
                         if let serverUrl {

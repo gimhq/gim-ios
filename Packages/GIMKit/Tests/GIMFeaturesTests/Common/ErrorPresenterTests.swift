@@ -31,6 +31,18 @@ final class ErrorPresenterTests: XCTestCase {
             (.Internal(reason: "sqlite busy"), "Something went wrong. Please try again."),
             (.ChatNotActive(chatId: "h/g1", state: .left), "You're no longer a member of this chat."),
             (.ChatNotActive(chatId: "h/g1", state: .leaving), "You're leaving this chat."),
+            (
+                .HubNotVerified(reason: "audience_url_mismatch"),
+                "This hub couldn't prove it is reachable at this address. Check the address and try again."
+            ),
+            (.HubOwnsGroups(hubId: "h2", groupCount: 3), "This hub hosts 3 groups you own."),
+            (.HubOwnsGroups(hubId: "h2", groupCount: 1), "This hub hosts 1 group you own."),
+            (.LastHub(hubId: "h2"), "This is your only hub. Add another hub before removing it."),
+            (.HomeHub(hubId: "h1"), "This device's home hub can't be removed. Make another hub primary instead."),
+            (
+                .HubNotDrained(hubId: "h2", reason: "1 messages and 0 commits not acknowledged yet"),
+                "Messages sent through this hub are still on their way. Try again later."
+            ),
         ]
         for (error, message) in cases {
             XCTAssertEqual(ErrorPresenter.message(for: error), message, "\(error)")

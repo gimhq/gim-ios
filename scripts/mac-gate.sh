@@ -2,20 +2,21 @@
 # Builds and tests a commit on the shared macOS build host from station.
 #
 #   scripts/mac-gate.sh build-test [--sha <commit>] [--keep]
-#   scripts/mac-gate.sh e2e --hub-url <url> [--sha <commit>] [--keep]
+#   scripts/mac-gate.sh e2e --hub-url <url> [--hub-b-url <url>] [--sha <commit>] [--keep]
 #
 # Ships `git archive <sha>` (default HEAD, which needs a clean tree) to ~/gim-ci/<id>-<short sha>/ on the Mac
 # (GIM_MAC_HOST, default a@100.99.1.8; id = GIM_GATE_ID, default the last component of the branch name). There, under
 # the shared lock ~/gim-ci/.lock-xcode and on a dedicated simulator created for the run, `build-test` runs xcodegen,
 # builds the GIM app and runs the GIMKit and GIMUI package tests; `e2e` additionally runs GIMUITests against the hub
-# at <url> (as seen from the Mac, e.g. from scripts/e2e-hub.sh). Raw xcodebuild logs, the xcbeautify output, the
+# at <url> (as seen from the Mac, e.g. from scripts/e2e-hub.sh; --hub-b-url adds the second hub of
+# `e2e-hub.sh fed-start` for HubsSmokeTests, which is skipped without it). Raw xcodebuild logs, the xcbeautify output, the
 # `[e2e-summary]` line and the zipped xcresult bundles are copied to .tmp/mac/<short sha>/. Prints one
 # `[mac-gate] ...` summary line and exits non-zero on any failure. The Mac work dir is removed on success and kept on
 # failure or with --keep.
 set -euo pipefail
 
 usage() {
-    echo "usage: $0 build-test|e2e [--sha <commit>] [--hub-url <url>] [--keep]" >&2
+    echo "usage: $0 build-test|e2e [--sha <commit>] [--hub-url <url>] [--hub-b-url <url>] [--keep]" >&2
     exit 2
 }
 
@@ -25,6 +26,7 @@ shift
 [[ $mode == build-test || $mode == e2e ]] || usage
 sha=
 hub_url=
+hub_b_url=
 keep=
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -36,6 +38,11 @@ while [[ $# -gt 0 ]]; do
     --hub-url)
         [[ $# -ge 2 ]] || usage
         hub_url=$2
+        shift 2
+        ;;
+    --hub-b-url)
+        [[ $# -ge 2 ]] || usage
+        hub_b_url=$2
         shift 2
         ;;
     --keep)
@@ -72,11 +79,12 @@ mac() {
     ssh -o BatchMode=yes -o ServerAliveInterval=30 "$host" "$@"
 }
 
-# Runs on the Mac with /bin/bash (3.2) as `gate.sh <mode> <name> <short sha> [hub url]` from the work dir.
+# Runs on the Mac with /bin/bash (3.2) as `gate.sh <mode> <name> <short sha> [hub url] [hub B url]` from the work
+# dir.
 # shellcheck disable=SC2016
 remote_script='
 set -uo pipefail
-mode=$1 name=$2 short=$3 hub_url=${4:-}
+mode=$1 name=$2 short=$3 hub_url=${4:-} hub_b_url=${5:-}
 eval "$(/opt/homebrew/bin/brew shellenv)"
 work=$PWD
 out=$work/.tmp/gate
@@ -173,7 +181,7 @@ if [ "$mode" = e2e ] && [ "$build" = ok ]; then
     xcrun simctl bootstatus "$sim" -b >/dev/null
     xcrun simctl addmedia "$sim" GIM/UITests/Fixtures/photo-library-seed.png
     # shellcheck disable=SC2086
-    TEST_RUNNER_GIM_E2E_SERVER_URL=$hub_url run e2e xcodebuild test -project GIM.xcodeproj -scheme GIM \
+    TEST_RUNNER_GIM_E2E_SERVER_URL=$hub_url TEST_RUNNER_GIM_E2E_SERVER_URL_B=$hub_b_url run e2e xcodebuild test -project GIM.xcodeproj -scheme GIM \
         -only-testing:GIMUITests -destination "$destination" -derivedDataPath "$derived" \
         -resultBundlePath "$results/GIM-e2e.xcresult" $signing && e2e=ok
     grep -o "\[e2e-summary\].*" "$out/e2e.log" >"$out/e2e-summary.txt"
@@ -197,7 +205,7 @@ printf '%s' "$remote_script" | mac "cat >~/$work/.tmp/gate.sh"
 
 status=0
 # shellcheck disable=SC2029
-mac "cd ~/$work && /bin/bash .tmp/gate.sh $mode $name $short $(printf '%q' "$hub_url")" </dev/null || status=$?
+mac "cd ~/$work && /bin/bash .tmp/gate.sh $mode $name $short $(printf '%q' "$hub_url") $(printf '%q' "$hub_b_url")" </dev/null || status=$?
 
 rm -rf "$local_out"
 mkdir -p "$local_out"

@@ -240,6 +240,30 @@ public final class RealGimClient: GimClientAPI {
         }
         return relay.handle(handle)
     }
+
+    public func hubs() async throws -> [GIMClientKit.HubInfo] {
+        try await bridged { try await core.hubs().map { GIMClientKit.HubInfo($0) } }
+    }
+
+    public func addHub(url: String) async throws -> GIMClientKit.HubInfo {
+        try await bridged { try await GIMClientKit.HubInfo(core.addHub(url: url)) }
+    }
+
+    public func removeHub(hubId: String, confirmOwnedGroups: Bool) async throws {
+        try await bridged { try await core.removeHub(hubId: hubId, confirmOwnedGroups: confirmOwnedGroups) }
+    }
+
+    public func setPrimaryHub(hubId: String) async throws {
+        try await bridged { try await core.setPrimaryHub(hubId: hubId) }
+    }
+
+    public func hubList(listener: any GIMClientKit.HubListListener) async throws -> GIMClientKit.TaskHandle {
+        let relay = MainQueueRelay()
+        let handle = try await bridged {
+            try await core.hubList(listener: CoreHubListListener(listener, relay: relay))
+        }
+        return relay.handle(handle)
+    }
 }
 
 /// Adapts gim-core's generated `Timeline` object to the mirror `Timeline` protocol.

@@ -17,6 +17,13 @@ import Synchronization
 /// Chat state follows gim-core (`ChatState`): `leaveChat` makes a group `leaving` until the own `left` change arrives
 /// `leaveCommitDelay` later, `simulateRemoval(chatId:by:)` makes it `left` at once; a left chat stays in the list with
 /// its history, and sends and changes to a chat that is not `active` throw `ChatNotActive`.
+///
+/// Hubs: a deterministic registry with the home hub at `homeHubUrl` (hub id `hubId(forUrl:)`). `addHub` lists a hub
+/// `unverified` and makes it `verified` and signed in `hubVerifyDelay` later; a URL containing "unverified" throws
+/// `HubNotVerified`, "unreachable" `Network`, "nohub" `InvalidInput`; one containing "busy" makes the first
+/// `removeHub` of that hub throw `HubNotDrained`, one containing "owner" makes the hub own 2 groups.
+/// `removeHub` refuses the home hub (`HomeHub`), the only listed hub (`LastHub`) and a hub owning groups
+/// (`simulateOwnedGroups(hubId:count:)`) without `confirmOwnedGroups` (`HubOwnsGroups`).
 public actor FakeGimClient: GimClientAPI {
     struct Reaction: Sendable {
         var emoji: String
@@ -69,6 +76,18 @@ public actor FakeGimClient: GimClientAPI {
         var state: ChatState = .active
     }
 
+    struct StoredHub: Sendable {
+        var hubId: String
+        var url: String?
+        var state: HubState
+        var priority: UInt8
+        /// This device holds a session there (the home hub: while signed in).
+        var signedIn = false
+        var ownedGroupCount: UInt32 = 0
+        /// Number of `removeHub` calls still answered with `HubNotDrained`.
+        var undrainedRemovals = 0
+    }
+
     struct StoredMedia: Sendable {
         var path: String
         var thumbnailPath: String?
@@ -88,6 +107,7 @@ public actor FakeGimClient: GimClientAPI {
         var now: @Sendable () -> Date
         var autoReply: Bool
         var networkReachable: Bool
+        var homeHubUrl: String
     }
 
     /// Number of newest timeline entries exposed before `paginateBackwards` is called.
@@ -96,6 +116,9 @@ public actor FakeGimClient: GimClientAPI {
     /// Time another member takes to commit a leave Proposal, after which the chat is `left` and shows the own `left`
     /// change.
     public static let leaveCommitDelay: Duration = .seconds(2)
+    /// Time a hub added with `addHub` takes from `unverified` to `verified` and signed in.
+    public static let hubVerifyDelay: Duration = .seconds(1)
+    public static let defaultHomeHubUrl = "https://gim.example.eu"
     /// The SAS of every simulated device link.
     public static let fakeSas = "123 456"
     /// The other device of a client created with a session.
@@ -146,6 +169,9 @@ public actor FakeGimClient: GimClientAPI {
     private var chatMembersHeld = false
     private var heldChatMembers: [CheckedContinuation<Void, Never>] = []
     private var outbox: [String] = []
+    /// The hub registry; see `hubInfos()` for the order reported.
+    private var storedHubs: [StoredHub]
+    private var homeHubId: String { Self.hubId(forUrl: options.homeHubUrl) }
     private var nextId = 1
     private var nextReply = 0
 
@@ -153,10 +179,12 @@ public actor FakeGimClient: GimClientAPI {
     private var timelineSubscribers: [String: [Subscriber<any TimelineListener>]] = [:]
     private var connectionSubscribers: [Subscriber<any ConnectionStateListener>] = []
     private var typingSubscribers: [String: [Subscriber<any TypingListener>]] = [:]
+    private var hubListSubscribers: [Subscriber<any HubListListener>] = []
 
     /// - Parameters:
     ///   - autoReply: peers type and reply in direct chats after each own send.
     ///   - networkReachable: initial reachability, as `PlatformHooks.isNetworkReachable()` reports it.
+    ///   - homeHubUrl: `ClientConfig.serverUrl`, the home hub of the hub registry.
     ///   - users: directory of users `findUser` can return.
     ///   - session: the signed-in user (added to the directory, with a second device `fakeOtherDeviceId`), or `nil`
     ///     before `createIdentity`.
@@ -166,6 +194,7 @@ public actor FakeGimClient: GimClientAPI {
         now: @escaping @Sendable () -> Date = { Date() },
         autoReply: Bool = false,
         networkReachable: Bool = true,
+        homeHubUrl: String = FakeGimClient.defaultHomeHubUrl,
         users: [UserProfile] = [],
         session: Session? = nil
     ) {
@@ -177,7 +206,7 @@ public actor FakeGimClient: GimClientAPI {
         self.init(
             options: Options(
                 scheduler: scheduler, dataDirectory: dataDirectory, now: now, autoReply: autoReply,
-                networkReachable: networkReachable),
+                networkReachable: networkReachable, homeHubUrl: homeHubUrl),
             seed: seed, seedsDemoOnRegister: false)
     }
 
@@ -189,6 +218,7 @@ public actor FakeGimClient: GimClientAPI {
         let (zoneUpdates, zoneContinuation) = AsyncStream.makeStream(of: (any LocalTimeZone)?.self)
         timeZoneUpdates = zoneContinuation
         networkReachable = options.networkReachable
+        storedHubs = [Self.homeHub(url: options.homeHubUrl)]
         session = seed.session
         sessionUserId.withLock { $0 = seed.session?.userId }
         if let session = seed.session {
@@ -294,6 +324,30 @@ public actor FakeGimClient: GimClientAPI {
         heldChatMembers.remove(at: index).resume()
     }
 
+    /// Simulates `count` chats of this user owned by the hub (chat ids prefixed with its hub id): `removeHub` throws
+    /// `HubOwnsGroups` unless `confirmOwnedGroups`.
+    public func simulateOwnedGroups(hubId: String, count: UInt32) throws {
+        try updateHub(hubId) { $0.ownedGroupCount = count }
+    }
+
+    /// Simulates another own device adding the hub at `url`: it is listed last, `unverified` with that URL (a shared
+    /// URL is never contacted) until `addHub(url:)` is called with it here.
+    public func simulateHubSharedByOtherDevice(url: String) throws {
+        try validateServerUrl(url, what: "url")
+        let hubId = Self.hubId(forUrl: url)
+        guard !listedHubs().contains(where: { $0.hubId == hubId }) else { return }
+        listUnverified(StoredHub(hubId: hubId, url: url, state: .unverified, priority: nextHubPriority()))
+    }
+
+    /// Simulates another own device removing the hub from the hosting record (also the home hub, from a client built
+    /// for another hub): it is `removed` here.
+    public func simulateHubRemovedElsewhere(hubId: String) throws {
+        try updateHub(hubId) {
+            $0.state = .removed
+            $0.signedIn = false
+        }
+    }
+
     /// Applies a reachability change immediately; `setNetworkReachable(reachable:)` does the same asynchronously.
     public func simulateNetworkReachable(_ reachable: Bool) {
         networkReachable = reachable
@@ -363,6 +417,8 @@ public actor FakeGimClient: GimClientAPI {
         timelineSubscribers = [:]
         typingSubscribers = [:]
         publishChatList()
+        storedHubs = [Self.homeHub(url: options.homeHubUrl)]
+        publishHubList()
     }
 
     // MARK: - Identity and devices
@@ -915,6 +971,155 @@ public actor FakeGimClient: GimClientAPI {
         return try stored.thumbnailPath.map { try copyFile($0, to: destPath) }
     }
 
+    // MARK: - Hubs
+
+    public func hubs() async throws -> [HubInfo] {
+        hubInfos()
+    }
+
+    public func addHub(url: String) async throws -> HubInfo {
+        _ = try requireSession()
+        try validateServerUrl(url, what: "url")
+        if url.contains("unverified") {
+            throw GimError.HubNotVerified(reason: "\(url) did not prove the hub at that URL")
+        }
+        if url.contains("unreachable") {
+            throw GimError.Network(reason: "\(url): connection refused")
+        }
+        if url.contains("nohub") {
+            throw GimError.InvalidInput(reason: "url: \(url) does not serve a gim hub")
+        }
+        let hubId = Self.hubId(forUrl: url)
+        if let index = storedHubs.firstIndex(where: { $0.hubId == hubId && $0.state != .removed }) {
+            // A listed hub: only records the URL entered here; a hub known from another device is verified then.
+            if !storedHubs[index].signedIn, storedHubs[index].state == .unverified {
+                storedHubs[index].url = url
+                publishHubList()
+                scheduleHubVerification(hubId)
+            }
+        } else {
+            listUnverified(
+                StoredHub(
+                    hubId: hubId, url: url, state: .unverified, priority: nextHubPriority(),
+                    ownedGroupCount: url.contains("owner") ? 2 : 0, undrainedRemovals: url.contains("busy") ? 1 : 0))
+            scheduleHubVerification(hubId)
+        }
+        return try hubInfo(hubId)
+    }
+
+    public func removeHub(hubId: String, confirmOwnedGroups: Bool) async throws {
+        _ = try requireSession()
+        let listed = listedHubs()
+        guard let hub = listed.first(where: { $0.hubId == hubId }) else {
+            throw GimError.InvalidInput(reason: "hub \(hubId) is not listed by the hosting record")
+        }
+        guard hubId != homeHubId else { throw GimError.HomeHub(hubId: hubId) }
+        guard listed.count > 1 else { throw GimError.LastHub(hubId: hubId) }
+        if hub.ownedGroupCount > 0, !confirmOwnedGroups {
+            throw GimError.HubOwnsGroups(hubId: hubId, groupCount: hub.ownedGroupCount)
+        }
+        if hub.undrainedRemovals > 0 {
+            try updateHub(hubId) { $0.undrainedRemovals -= 1 }
+            throw GimError.HubNotDrained(hubId: hubId, reason: "1 messages and 0 commits not acknowledged yet")
+        }
+        try simulateHubRemovedElsewhere(hubId: hubId)
+    }
+
+    public func setPrimaryHub(hubId: String) async throws {
+        _ = try requireSession()
+        var order = listedHubs()
+        guard let position = order.firstIndex(where: { $0.hubId == hubId }) else {
+            throw GimError.InvalidInput(reason: "hub \(hubId) is not listed by the hosting record")
+        }
+        guard position > 0 else { return }
+        order.insert(order.remove(at: position), at: 0)
+        // Every hub whose priority changes co-signs its new entry, so this device must be signed in there.
+        for (priority, hub) in order.enumerated() where hub.priority != priority && !isSignedIn(hub) {
+            throw GimError.InvalidInput(
+                reason: "hub \(hub.hubId) is not reachable from this device; set its URL first")
+        }
+        for (priority, hub) in order.enumerated() {
+            try updateHub(hub.hubId) { $0.priority = UInt8(clamping: priority) }
+        }
+    }
+
+    public func hubList(listener: any HubListListener) async throws -> TaskHandle {
+        let subscription = FakeSubscription()
+        let hubs = hubInfos()
+        subscription.deliver { listener.onUpdate(hubs: hubs) }
+        hubListSubscribers.append(Subscriber(subscription: subscription, listener: listener))
+        return subscription.taskHandle()
+    }
+
+    private func scheduleHubVerification(_ hubId: String) {
+        options.scheduler.schedule(after: Self.hubVerifyDelay) { [weak self] in
+            await self?.completeHubVerification(hubId)
+        }
+    }
+
+    private func completeHubVerification(_ hubId: String) {
+        guard session != nil,
+            let index = storedHubs.firstIndex(where: { $0.hubId == hubId && $0.state == .unverified })
+        else { return }
+        storedHubs[index].state = .verified
+        storedHubs[index].signedIn = true
+        publishHubList()
+    }
+
+    /// The hubs not removed, in registry order (priority, then hub id).
+    private func listedHubs() -> [StoredHub] {
+        Self.sortedHubs(storedHubs).filter { $0.state != .removed }
+    }
+
+    private func nextHubPriority() -> UInt8 {
+        listedHubs().map { UInt8(clamping: Int($0.priority) + 1) }.max() ?? 1
+    }
+
+    /// Lists `hub` (new, or removed before) and publishes the list.
+    private func listUnverified(_ hub: StoredHub) {
+        if let index = storedHubs.firstIndex(where: { $0.hubId == hub.hubId }) {
+            storedHubs[index] = hub
+        } else {
+            storedHubs.append(hub)
+        }
+        publishHubList()
+    }
+
+    private func isSignedIn(_ hub: StoredHub) -> Bool {
+        session != nil && hub.state != .removed && (hub.hubId == homeHubId || hub.signedIn)
+    }
+
+    private func updateHub(_ hubId: String, _ mutate: (inout StoredHub) -> Void) throws {
+        guard let index = storedHubs.firstIndex(where: { $0.hubId == hubId }) else {
+            throw GimError.InvalidInput(reason: "hub \(hubId) is not listed by the hosting record")
+        }
+        mutate(&storedHubs[index])
+        publishHubList()
+    }
+
+    /// Like gim-core: registry order, removed hubs included; the first hub not removed is the primary.
+    private func hubInfos() -> [HubInfo] {
+        let sorted = Self.sortedHubs(storedHubs)
+        let primary = sorted.first { $0.state != .removed }?.hubId
+        return sorted.map { hub in
+            HubInfo(
+                hubId: hub.hubId, url: hub.url, state: hub.state, priority: hub.priority,
+                isPrimary: hub.hubId == primary, isHome: hub.hubId == homeHubId, signedIn: isSignedIn(hub))
+        }
+    }
+
+    private func hubInfo(_ hubId: String) throws -> HubInfo {
+        guard let info = hubInfos().first(where: { $0.hubId == hubId }) else {
+            throw GimError.Internal(reason: "hub \(hubId) not listed after adding it")
+        }
+        return info
+    }
+
+    private func publishHubList() {
+        let hubs = hubInfos()
+        hubListSubscribers.deliver { $0.onUpdate(hubs: hubs) }
+    }
+
     // MARK: - Listeners
 
     public func chatList(listener: any ChatListListener) async throws -> TaskHandle {
@@ -1212,6 +1417,21 @@ public actor FakeGimClient: GimClientAPI {
     }
 
     // MARK: - Pure helpers
+
+    /// The fake's hub id of the hub at `url`: `hub-` and the URL's host (and port), lowercased.
+    public static func hubId(forUrl url: String) -> String {
+        let components = URLComponents(string: url)
+        let host = components?.host?.lowercased() ?? url
+        return "hub-\(host)" + (components?.port.map { ":\($0)" } ?? "")
+    }
+
+    static func homeHub(url: String) -> StoredHub {
+        StoredHub(hubId: hubId(forUrl: url), url: url, state: .verified, priority: 0)
+    }
+
+    static func sortedHubs(_ hubs: [StoredHub]) -> [StoredHub] {
+        hubs.sorted { ($0.priority, $0.hubId) < ($1.priority, $1.hubId) }
+    }
 
     static let recoveryAlphabet = Array("0123456789ABCDEFGHJKMNPQRSTVWXYZ")
 
