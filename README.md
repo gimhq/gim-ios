@@ -91,4 +91,21 @@ scripts/e2e-hub.sh stop
 
 Builds `ai-agent/gim-hub:<short sha>` from the gim-hub repo (`GIM_HUB_REPO`, pinned commit in the script or
 `GIM_HUB_SHA`) if missing and runs a fresh standalone hub in Docker. The printed URL is the Docker host as seen from
-the Mac (`GIM_E2E_HUB_HOST`, default `100.99.1.1`); `scripts/e2e-hub.sh url` prints it again.
+the Mac (`GIM_E2E_HUB_HOST`, default `100.99.1.1`); `scripts/e2e-hub.sh url` prints it again. The hub runs with
+`GIM_HUB_PUBLIC_URL` set to exactly that URL: gim-core signs in only at the URL the hub proves (`GET /v2/hub`), so
+clients must use it verbatim. A port already in use on the host is an error.
+
+Two federated hubs:
+
+```sh
+eval "$(scripts/e2e-hub.sh fed-start)"   # [--run <id>] [--sha <commit>] [--port-a <port>] [--port-b <port>]
+echo "$GIM_E2E_HUB_A $GIM_E2E_HUB_B"     # also GIM_E2E_HUB_ID_A / GIM_E2E_HUB_ID_B
+scripts/e2e-hub.sh fed-url a             # prints a hub's URL again
+scripts/e2e-hub.sh fed-stop
+```
+
+Hubs A and B run in closed federation (each allows the other, shared libp2p PSK on a dedicated network, root keys in
+named volumes), each with its own published port (default: the first free ones from 18181) and public URL as above.
+`fed-start` returns once both are healthy and have bound each other. The run id defaults to `GIM_GATE_ID` or the
+branch name's last component; containers, network and volumes are labelled `ai-agent-run=gim-ios-e2e-<run>` and
+`fed-stop` removes exactly those.

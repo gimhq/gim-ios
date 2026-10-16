@@ -18,11 +18,12 @@ extension FakeGimClient {
         now: @escaping @Sendable () -> Date = { Date() },
         autoReply: Bool = true,
         registered: Bool = true,
-        networkReachable: Bool = true
+        networkReachable: Bool = true,
+        homeHubUrl: String = FakeGimClient.defaultHomeHubUrl
     ) -> FakeGimClient {
         let options = Options(
             scheduler: scheduler, dataDirectory: dataDirectory, now: now, autoReply: autoReply,
-            networkReachable: networkReachable)
+            networkReachable: networkReachable, homeHubUrl: homeHubUrl)
         guard registered else {
             return FakeGimClient(
                 options: options, seed: Seed(users: FakeDemoData.peers), seedsDemoOnRegister: true)
