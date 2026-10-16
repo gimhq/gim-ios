@@ -371,6 +371,38 @@ final class AppModelTests: XCTestCase {
     }
 
     @MainActor
+    func testHeldSyncStaysStoppedWhileActiveUntilReleased() async throws {
+        let session = session
+        let scheduler = ManualFakeScheduler()
+        let client = FakeGimClient(scheduler: scheduler, session: session)
+        let defaults = makeDefaults()
+        defaults.set("https://gim.example.eu", forKey: AppModel.serverUrlKey)
+        let model = makeModel(factory: ClientFactory(client), defaults: defaults)
+        await model.start()
+        var states = try await ListenerBridge.connectionState(client).makeAsyncIterator()
+        _ = await states.next()
+        await model.scenePhaseChanged(.active)
+        let connecting = await states.next()
+        XCTAssertEqual(connecting, .connecting)
+        // A started sync schedules its connection steps.
+        let scheduled = scheduler.pendingCount
+
+        await model.holdSync(true)
+        XCTAssertTrue(model.isSyncHeld)
+        let held = await states.next()
+        XCTAssertEqual(held, .offline)
+        await model.scenePhaseChanged(.background)
+        await model.scenePhaseChanged(.active)
+        XCTAssertEqual(scheduler.pendingCount, scheduled, "no sync started while held")
+
+        await model.holdSync(false)
+        XCTAssertFalse(model.isSyncHeld)
+        let resumed = await states.next()
+        XCTAssertEqual(resumed, .connecting)
+        XCTAssertGreaterThan(scheduler.pendingCount, scheduled)
+    }
+
+    @MainActor
     func testSignedInHookRunsAtLaunchAndAfterEachSignIn() async throws {
         let launched = FakeGimClient(session: session)
         let factory = ClientFactory(launched, FakeGimClient())

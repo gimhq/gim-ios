@@ -21,6 +21,14 @@
             XCTAssertEqual(DebugPushURL.payload(from: URL(string: "gim-debug://process-push?payload=e30")!), "{}")
         }
 
+        func testHoldSyncURL() {
+            XCTAssertEqual(DebugPushURL.holdSyncURL.absoluteString, "gim-debug://hold-sync")
+            XCTAssertTrue(DebugPushURL.isHoldSync(DebugPushURL.holdSyncURL))
+            XCTAssertFalse(DebugPushURL.isHoldSync(DebugPushURL.url(payload: "{}")))
+            XCTAssertFalse(DebugPushURL.isHoldSync(URL(string: "https://hold-sync")!))
+            XCTAssertNil(DebugPushURL.payload(from: DebugPushURL.holdSyncURL))
+        }
+
         func testRejectsOtherURLsAndBadPayloads() {
             for text in [
                 "gim-debug://other?payload=e30", "https://process-push?payload=e30", "gim-debug://process-push",
