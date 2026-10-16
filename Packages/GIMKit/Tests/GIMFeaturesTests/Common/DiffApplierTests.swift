@@ -7,7 +7,7 @@ final class DiffApplierTests: XCTestCase {
     private func chat(_ id: String, unread: UInt32 = 0) -> ChatSummary {
         ChatSummary(
             chatId: id, kind: .direct, name: id.uppercased(), avatar: nil, lastMessage: nil, unreadCount: unread,
-            updatedAtMs: 0, memberCount: 2)
+            updatedAtMs: 0, memberCount: 2, state: .active)
     }
 
     private func message(_ id: String) -> TimelineItem {
@@ -23,7 +23,7 @@ final class DiffApplierTests: XCTestCase {
             switch $0 {
             case .message(let item): item.messageId
             case .dateSeparator(let day): "day-\(day)"
-            case .membershipChange(let name, _, _): "member-\(name)"
+            case .membershipChange(let name, _, _, _, _): "member-\(name)"
             }
         }
     }

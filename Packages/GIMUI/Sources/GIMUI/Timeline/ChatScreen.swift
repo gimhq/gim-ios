@@ -17,7 +17,6 @@ public struct MessageMenuContext {
 /// composer.
 public struct ChatScreen<Composer: View>: View {
     private let client: any GimClientAPI
-    private let leavingChats: LeavingChats?
     private let contextMenuProvider: ((MessageItem, MessageMenuContext) -> UIMenu?)?
     private let composer: (TimelineViewModel, Binding<MessageItem?>, Binding<MessageItem?>) -> Composer
 
@@ -26,21 +25,18 @@ public struct ChatScreen<Composer: View>: View {
     @State private var replyingTo: MessageItem?
     /// Set by the menu's Edit action; the composer edits it and clears it.
     @State private var editing: MessageItem?
-    @Environment(\.dismiss) private var dismiss
 
     /// - Parameters:
-    ///   - leavingChats: passed to group info, which records the chat as leaving.
     ///   - contextMenuProvider: replaces the timeline's default long-press menu; the context starts a reply or an
     ///     edit.
     ///   - composer: placed in the bottom safe area, given the timeline, the message being replied to and the
     ///     message being edited.
     public init(
-        client: any GimClientAPI, chatId: String, leavingChats: LeavingChats? = nil,
+        client: any GimClientAPI, chatId: String,
         contextMenuProvider: ((MessageItem, MessageMenuContext) -> UIMenu?)? = nil,
         @ViewBuilder composer: @escaping (TimelineViewModel, Binding<MessageItem?>, Binding<MessageItem?>) -> Composer
     ) {
         self.client = client
-        self.leavingChats = leavingChats
         self.contextMenuProvider = contextMenuProvider
         self.composer = composer
         _viewModel = State(initialValue: TimelineViewModel(client: client, chatId: chatId))
@@ -74,9 +70,8 @@ public struct ChatScreen<Composer: View>: View {
             if viewModel.isGroup {
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink {
-                        GroupInfoScreen(
-                            client: client, chatId: viewModel.chatId, leavingChats: leavingChats,
-                            onLeft: { dismiss() })
+                        // Closes itself once the user left; the chat then shows its leaving state.
+                        GroupInfoScreen(client: client, chatId: viewModel.chatId)
                     } label: {
                         Image(systemName: "info.circle")
                     }

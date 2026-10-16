@@ -52,32 +52,7 @@ final class MessagingSmokeTests: E2ETestCase {
 
         summary.start("b")
         let chatId = try XCTContext.runActivity(named: "step b: app creates group \(groupName)") { _ in
-            try tap(app.buttons["chatList.newChat"], "step b: New Chat button", app)
-            try tap(app.buttons["newChat.newGroup"], "step b: New Group row", app)
-            try type(groupName, into: app.textFields["newGroup.name"], "step b: group name field", app)
-            for member in [peer.session, bystander.session] {
-                try type(
-                    member.handle, into: app.textFields["newGroup.memberHandle"], "step b: member handle field", app)
-                try tap(app.buttons["newGroup.addMember"], "step b: Add button for \(member.handle)", app)
-                // The chip shows the display name (the hub directory may report the handle as the display name), or
-                // @handle when the directory has no display name.
-                let chip = app.buttons
-                    .matching(
-                        NSPredicate(
-                            format: "label IN %@",
-                            [
-                                "Remove \(member.displayName)", "Remove \(member.handle)", "Remove @\(member.handle)",
-                            ])
-                    )
-                    .firstMatch
-                try require(
-                    chip.waitForExistence(timeout: networkTimeout),
-                    "step b: \(member.handle) added as member chip (footer: \(footerTexts(app)))", app)
-            }
-            try tap(app.buttons["newGroup.create"], "step b: Create button (footer: \(footerTexts(app)))", app)
-            try require(
-                app.textViews["composer.text"].waitForExistence(timeout: networkTimeout),
-                "step b: conversation with composer opened", app)
+            try createGroup(groupName, members: [peer.session, bystander.session], "step b", app)
             return try eventually("step b: peer joins group \(groupName)", app) { peer.chatId(named: groupName) }
         }
         summary.finish("b")
@@ -286,62 +261,12 @@ final class MessagingSmokeTests: E2ETestCase {
         attachDiagnostics("step e: \(reason); app-to-peer image skipped", app)
     }
 
-    /// Taps the timeline's jump button when the newest messages are scrolled out of view.
-    @MainActor
-    private func scrollToLatest(_ app: XCUIApplication) {
-        let jump = app.buttons["timeline.jumpToLatest"]
-        if jump.exists && jump.isHittable { jump.tap() }
-    }
-
-    /// A context-menu or pull-down-menu item by its title; UIKit exposes these as buttons, menu items or cells
-    /// depending on the OS version and element size.
-    @MainActor
-    private func menuItem(_ title: String, in app: XCUIApplication) -> XCUIElement {
-        let types = [XCUIElement.ElementType.button, .menuItem, .cell, .staticText].map { NSNumber(value: $0.rawValue) }
-        return app.descendants(matching: .any)
-            .matching(NSPredicate(format: "label == %@ AND elementType IN %@", title, types as NSArray))
-            .firstMatch
-    }
-
-    /// The form footers' texts (validation and error messages), for failure messages.
-    @MainActor
-    private func footerTexts(_ app: XCUIApplication) -> String {
-        let labels = app.cells.staticTexts.allElementsBoundByIndex.map(\.label)
-        let footers = labels.filter {
-            $0.hasPrefix("Add ") || $0.hasPrefix("No ") || $0.hasPrefix("You ") || $0.hasPrefix("Couldn't")
-        }
-        return footers.isEmpty ? "none" : footers.joined(separator: " | ")
-    }
-
-    @MainActor
-    private func send(_ text: String, _ step: String, _ app: XCUIApplication) throws {
-        try type(text, into: app.textViews["composer.text"], "\(step): composer text view", app)
-        try tap(app.buttons["composer.send"], "\(step): Send button", app)
-    }
-
-    @MainActor
-    private func openMenu(on message: XCUIElement, _ step: String, _ app: XCUIApplication) throws {
-        scrollToLatest(app)
-        try require(message.waitForExistence(timeout: networkTimeout), "\(step): message bubble visible", app)
-        message.press(forDuration: 1.2)
-        try require(menuItem("Reply", in: app).waitForExistence(timeout: 5), "\(step): context menu open", app)
-    }
-
     /// The texts of the timeline bubbles on screen, for failure messages.
     @MainActor
     private func visibleMessageTexts(_ app: XCUIApplication) -> [String] {
         app.staticTexts.matching(identifier: "timeline.message.text").allElementsBoundByIndex.map(\.label)
     }
 
-    /// The body label of the timeline bubble showing `text`.
-    @MainActor
-    private func messageText(_ text: String, in app: XCUIApplication) -> XCUIElement {
-        app.staticTexts.matching(Self.messageTextPredicate(text)).firstMatch
-    }
-
-    private static func messageTextPredicate(_ text: String) -> NSPredicate {
-        NSPredicate(format: "identifier == 'timeline.message.text' AND label == %@", text)
-    }
 }
 
 extension MessageItem {

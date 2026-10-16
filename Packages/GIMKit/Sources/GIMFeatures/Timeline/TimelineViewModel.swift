@@ -2,7 +2,8 @@ import Foundation
 import GIMClientKit
 import Observation
 
-/// One chat's timeline: the display items, older-history pagination, typing, read receipts, retries and media files.
+/// One chat's timeline: the display items, older-history pagination, typing, read receipts, retries, media files and
+/// the chat's state.
 ///
 /// The items are rebuilt from gim-core's timeline (kept with `DiffApplier`) on every change; `onChange` reports the
 /// difference so the timeline view can run batch updates.
@@ -26,6 +27,14 @@ public final class TimelineViewModel {
     public private(set) var errorMessage: String?
     /// Last message a read receipt was sent for.
     public private(set) var markedReadUpTo: String?
+    /// Where this device stands in the chat, from `Timeline.chatState()`, the chat list and `ChatNotActive` errors;
+    /// `nil` until known.
+    public private(set) var chatState: ChatState?
+
+    /// Leaving or left: nothing can be sent or changed.
+    public var isReadOnly: Bool {
+        chatState == .leaving || chatState == .left
+    }
 
     /// Called after `items` changed, on the main actor.
     @ObservationIgnored public var onChange: ((TimelineChangeSet) -> Void)?
@@ -73,6 +82,8 @@ public final class TimelineViewModel {
                 do {
                     let timeline = try await client.timeline(chatId: chatId)
                     self?.timeline = timeline
+                    // From local state: right after a restart, before any diff.
+                    self?.updateChatState(timeline.chatState())
                     for await diffs in await Self.stream(timeline) {
                         self?.apply(diffs)
                     }
@@ -96,7 +107,7 @@ public final class TimelineViewModel {
             })
         tasks.append(
             Task { [weak self] in
-                // Best effort: only used for typing names; gim-core may not implement it yet.
+                // Best effort: only used for typing and membership names.
                 guard let members = try? await client.chatMembers(chatId: chatId) else { return }
                 self?.learnNames(members)
             })
@@ -139,8 +150,18 @@ public final class TimelineViewModel {
         do {
             try await client.retrySend(chatId: chatId, messageId: messageId)
         } catch {
+            guard !handleChatNotActive(error) else { return }
             errorMessage = ErrorPresenter.message(for: error)
         }
+    }
+
+    /// Takes the state from a `ChatNotActive` error, which makes the chat read-only instead of showing an error.
+    /// Returns whether `error` was one; other errors are left to the caller.
+    @discardableResult
+    public func handleChatNotActive(_ error: any Error) -> Bool {
+        guard case .ChatNotActive(_, let state) = error as? GimError else { return false }
+        updateChatState(state)
+        return true
     }
 
     public func dismissError() {
@@ -211,8 +232,16 @@ public final class TimelineViewModel {
             return
         }
         isLoading = false
-        for case .message(let message) in source where names[message.sender.userId] == nil {
-            names[message.sender.userId] = UserLabel.name(for: message.sender)
+        updateChatState(timeline?.chatState())
+        for item in source {
+            switch item {
+            case .message(let message) where names[message.sender.userId] == nil:
+                names[message.sender.userId] = UserLabel.name(for: message.sender)
+            case .membershipChange(let userName, _, _, let userId, _) where names[userId] == nil:
+                names[userId] = UserLabel.name(userName)
+            default:
+                break
+            }
         }
         rebuild(isReset: change.isReset)
     }
@@ -230,7 +259,8 @@ public final class TimelineViewModel {
 
     private func learnNames(_ users: [UserProfile]) {
         for user in users { names[user.userId] = UserLabel.name(for: user) }
-        if !typingUserIds.isEmpty { rebuild(isReset: false) }
+        // Typing and membership rows name users.
+        rebuild(isReset: false)
     }
 
     private func applyChatList(_ diffs: [ChatListDiff]) {
@@ -238,16 +268,23 @@ public final class TimelineViewModel {
             let summary = chatList.first(where: { $0.chatId == chatId })
         else { return }
         title = summary.name
+        updateChatState(summary.state)
         if isGroup != (summary.kind == .group) {
             isGroup = summary.kind == .group
             rebuild(isReset: false)
         }
     }
 
+    private func updateChatState(_ state: ChatState?) {
+        guard let state, state != chatState else { return }
+        chatState = state
+    }
+
     private func rebuild(isReset: Bool) {
         typingText = TimelineItemBuilder.typingText(names: typingUserIds.map { names[$0] ?? "Someone" })
         let newItems = builder.build(
-            source, isGroup: isGroup, typingText: typingText, unavailableMedia: unavailableMedia)
+            source, isGroup: isGroup, typingText: typingText, unavailableMedia: unavailableMedia,
+            ownUserId: client.userId(), names: names)
         let change = TimelineChangeSet(from: items, to: newItems, isReset: isReset)
         guard !change.isEmpty else { return }
         items = newItems

@@ -17,7 +17,7 @@ final class ChatRowTests: XCTestCase {
             lastMessage: preview.map {
                 MessagePreview(senderName: sender, text: $0, sentAtMs: sentAtMs, isOwn: false)
             },
-            unreadCount: unread, updatedAtMs: sentAtMs, memberCount: kind == .group ? 4 : 2)
+            unreadCount: unread, updatedAtMs: sentAtMs, memberCount: kind == .group ? 4 : 2, state: .active)
     }
 
     func testGroupPreviewIsPrefixedWithSender() {
@@ -71,7 +71,7 @@ final class ChatRowTests: XCTestCase {
         let summary = ChatSummary(
             chatId: "chat-1", kind: .group, name: userId, avatar: nil,
             lastMessage: MessagePreview(senderName: userId, text: "Hi", sentAtMs: sentAtMs, isOwn: false),
-            unreadCount: 0, updatedAtMs: sentAtMs, memberCount: 3)
+            unreadCount: 0, updatedAtMs: sentAtMs, memberCount: 3, state: .active)
 
         let row = ChatRow(summary: summary, dateFormatter: makeFormatter())
 

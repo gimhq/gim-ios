@@ -12,16 +12,15 @@ public struct ChatListScreen: View {
     @State private var showsNewChat = false
 
     /// - Parameters:
-    ///   - leavingChats: the chats the user is leaving; their rows say so.
     ///   - onOpenSettings: shows a settings button in the toolbar when set.
     public init(
-        client: any GimClientAPI, leavingChats: LeavingChats? = nil, onOpen: @escaping (String) -> Void,
+        client: any GimClientAPI, onOpen: @escaping (String) -> Void,
         onOpenSettings: (() -> Void)? = nil
     ) {
         self.client = client
         self.onOpen = onOpen
         self.onOpenSettings = onOpenSettings
-        _viewModel = State(initialValue: ChatListViewModel(client: client, leavingChats: leavingChats))
+        _viewModel = State(initialValue: ChatListViewModel(client: client))
     }
 
     public var body: some View {
@@ -31,6 +30,7 @@ public struct ChatListScreen: View {
             } label: {
                 ChatRowView(row: row, subtitle: viewModel.subtitle(for: row))
             }
+            .accessibilityIdentifier("chatList.row")
         }
         .listStyle(.plain)
         .overlay { emptyState }

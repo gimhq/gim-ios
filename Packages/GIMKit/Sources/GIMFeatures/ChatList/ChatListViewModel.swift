@@ -16,29 +16,37 @@ public final class ChatListViewModel {
 
     private let client: any GimClientAPI
     private let dateFormatter: RelativeDateFormatter
-    private let leavingChats: LeavingChats?
+    /// How the user left each left chat whose timeline was looked up: the newest own `left` or `removed` change.
+    private var exits: [String: MembershipChangeKind] = [:]
+    /// Lookups of `exits`, by chat id; kept once finished so each left chat is looked up once.
+    @ObservationIgnored private var exitLookups: [String: Task<Void, Never>] = [:]
     @ObservationIgnored private var listTask: Task<Void, Never>?
     @ObservationIgnored private var connectionTask: Task<Void, Never>?
 
-    /// - Parameter leavingChats: the chats the user is leaving; their rows say so.
-    public init(
-        client: any GimClientAPI, dateFormatter: RelativeDateFormatter = RelativeDateFormatter(),
-        leavingChats: LeavingChats? = nil
-    ) {
+    public init(client: any GimClientAPI, dateFormatter: RelativeDateFormatter = RelativeDateFormatter()) {
         self.client = client
         self.dateFormatter = dateFormatter
-        self.leavingChats = leavingChats
     }
 
-    /// The text under the row's title: "Leaving…" while the user is leaving the chat, otherwise the last message.
+    /// The text under the row's title: the last message while the chat is active, otherwise its `ChatState`.
+    /// A left chat says how the user left when its timeline shows the own `left` or `removed` change.
     public func subtitle(for row: ChatRow) -> String {
-        if leavingChats?.contains(row.id) == true { return "Leaving…" }
-        return row.preview ?? "No messages yet"
+        switch row.state {
+        case .active: row.preview ?? "No messages yet"
+        case .leaving: "Leaving…"
+        case .left:
+            switch exits[row.id] {
+            case .left: "You left"
+            case .removed: "You were removed"
+            case .added, nil: "Left"
+            }
+        }
     }
 
     deinit {
         listTask?.cancel()
         connectionTask?.cancel()
+        for lookup in exitLookups.values { lookup.cancel() }
     }
 
     /// Subscribes to the chat list and the connection state. Does nothing while already subscribed.
@@ -89,7 +97,44 @@ public final class ChatListViewModel {
         } catch {
             // Out of sync with the core; a new subscription starts with a reset.
             refresh()
+            return
         }
+        lookUpExits()
+    }
+
+    /// Looks up how the user left each newly left chat; forgets chats that are no longer left.
+    private func lookUpExits() {
+        let leftIds = Set(rows.filter { $0.state == .left }.map(\.id))
+        for (chatId, lookup) in exitLookups where !leftIds.contains(chatId) {
+            lookup.cancel()
+            exitLookups[chatId] = nil
+            exits[chatId] = nil
+        }
+        let client = client
+        for chatId in leftIds where exitLookups[chatId] == nil {
+            exitLookups[chatId] = Task { [weak self] in
+                guard let change = await Self.ownExit(client, chatId: chatId), !Task.isCancelled else { return }
+                self?.exits[chatId] = change
+            }
+        }
+    }
+
+    /// The newest own `left` or `removed` change among the timeline items loaded so far; `nil` if there is none.
+    private static func ownExit(_ client: any GimClientAPI, chatId: String) async -> MembershipChangeKind? {
+        guard let ownUserId = client.userId(),
+            let stream = try? await ListenerBridge.timeline(client, chatId: chatId)
+        else { return nil }
+        var items: [TimelineItem] = []
+        // The first callback is the reset with the loaded items; ending the iteration cancels the subscription.
+        for await diffs in stream {
+            _ = try? DiffApplier.apply(diffs, to: &items)
+            break
+        }
+        for case .membershipChange(_, let change, _, let userId, _) in items.reversed()
+        where userId == ownUserId && change != .added {
+            return change
+        }
+        return nil
     }
 
     private func fail(_ error: any Error) {

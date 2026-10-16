@@ -3,13 +3,13 @@ import GIMFeatures
 import UIKit
 
 /// The long-press menu of a message: Reply, the quick reactions, Copy, Edit, Delete and Retry, as offered by
-/// `MessageActionsViewModel.actions(for:)`.
+/// `MessageActionsViewModel.actions(for:isReadOnly:)`.
 @MainActor
 enum MessageContextMenu {
     static func menu(
         for message: MessageItem, context: MessageMenuContext, actions: MessageActionsViewModel
     ) -> UIMenu? {
-        let available = MessageActionsViewModel.actions(for: message)
+        let available = MessageActionsViewModel.actions(for: message, isReadOnly: context.timeline.isReadOnly)
         guard !available.isEmpty else { return nil }
         let children: [UIMenuElement] = available.map { action in
             switch action {

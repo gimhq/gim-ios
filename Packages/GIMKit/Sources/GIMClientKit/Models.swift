@@ -75,10 +75,13 @@ public struct ChatSummary: Sendable, Hashable {
     public var unreadCount: UInt32
     public var updatedAtMs: UInt64
     public var memberCount: UInt32
+    /// Where this device stands in the chat; read from local state, so it is right from the first callback after a
+    /// restart.
+    public var state: ChatState
 
     public init(
         chatId: String, kind: ChatKind, name: String, avatar: MediaRef?, lastMessage: MessagePreview?,
-        unreadCount: UInt32, updatedAtMs: UInt64, memberCount: UInt32
+        unreadCount: UInt32, updatedAtMs: UInt64, memberCount: UInt32, state: ChatState
     ) {
         self.chatId = chatId
         self.kind = kind
@@ -88,7 +91,21 @@ public struct ChatSummary: Sendable, Hashable {
         self.unreadCount = unreadCount
         self.updatedAtMs = updatedAtMs
         self.memberCount = memberCount
+        self.state = state
     }
+}
+
+/// Where this device stands in a chat. Changes reach the chat list as a `set` diff of the row: `active -> leaving`
+/// when `leaveChat` starts, `leaving -> left` once another member commits the removal, `leaving -> active` if the hub
+/// refuses the leave for good, and `active -> left` when another member removes this user.
+public enum ChatState: Sendable, Hashable {
+    /// A member; messages can be sent.
+    case active
+    /// Leaving was asked for: still a member until another member commits the removal, but nothing can be sent
+    /// (`GimError.ChatNotActive`). gim-core keeps and re-sends the leave across restarts.
+    case leaving
+    /// Removed (after leaving, by another member or by the hub); history is kept, nothing can be sent.
+    case left
 }
 
 /// Last message shown in a chat list row.
@@ -112,7 +129,10 @@ public enum TimelineItem: Sendable, Hashable {
     case message(item: MessageItem)
     /// Inserted before the first item of each local calendar day.
     case dateSeparator(dayStartMs: UInt64)
-    case membershipChange(userName: String, change: MembershipChangeKind, atMs: UInt64)
+    /// `userId` is the user who joined or left (the signed-in user's own `left` has their user id); `actorUserId` is
+    /// the user who caused the change (the adder or remover, the user themselves for `left`), `nil` if unknown.
+    case membershipChange(
+        userName: String, change: MembershipChangeKind, atMs: UInt64, userId: String, actorUserId: String?)
 }
 
 public enum MembershipChangeKind: Sendable, Hashable {
@@ -267,7 +287,8 @@ public enum GimError: Error, Sendable, Hashable, LocalizedError {
     /// The call needs a session: create an identity, restore one or link this device first. Also returned after
     /// `signOut` and once the hub reports this device as revoked.
     case NotRegistered
-    /// An argument was rejected before anything was sent.
+    /// An argument was rejected before anything was sent, the call does not fit the state, or the hub rejected the
+    /// request as invalid (400 `validation_failed`, 422); gim-core does not resend it.
     case InvalidInput(reason: String)
     /// The chat, message, user or media does not exist locally or on the server.
     case NotFound(reason: String)
@@ -275,7 +296,8 @@ public enum GimError: Error, Sendable, Hashable, LocalizedError {
     case Crypto(reason: String)
     /// The local database or file system failed.
     case Storage(reason: String)
-    /// The hub answered with a non-success HTTP status.
+    /// The hub answered with a non-success HTTP status. A 4xx (e.g. 403 `not_member`) is a definite rejection that
+    /// gim-core does not resend; a 5xx, 408 or 429 has an unknown outcome and gim-core resends the request unchanged.
     case Server(status: UInt16, reason: String)
     /// The hub is throttling the call (HTTP 429) or a remote hub is unavailable (HTTP 503) and gim-core's bounded
     /// retries are used up; try again after `retryAfterSecs`.
@@ -286,6 +308,9 @@ public enum GimError: Error, Sendable, Hashable, LocalizedError {
     case NotImplemented
     /// A bug or an unexpected failure inside gim-core or a platform callback.
     case Internal(reason: String)
+    /// The call sends to (or changes) a chat this device is leaving or has left. `state` is `leaving` or `left`; see
+    /// `ChatState`.
+    case ChatNotActive(chatId: String, state: ChatState)
 
     public var errorDescription: String? {
         String(reflecting: self)

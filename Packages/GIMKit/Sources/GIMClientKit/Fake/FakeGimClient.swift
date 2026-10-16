@@ -13,6 +13,10 @@ import Synchronization
 /// Identity: `createIdentity` returns a deterministic recovery code that `restoreFromRecovery` accepts after
 /// `signOut`; the device link runs on one client per side (`startLink`/`waitLink`/`confirmLink` signs in as the demo
 /// user, `approveLink`/`confirmApproval` adds a device) with the fixed SAS `fakeSas`.
+///
+/// Chat state follows gim-core (`ChatState`): `leaveChat` makes a group `leaving` until the own `left` change arrives
+/// `leaveCommitDelay` later, `simulateRemoval(chatId:by:)` makes it `left` at once; a left chat stays in the list with
+/// its history, and sends and changes to a chat that is not `active` throw `ChatNotActive`.
 public actor FakeGimClient: GimClientAPI {
     struct Reaction: Sendable {
         var emoji: String
@@ -26,12 +30,13 @@ public actor FakeGimClient: GimClientAPI {
 
     enum Entry: Sendable {
         case message(StoredMessage)
-        case membership(userName: String, change: MembershipChangeKind, atMs: UInt64)
+        case membership(
+            userName: String, change: MembershipChangeKind, atMs: UInt64, userId: String, actorUserId: String?)
 
         var atMs: UInt64 {
             switch self {
             case .message(let stored): stored.item.sentAtMs
-            case .membership(_, _, let atMs): atMs
+            case .membership(_, _, let atMs, _, _): atMs
             }
         }
 
@@ -42,8 +47,9 @@ public actor FakeGimClient: GimClientAPI {
         var timelineItem: TimelineItem {
             switch self {
             case .message(let stored): .message(item: stored.item)
-            case .membership(let userName, let change, let atMs):
-                .membershipChange(userName: userName, change: change, atMs: atMs)
+            case .membership(let userName, let change, let atMs, let userId, let actorUserId):
+                .membershipChange(
+                    userName: userName, change: change, atMs: atMs, userId: userId, actorUserId: actorUserId)
             }
         }
     }
@@ -60,6 +66,7 @@ public actor FakeGimClient: GimClientAPI {
         var loadedCount = 0
         var unreadCount: UInt32 = 0
         var typing: [String] = []
+        var state: ChatState = .active
     }
 
     struct StoredMedia: Sendable {
@@ -86,7 +93,8 @@ public actor FakeGimClient: GimClientAPI {
     /// Number of newest timeline entries exposed before `paginateBackwards` is called.
     public static let initialWindow = 50
     public static let failureReason = "Simulated network failure"
-    /// Time another member takes to commit a leave Proposal, after which the own `left` change arrives.
+    /// Time another member takes to commit a leave Proposal, after which the chat is `left` and shows the own `left`
+    /// change.
     public static let leaveCommitDelay: Duration = .seconds(2)
     /// The SAS of every simulated device link.
     public static let fakeSas = "123 456"
@@ -127,8 +135,10 @@ public actor FakeGimClient: GimClientAPI {
     /// Bumped on every connection change so stale scheduled steps do nothing.
     private var connectionGeneration = 0
     private var sendFailuresRemaining = 0
-    /// Chats left with `leaveChat` whose `left` change has not arrived yet.
-    private var leavingChatIds: Set<String> = []
+    /// Status and error code of the hub's definite rejection of the next own send.
+    private var nextSendRejection: (status: UInt16, code: String)?
+    /// `ChatState` of every chat, for the synchronous `Timeline.chatState()`.
+    private let chatStates = Mutex<[String: ChatState]>([:])
     private var fetchMediaFailure: GimError?
     /// Users in the directory without a device: invites to them fail like invites to unknown users.
     private var devicelessUserIds: Set<String> = []
@@ -194,6 +204,8 @@ public actor FakeGimClient: GimClientAPI {
         chats = Dictionary(uniqueKeysWithValues: seed.chats.map { ($0.id, $0) })
         media = seed.media
         publishedChatList = Self.sortedSummaries(chats: chats, users: users, session: seed.session)
+        let states = chats.mapValues(\.state)
+        chatStates.withLock { $0 = states }
         publishedTimelines = chats.mapValues { Self.timelineItems(of: $0, zone: nil) }
         // `setNetworkReachable` and `setLocalTimeZone` are synchronous; this keeps their updates in call order.
         Task { [weak self] in
@@ -222,6 +234,25 @@ public actor FakeGimClient: GimClientAPI {
     /// The next `count` own sends (including retries) end in `failed`.
     public func failNextSends(_ count: Int) {
         sendFailuresRemaining = count
+    }
+
+    /// The hub rejects the next own send (not a retry) for good, with a 4xx such as 403 `not_member`: like gim-core,
+    /// `sendText`/`sendMedia` return and the message is `failed` at once, without waiting for a connection, and is
+    /// not resent.
+    public func rejectNextSend(status: UInt16 = 403, code: String = "not_member") {
+        nextSendRejection = (status, code)
+    }
+
+    /// Simulates another member (`actorUserId`) removing the signed-in user from a group: the chat is `left` at once
+    /// and shows the own `removed` change.
+    public func simulateRemoval(chatId: String, by actorUserId: String) throws {
+        let session = try requireSession()
+        let chat = try existingGroup(chatId, "Only groups have members to remove")
+        guard chat.state != .left else { throw GimError.ChatNotActive(chatId: chatId, state: .left) }
+        guard chat.members.contains(actorUserId), actorUserId != session.userId else {
+            throw GimError.NotFound(reason: "member \(actorUserId)")
+        }
+        markLeft(chatId, change: .removed, actorUserId: actorUserId)
     }
 
     /// The next `fetchMedia` call throws `error` (for example `.RetryLater`); later calls succeed again.
@@ -322,7 +353,7 @@ public actor FakeGimClient: GimClientAPI {
         pendingApprovals = []
         syncRunning = false
         outbox = []
-        leavingChatIds = []
+        nextSendRejection = nil
         setConnection(.offline)
         for chatId in chats.keys {
             timelineSubscribers[chatId, default: []].deliver { $0.onUpdate(diffs: [.clear]) }
@@ -606,7 +637,7 @@ public actor FakeGimClient: GimClientAPI {
         chats[chat.id] = chat
         publishTimelineChange(chat.id)
         publishChatList()
-        reportSkipped(skipped, chat.id)
+        reportSkipped(skipped, chat.id, by: session.userId)
         return chat.id
     }
 
@@ -621,16 +652,16 @@ public actor FakeGimClient: GimClientAPI {
     }
 
     public func addMembers(chatId: String, userIds: [String]) async throws {
-        _ = try requireSession()
+        let session = try requireSession()
         var chat = try existingGroup(chatId, "Members can only be added to groups")
+        try requireActive(chat)
         let (added, skipped) = try invitees(userIds, excluding: chat.members)
         chat.members += added
         chats[chatId] = chat
         for userId in added {
-            appendEntry(
-                .membership(userName: users[userId]?.displayName ?? userId, change: .added, atMs: nowMs()), chatId)
+            appendEntry(membershipEntry(userId, change: .added, actorUserId: session.userId), chatId)
         }
-        reportSkipped(skipped, chatId)
+        reportSkipped(skipped, chatId, by: session.userId)
     }
 
     /// Splits invitees into known users and unknown ones (like gim-core's users without a device, which are
@@ -653,49 +684,78 @@ public actor FakeGimClient: GimClientAPI {
         return (found, skipped)
     }
 
-    /// gim-core reports each skipped invitee as a `removed` change, named like other membership changes.
-    private func reportSkipped(_ userIds: [String], _ chatId: String) {
+    /// gim-core reports each skipped invitee as a `removed` change by the inviter, named like other membership
+    /// changes.
+    private func reportSkipped(_ userIds: [String], _ chatId: String, by inviter: String) {
         for userId in userIds {
-            appendEntry(
-                .membership(userName: users[userId]?.displayName ?? userId, change: .removed, atMs: nowMs()), chatId)
+            appendEntry(membershipEntry(userId, change: .removed, actorUserId: inviter), chatId)
         }
+    }
+
+    /// A membership change of `userId` now, named with the display name (the user id while the profile is unknown).
+    private func membershipEntry(_ userId: String, change: MembershipChangeKind, actorUserId: String?) -> Entry {
+        .membership(
+            userName: users[userId]?.displayName ?? userId, change: change, atMs: nowMs(), userId: userId,
+            actorUserId: actorUserId)
     }
 
     public func removeMember(chatId: String, userId: String) async throws {
         let session = try requireSession()
         var chat = try existingGroup(chatId, "Members can only be removed from groups")
+        try requireActive(chat)
         guard userId != session.userId else { throw GimError.InvalidInput(reason: "Use leaveChat to leave a group") }
-        guard chat.members.contains(userId), let user = users[userId] else {
+        guard chat.members.contains(userId), users[userId] != nil else {
             throw GimError.NotFound(reason: "member \(userId)")
         }
         chat.members.removeAll { $0 == userId }
         chat.typing.removeAll { $0 == userId }
         chats[chatId] = chat
-        appendEntry(.membership(userName: user.displayName, change: .removed, atMs: nowMs()), chatId)
+        appendEntry(membershipEntry(userId, change: .removed, actorUserId: session.userId), chatId)
     }
 
-    /// Like gim-core, the chat is leaving until another member commits the leave: sends fail with `InvalidInput`
-    /// until the own `left` change arrives `leaveCommitDelay` later, and the chat is removed.
+    /// Like gim-core, the chat is `leaving` once the call returns (sends throw `ChatNotActive`) until another member
+    /// commits the leave `leaveCommitDelay` later; then it is `left` and shows the own `left` change. Calling it again
+    /// while leaving re-sends the leave and does not restart the delay.
     public func leaveChat(chatId: String) async throws {
         _ = try requireSession()
-        _ = try existingGroup(chatId, "Only groups can be left")
-        guard leavingChatIds.insert(chatId).inserted else { return }
-        options.scheduler.schedule(after: Self.leaveCommitDelay) { [weak self] in await self?.completeLeave(chatId) }
+        var chat = try existingGroup(chatId, "Only groups can be left")
+        switch chat.state {
+        case .left:
+            throw GimError.ChatNotActive(chatId: chatId, state: .left)
+        case .leaving:
+            return
+        case .active:
+            chat.state = .leaving
+            chats[chatId] = chat
+            publishChatList()
+            options.scheduler.schedule(after: Self.leaveCommitDelay) { [weak self] in
+                await self?.completeLeave(chatId)
+            }
+        }
+    }
+
+    public func chatState(chatId: String) async throws -> ChatState {
+        try existingChat(chatId).state
     }
 
     private func completeLeave(_ chatId: String) {
-        guard leavingChatIds.remove(chatId) != nil, let session, chats[chatId] != nil else { return }
-        appendEntry(.membership(userName: session.displayName, change: .left, atMs: nowMs()), chatId)
-        chats[chatId] = nil
-        publishedTimelines[chatId] = nil
-        timelineSubscribers[chatId] = nil
-        typingSubscribers[chatId] = nil
-        publishChatList()
+        guard let session, chats[chatId]?.state == .leaving else { return }
+        markLeft(chatId, change: .left, actorUserId: session.userId)
+    }
+
+    /// The signed-in user is no longer a member: the chat is `left`, keeps its history and shows the own `change`.
+    private func markLeft(_ chatId: String, change: MembershipChangeKind, actorUserId: String) {
+        guard let session, var chat = chats[chatId] else { return }
+        chat.state = .left
+        chat.members.removeAll { $0 == session.userId }
+        chats[chatId] = chat
+        appendEntry(membershipEntry(session.userId, change: change, actorUserId: actorUserId), chatId)
     }
 
     public func setGroupInfo(chatId: String, name: String?, avatarFilePath: String?) async throws {
         _ = try requireSession()
         var chat = try existingGroup(chatId, "Only groups have a name and avatar")
+        try requireActive(chat)
         guard name != nil || avatarFilePath != nil else {
             throw GimError.InvalidInput(reason: "Set a name or an avatar")
         }
@@ -730,7 +790,7 @@ public actor FakeGimClient: GimClientAPI {
         chatId: String, filePath: String, mime: String, caption: String?, replyTo: String?
     ) async throws -> String {
         _ = try requireSession()
-        try requireJoined(chatId)
+        try requireActive(existingChat(chatId))
         let messageId = makeId("msg")
         let stored = try storeFile(filePath, as: messageId)
         let isImage = mime.hasPrefix("image/")
@@ -747,6 +807,7 @@ public actor FakeGimClient: GimClientAPI {
     public func editMessage(chatId: String, messageId: String, newBody: String) async throws {
         _ = try requireSession()
         let stored = try existingMessage(chatId, messageId)
+        try requireActive(existingChat(chatId))
         guard stored.item.isOwn else { throw GimError.InvalidInput(reason: "Only your own messages can be edited") }
         guard case .text = stored.item.content else { throw GimError.InvalidInput(reason: "Only text can be edited") }
         guard !newBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -761,6 +822,7 @@ public actor FakeGimClient: GimClientAPI {
     public func deleteMessage(chatId: String, messageId: String) async throws {
         _ = try requireSession()
         let stored = try existingMessage(chatId, messageId)
+        try requireActive(existingChat(chatId))
         guard stored.item.isOwn else {
             throw GimError.InvalidInput(reason: "Only your own messages can be deleted")
         }
@@ -784,6 +846,7 @@ public actor FakeGimClient: GimClientAPI {
     public func retrySend(chatId: String, messageId: String) async throws {
         _ = try requireSession()
         let stored = try existingMessage(chatId, messageId)
+        try requireActive(existingChat(chatId))
         guard case .failed = stored.item.sendState else {
             throw GimError.InvalidInput(reason: "Message has not failed")
         }
@@ -893,6 +956,10 @@ public actor FakeGimClient: GimClientAPI {
         return subscription.taskHandle()
     }
 
+    nonisolated func chatState(chatId: String) -> ChatState? {
+        chatStates.withLock { $0[chatId] }
+    }
+
     func paginateBackwards(chatId: String, count: UInt16) throws -> Bool {
         var chat = try existingChat(chatId)
         let hidden = chat.entries.count - chat.loadedCount
@@ -910,7 +977,7 @@ public actor FakeGimClient: GimClientAPI {
         _ chatId: String, messageId: String, content: MessageContent, replyTo: String?
     ) throws -> String {
         let session = try requireSession()
-        try requireJoined(chatId)
+        try requireActive(existingChat(chatId))
         let reply = try replyTo.map { try replyPreview(for: $0, in: chatId) }
         let item = MessageItem(
             messageId: messageId, chatId: chatId,
@@ -918,7 +985,14 @@ public actor FakeGimClient: GimClientAPI {
             isOwn: true, sentAtMs: nowMs(), content: content, replyTo: reply, reactions: [], edited: false,
             sendState: .pending)
         appendEntry(.message(StoredMessage(item: item)), chatId)
-        startDelivery(messageId)
+        if let rejection = nextSendRejection {
+            nextSendRejection = nil
+            updateMessage(chatId, messageId) {
+                $0.item.sendState = .failed(reason: "rejected (\(rejection.status) \(rejection.code))")
+            }
+        } else {
+            startDelivery(messageId)
+        }
         return messageId
     }
 
@@ -993,6 +1067,7 @@ public actor FakeGimClient: GimClientAPI {
     private func setOwnReaction(_ chatId: String, _ messageId: String, emoji: String, active: Bool) throws {
         let session = try requireSession()
         let stored = try existingMessage(chatId, messageId)
+        try requireActive(existingChat(chatId))
         guard !emoji.isEmpty else { throw GimError.InvalidInput(reason: "Reaction is empty") }
         guard stored.item.content != .deleted else { throw GimError.InvalidInput(reason: "Message was deleted") }
         updateMessage(chatId, messageId) {
@@ -1017,12 +1092,9 @@ public actor FakeGimClient: GimClientAPI {
         return chat
     }
 
-    /// gim-core's refusal while leaving (`BaseError::InvalidState` surfaces as `InvalidInput`).
-    private func requireJoined(_ chatId: String) throws {
-        _ = try existingChat(chatId)
-        if leavingChatIds.contains(chatId) {
-            throw GimError.InvalidInput(reason: "invalid state: leaving chat \(chatId)")
-        }
+    /// gim-core's refusal of sends and changes to a chat that is `leaving` or `left`.
+    private func requireActive(_ chat: StoredChat) throws {
+        guard chat.state == .active else { throw GimError.ChatNotActive(chatId: chat.id, state: chat.state) }
     }
 
     private func existingGroup(_ chatId: String, _ notGroupReason: String) throws -> StoredChat {
@@ -1130,6 +1202,8 @@ public actor FakeGimClient: GimClientAPI {
     /// Emits the diffs that move the published chat list to the current state. A chat that changed position is
     /// removed and inserted again.
     private func publishChatList() {
+        let states = chats.mapValues(\.state)
+        chatStates.withLock { $0 = states }
         let newList = Self.sortedSummaries(chats: chats, users: users, session: session)
         let diffs = Self.chatListDiffs(from: publishedChatList, to: newList)
         publishedChatList = newList
@@ -1341,7 +1415,7 @@ public actor FakeGimClient: GimClientAPI {
                     isOwn: $0.isOwn)
             },
             unreadCount: chat.unreadCount, updatedAtMs: chat.entries.last?.atMs ?? chat.createdAtMs,
-            memberCount: UInt32(chat.members.count))
+            memberCount: UInt32(chat.members.count), state: chat.state)
     }
 
     static func previewText(_ content: MessageContent) -> String {
@@ -1388,6 +1462,10 @@ final class FakeTimeline: Timeline {
 
     func paginateBackwards(count: UInt16) async throws -> Bool {
         try await client.paginateBackwards(chatId: id, count: count)
+    }
+
+    func chatState() -> ChatState? {
+        client.chatState(chatId: id)
     }
 }
 
