@@ -77,7 +77,7 @@ final class FakeGimClientTests: XCTestCase {
             switch item {
             case .dateSeparator: continue
             case .message(let message): atMs = message.sentAtMs
-            case .membershipChange(_, _, let at): atMs = at
+            case .membershipChange(_, _, let at, _, _): atMs = at
             }
             let day = dayStartMs(atMs)
             if day != currentDay {
@@ -672,18 +672,23 @@ final class FakeGimClientTests: XCTestCase {
         try await client.addMembers(chatId: chat, userIds: ["user-nikos", "user-sofia", "user-nikos", "user-luca"])
         XCTAssertEqual(list.items.first { $0.chatId == chat }?.memberCount, 4)
         let atMs = ms(base)
+        let me = FakeGimClient.demoSelfId
         XCTAssertEqual(
             timeline.items,
             [
                 .dateSeparator(dayStartMs: dayStartMs(atMs)),
-                .membershipChange(userName: "Nikos Papadopoulos", change: .added, atMs: atMs),
-                .membershipChange(userName: "Sofia Marin", change: .added, atMs: atMs),
+                .membershipChange(
+                    userName: "Nikos Papadopoulos", change: .added, atMs: atMs, userId: "user-nikos", actorUserId: me),
+                .membershipChange(
+                    userName: "Sofia Marin", change: .added, atMs: atMs, userId: "user-sofia", actorUserId: me),
             ])
 
         try await client.removeMember(chatId: chat, userId: "user-luca")
         XCTAssertEqual(list.items.first { $0.chatId == chat }?.memberCount, 3)
         XCTAssertEqual(
-            timeline.items.last, .membershipChange(userName: "Luca Bianchi", change: .removed, atMs: atMs))
+            timeline.items.last,
+            .membershipChange(
+                userName: "Luca Bianchi", change: .removed, atMs: atMs, userId: "user-luca", actorUserId: me))
         let members = try await client.chatMembers(chatId: chat)
         XCTAssertEqual(members.map(\.handle), ["alex", "nikos", "sofia"])
 
@@ -720,11 +725,13 @@ final class FakeGimClientTests: XCTestCase {
         let chat = try await client.createGroupChat(name: "Regatta", memberUserIds: ["user-luca", "user-missing"])
         let (_, timeline) = try await subscribeTimeline(client, chat)
         let atMs = ms(base)
+        let me = FakeGimClient.demoSelfId
         XCTAssertEqual(
             timeline.items,
             [
                 .dateSeparator(dayStartMs: dayStartMs(atMs)),
-                .membershipChange(userName: "user-missing", change: .removed, atMs: atMs),
+                .membershipChange(
+                    userName: "user-missing", change: .removed, atMs: atMs, userId: "user-missing", actorUserId: me),
             ])
         var members = try await client.chatMembers(chatId: chat)
         XCTAssertEqual(members.map(\.userId), [FakeGimClient.demoSelfId, "user-luca"])
@@ -736,8 +743,9 @@ final class FakeGimClientTests: XCTestCase {
         XCTAssertEqual(
             Array(timeline.items.suffix(2)),
             [
-                .membershipChange(userName: "Nikos Papadopoulos", change: .added, atMs: atMs),
-                .membershipChange(userName: "Kai", change: .removed, atMs: atMs),
+                .membershipChange(
+                    userName: "Nikos Papadopoulos", change: .added, atMs: atMs, userId: "user-nikos", actorUserId: me),
+                .membershipChange(userName: "Kai", change: .removed, atMs: atMs, userId: "user-kai", actorUserId: me),
             ])
         members = try await client.chatMembers(chatId: chat)
         XCTAssertEqual(members.map(\.userId), [FakeGimClient.demoSelfId, "user-luca", "user-nikos"])
@@ -772,29 +780,154 @@ final class FakeGimClientTests: XCTestCase {
     func testLeaveChatIsLeavingUntilTheLeftChangeArrives() async throws {
         let client = try await makeDemo()
         let list = try await subscribeChatList(client)
-        let (_, timeline) = try await subscribeTimeline(client, group)
+        let (timeline, recorder) = try await subscribeTimeline(client, group)
+        XCTAssertEqual(list.items.first { $0.chatId == group }?.state, .active)
+        XCTAssertEqual(timeline.chatState(), .active)
+        list.clear()
 
         try await client.leaveChat(chatId: group)
 
+        XCTAssertEqual(list.events.count, 1)
+        guard case .set(0, let leaving) = list.events.first?.first else {
+            return XCTFail("Expected a set of the row, got \(list.events)")
+        }
+        XCTAssertEqual(leaving.state, .leaving)
         XCTAssertEqual(list.items.map(\.chatId), [group, direct])
-        let refusal = GimError.InvalidInput(reason: "invalid state: leaving chat \(group)")
+        let leavingState = try await client.chatState(chatId: group)
+        XCTAssertEqual(leavingState, .leaving)
+        XCTAssertEqual(timeline.chatState(), .leaving)
+        let refusal = GimError.ChatNotActive(chatId: group, state: .leaving)
         await assertThrows(refusal) { try await client.sendText(chatId: self.group, body: "Hi", replyTo: nil) }
         await assertThrows(refusal) {
             try await client.sendMedia(
                 chatId: self.group, filePath: "/nonexistent", mime: "image/png", caption: nil, replyTo: nil)
         }
+        // Calling it again re-sends the leave and does not restart the delay.
+        await scheduler.advance(by: .seconds(1))
         try await client.leaveChat(chatId: group)
 
         clock.now = base.addingTimeInterval(2)
-        await scheduler.advance(by: FakeGimClient.leaveCommitDelay)
+        await scheduler.advance(by: FakeGimClient.leaveCommitDelay - .seconds(1))
 
+        let me = FakeGimClient.demoSelfId
         XCTAssertEqual(
-            timeline.items.last, .membershipChange(userName: "Alex Morgan", change: .left, atMs: ms(clock.now)))
-        XCTAssertEqual(list.items.map(\.chatId), [direct])
-        await assertThrows(.NotFound(reason: "chat \(group)")) { try await client.chatMembers(chatId: self.group) }
+            recorder.items.last,
+            .membershipChange(
+                userName: "Alex Morgan", change: .left, atMs: ms(clock.now), userId: me, actorUserId: me))
+        // The chat stays with its history.
+        XCTAssertEqual(list.items.map(\.chatId), [group, direct])
+        XCTAssertEqual(list.items.first?.state, .left)
+        XCTAssertEqual(list.items.first?.memberCount, 3)
+        XCTAssertEqual(timeline.chatState(), .left)
+        let leftState = try await client.chatState(chatId: group)
+        XCTAssertEqual(leftState, .left)
+        await assertThrows(.ChatNotActive(chatId: group, state: .left)) {
+            try await client.leaveChat(chatId: self.group)
+        }
         await assertThrows(.InvalidInput(reason: "Only groups can be left")) {
             try await client.leaveChat(chatId: self.direct)
         }
+        await assertThrows(.NotFound(reason: "chat chat-none")) { try await client.chatState(chatId: "chat-none") }
+    }
+
+    func testEveryChangeToAChatThatIsNotActiveThrowsChatNotActive() async throws {
+        let client = try await makeDemo()
+        let avatar = URL(fileURLWithPath: try makeTemporaryDirectory()).appendingPathComponent("a.png")
+        try Data([1]).write(to: avatar)
+        let own = "msg-crew-2"
+        await client.failNextSends(1)
+        let failed = try await client.sendText(chatId: group, body: "Fails", replyTo: nil)
+        await scheduler.runUntilIdle()
+        try await client.leaveChat(chatId: group)
+
+        for state in [ChatState.leaving, .left] {
+            if state == .left {
+                await scheduler.advance(by: FakeGimClient.leaveCommitDelay)
+            }
+            let refusal = GimError.ChatNotActive(chatId: group, state: state)
+            await assertThrows(refusal) { try await client.sendText(chatId: self.group, body: "Hi", replyTo: nil) }
+            await assertThrows(refusal) {
+                try await client.sendMedia(
+                    chatId: self.group, filePath: avatar.path, mime: "image/png", caption: nil, replyTo: nil)
+            }
+            await assertThrows(refusal) {
+                try await client.editMessage(chatId: self.group, messageId: own, newBody: "Edited")
+            }
+            await assertThrows(refusal) { try await client.deleteMessage(chatId: self.group, messageId: own) }
+            await assertThrows(refusal) { try await client.react(chatId: self.group, messageId: own, emoji: "👍") }
+            await assertThrows(refusal) { try await client.unreact(chatId: self.group, messageId: own, emoji: "👍") }
+            await assertThrows(refusal) { try await client.retrySend(chatId: self.group, messageId: failed) }
+            await assertThrows(refusal) {
+                try await client.setGroupInfo(chatId: self.group, name: "Crew", avatarFilePath: nil)
+            }
+            await assertThrows(refusal) { try await client.addMembers(chatId: self.group, userIds: ["user-nikos"]) }
+            await assertThrows(refusal) { try await client.removeMember(chatId: self.group, userId: "user-nikos") }
+        }
+        // Reading, cancelling and marking read still work.
+        try await client.cancelSend(chatId: group, messageId: failed)
+        try await client.markRead(chatId: group, upToMessageId: own)
+        _ = try await client.chatMembers(chatId: group)
+    }
+
+    func testRemovalByAnotherMemberLeavesTheChatAtOnce() async throws {
+        let client = try await makeDemo()
+        let list = try await subscribeChatList(client)
+        let (timeline, recorder) = try await subscribeTimeline(client, group)
+
+        try await client.simulateRemoval(chatId: group, by: "user-luca")
+
+        let me = FakeGimClient.demoSelfId
+        XCTAssertEqual(
+            recorder.items.last,
+            .membershipChange(
+                userName: "Alex Morgan", change: .removed, atMs: ms(base), userId: me, actorUserId: "user-luca"))
+        XCTAssertEqual(list.items.first { $0.chatId == group }?.state, .left)
+        XCTAssertEqual(timeline.chatState(), .left)
+        let members = try await client.chatMembers(chatId: group)
+        XCTAssertFalse(members.contains { $0.userId == me })
+        await assertThrows(.ChatNotActive(chatId: group, state: .left)) {
+            try await client.sendText(chatId: self.group, body: "Hi", replyTo: nil)
+        }
+        await assertThrows(.ChatNotActive(chatId: group, state: .left)) {
+            try await client.simulateRemoval(chatId: self.group, by: "user-luca")
+        }
+    }
+
+    func testLeavingChatRemovedByAnotherMemberEndsLeft() async throws {
+        let client = try await makeDemo()
+        let (_, recorder) = try await subscribeTimeline(client, group)
+        try await client.leaveChat(chatId: group)
+
+        try await client.simulateRemoval(chatId: group, by: "user-nikos")
+        await scheduler.advance(by: FakeGimClient.leaveCommitDelay)
+
+        let changes = recorder.items.filter {
+            if case .membershipChange = $0 { true } else { false }
+        }
+        XCTAssertEqual(changes.count, 1, "the scheduled commit adds no second change")
+        let state = try await client.chatState(chatId: group)
+        XCTAssertEqual(state, .left)
+    }
+
+    func testRejectedSendFailsAtOnceAndIsNotResent() async throws {
+        let client = try await makeDemo(synced: false)
+        let (_, timeline) = try await subscribeTimeline(client, direct)
+        await client.rejectNextSend()
+
+        let id = try await client.sendText(chatId: direct, body: "Rejected", replyTo: nil)
+
+        XCTAssertEqual(timeline.messages.last?.messageId, id)
+        XCTAssertEqual(timeline.messages.last?.sendState, .failed(reason: "rejected (403 not_member)"))
+        try await client.startSync()
+        await scheduler.runUntilIdle()
+        XCTAssertEqual(timeline.messages.last?.sendState, .failed(reason: "rejected (403 not_member)"))
+
+        // Only the next send is rejected; a retry goes through.
+        try await client.retrySend(chatId: direct, messageId: id)
+        let next = try await client.sendText(chatId: direct, body: "Accepted", replyTo: nil)
+        await scheduler.runUntilIdle()
+        XCTAssertEqual(timeline.messages.first { $0.messageId == id }?.sendState, .read)
+        XCTAssertEqual(timeline.messages.first { $0.messageId == next }?.sendState, .read)
     }
 
     func testSetGroupInfoRenamesAndSetsTheAvatar() async throws {

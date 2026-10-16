@@ -57,6 +57,8 @@ final class LeavingChatsTests: XCTestCase {
     }
 
     func testLeavingRefusalDetection() {
+        XCTAssertTrue(LeavingChats.isLeavingRefusal(GimError.ChatNotActive(chatId: "h/g1", state: .leaving)))
+        XCTAssertFalse(LeavingChats.isLeavingRefusal(GimError.ChatNotActive(chatId: "h/g1", state: .left)))
         XCTAssertTrue(LeavingChats.isLeavingRefusal(GimError.InvalidInput(reason: "invalid state: leaving chat h/g1")))
         XCTAssertFalse(LeavingChats.isLeavingRefusal(GimError.InvalidInput(reason: "invalid state: left chat h/g1")))
         XCTAssertFalse(LeavingChats.isLeavingRefusal(GimError.NotFound(reason: "leaving chat h/g1")))

@@ -75,7 +75,9 @@ final class TimelineItemBuilderTests: XCTestCase {
             message("2", alice, at: start + 5 * minute),
             message("3", alice, at: start + 11 * minute),
             message("4", bob, at: start + 12 * minute),
-            .membershipChange(userName: "Carol", change: .added, atMs: start + 13 * minute),
+            .membershipChange(
+                userName: "Carol", change: .added, atMs: start + 13 * minute, userId: "user-carol",
+                actorUserId: alice.userId),
             message("5", bob, at: start + 14 * minute),
         ]
 
@@ -179,7 +181,8 @@ final class TimelineItemBuilderTests: XCTestCase {
         let userId = "u" + String(repeating: "q", count: 55)
         let remote = UserProfile(userId: userId, handle: "", displayName: userId)
         let items: [TimelineItem] = [
-            .membershipChange(userName: userId, change: .removed, atMs: nowMs - 2 * minute),
+            .membershipChange(
+                userName: userId, change: .removed, atMs: nowMs - 2 * minute, userId: userId, actorUserId: alice.userId),
             message("a", remote, at: nowMs - minute),
             message(
                 "b", alice, at: nowMs,

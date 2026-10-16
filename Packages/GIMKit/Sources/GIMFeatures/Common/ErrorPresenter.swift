@@ -29,6 +29,8 @@ public enum ErrorPresenter {
             return "This isn't available in this version yet."
         case .Internal:
             return genericMessage
+        case .ChatNotActive:
+            return "You're no longer a member of this chat."
         }
     }
 

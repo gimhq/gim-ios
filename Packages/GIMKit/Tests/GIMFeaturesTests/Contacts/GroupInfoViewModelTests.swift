@@ -208,7 +208,8 @@ final class GroupInfoViewModelTests: XCTestCase {
     }
 
     func testMembershipChangeDetection() {
-        let change = TimelineItem.membershipChange(userName: "Luca", change: .added, atMs: 0)
+        let change = TimelineItem.membershipChange(
+            userName: "Luca", change: .added, atMs: 0, userId: "user-luca", actorUserId: "user-alex")
         let separator = TimelineItem.dateSeparator(dayStartMs: 0)
         XCTAssertTrue(GroupInfoViewModel.containsMembershipChange([.pushBack(value: change)]))
         XCTAssertTrue(GroupInfoViewModel.containsMembershipChange([.append(values: [separator, change])]))
@@ -293,9 +294,12 @@ final class GroupInfoViewModelTests: XCTestCase {
         XCTAssertTrue(idsWhileLeaving.contains(chatId))
         await settle()
         await scheduler.advance(by: FakeGimClient.leaveCommitDelay)
-        let idsAfterLeft = try await chatIds(client)
-        XCTAssertFalse(idsAfterLeft.contains(chatId))
         await eventually { !leavingChats.contains(chatId) }
+        // The left chat keeps its history.
+        let idsAfterLeft = try await chatIds(client)
+        XCTAssertTrue(idsAfterLeft.contains(chatId))
+        let state = try await client.chatState(chatId: chatId)
+        XCTAssertEqual(state, .left)
     }
 
     @MainActor

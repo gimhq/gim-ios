@@ -130,6 +130,7 @@ actor RecordingClient: GimClientAPI {
         try await fake.removeMember(chatId: chatId, userId: userId)
     }
     func leaveChat(chatId: String) async throws { try await fake.leaveChat(chatId: chatId) }
+    func chatState(chatId: String) async throws -> ChatState { try await fake.chatState(chatId: chatId) }
     func setGroupInfo(chatId: String, name: String?, avatarFilePath: String?) async throws {
         try await fake.setGroupInfo(chatId: chatId, name: name, avatarFilePath: avatarFilePath)
     }
