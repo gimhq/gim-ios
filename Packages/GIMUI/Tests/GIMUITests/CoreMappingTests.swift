@@ -2,7 +2,7 @@ import GIMClientKit
 import GIMCore
 import XCTest
 
-@testable import GIMUI
+@testable import GIMPlatform
 
 final class CoreMappingTests: XCTestCase {
     func testClientConfigKeepsTheMode() {

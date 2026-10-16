@@ -178,6 +178,12 @@ App adaptations:
   `{"type":"message","chat_id":…,"body":…}` as a displayed `message` (title from the chat list), and returns the
   generic content (`New message`, displayed) for anything else. In `extension` mode `startSync` throws `InvalidInput`
   and `registerPush`/`unregisterPush` do nothing, like gim-core.
+- The Notification Service Extension creates its clients with `mode: .extension` on the App Group's data directory
+  (`PushNotificationHandler` in GIMFeatures, `NotificationService` in `GIM/NotificationService`) and passes the
+  `gim` entry of the push's `userInfo` (the hub's payload as gim-push-mock relays it) to `processPush` as JSON text.
+  The app registers `PushRegistration(provider: "mock-ios-sim", token: "sim-<uuid>", appId: <bundle id>)` in Debug
+  builds (`PushRegistrar`). The bridge and the platform hooks moved to the `GIMPlatform` target of `Packages/GIMUI`,
+  which the extension links without SwiftUI.
 
 ## Changes since `50f7915`
 
@@ -354,7 +360,7 @@ The mirror is permanent; there is no swap that deletes it.
 
 - GIMClientKit keeps `GimClientAPI`, the models and `FakeGimClient`. GIMKit never imports `GIMCore`, so the
   ViewModels and their tests stay on Linux.
-- `Packages/GIMUI/Sources/GIMUI/Bridge` maps `GIMCore` to the mirror: `RealGimClientFactory` calls
+- `Packages/GIMUI/Sources/GIMPlatform/Bridge` maps `GIMCore` to the mirror: `RealGimClientFactory` calls
   `GIMCore.createClient`, `RealGimClient` implements `GimClientAPI` by converting every value 1:1 (`CoreMapping`),
   rethrowing errors as the mirror's `GimError`, and `CoreListeners` adapts the callback interfaces and delivers
   them on the main queue.

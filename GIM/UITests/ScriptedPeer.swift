@@ -57,6 +57,18 @@ final class ScriptedPeer: Sendable {
         try await client.sendText(chatId: chatId, body: body, replyTo: replyTo)
     }
 
+    /// Opens a direct chat with the user of `handle` and returns its id.
+    func openDirectChat(handle: String) async throws -> String {
+        guard let user = try await client.findUser(handle: handle) else {
+            throw GimError.NotFound(reason: "no user with handle \(handle)")
+        }
+        return try await client.createDirectChat(userId: user.userId)
+    }
+
+    func editText(chatId: String, messageId: String, body: String) async throws {
+        try await client.editMessage(chatId: chatId, messageId: messageId, newBody: body)
+    }
+
     /// Sends a small generated PNG.
     func sendImage(chatId: String) async throws -> String {
         let url = directory.appendingPathComponent("peer-\(UUID().uuidString).png")

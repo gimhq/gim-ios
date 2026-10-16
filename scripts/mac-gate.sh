@@ -12,10 +12,11 @@
 # `e2e-hub.sh fed-start` for HubsSmokeTests, which is skipped without it). With --push-mock-url (`e2e-hub.sh push-url`)
 # a helper on the Mac hands every new mock-ios-sim delivery of that push mock to `xcrun simctl push` on the run's
 # simulator while GIMUITests run (logged to push-helper.log), and the tests get the URL as
-# TEST_RUNNER_GIM_E2E_PUSH_MOCK_URL. Raw xcodebuild logs, the xcbeautify output, the
-# `[e2e-summary]` line and the zipped xcresult bundles are copied to .tmp/mac/<short sha>/. Prints one
-# `[mac-gate] ...` summary line and exits non-zero on any failure. The Mac work dir is removed on success and kept on
-# failure or with --keep.
+# TEST_RUNNER_GIM_E2E_PUSH_MOCK_URL. The tests allow the app's notification authorization alert (E2ETestCase). Raw
+# xcodebuild logs, the xcbeautify output, the `[e2e-summary]` line, the Notification Service Extension's metrics
+# (gim-nse.log from the App Group container, as nse.log) and the zipped xcresult bundles are copied to
+# .tmp/mac/<short sha>/. Prints one `[mac-gate] ...` summary line and exits non-zero on any failure. The Mac work dir
+# is removed on success and kept on failure or with --keep.
 set -euo pipefail
 
 usage() {
@@ -237,6 +238,12 @@ if [ "$mode" = e2e ] && [ "$build" = ok ]; then
         -resultBundlePath "$results/GIM-e2e.xcresult" $signing && e2e=ok
     grep -o "\[e2e-summary\].*" "$out/e2e.log" >"$out/e2e-summary.txt"
     cat "$out/e2e-summary.txt"
+    if group=$(xcrun simctl get_app_container "$sim" im.g.apps group.im.g.apps 2>/dev/null) \
+        && cp "$group/gim-nse.log" "$out/nse.log" 2>/dev/null; then
+        echo "[mac-gate] nse.log: $(wc -l <"$out/nse.log" | tr -d " ") pushes"
+    else
+        echo "[mac-gate] no gim-nse.log in the App Group container" | tee "$out/nse.log"
+    fi
 fi
 
 for bundle in "$results"/*.xcresult; do
