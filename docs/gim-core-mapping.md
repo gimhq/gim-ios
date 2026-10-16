@@ -3,10 +3,8 @@
 `Packages/GIMKit/Sources/GIMClientKit` mirrors the UniFFI Swift bindings of gim-core so that switching to the real
 `GIMCore.xcframework` is a mechanical swap.
 
-- Mirrored commit: gim-core `50f7915` (`bindings/gim-ffi/src/`, generated
+- Mirrored and vendored commit: gim-core `f8db42c`, GIMCore `0.1.0+f8db42c` (`bindings/gim-ffi/src/`, generated
   `bindings/gim-ffi/generated/swift/GIMCore.swift`, contract in `docs/API.md`).
-- Vendored GIMCore: `0.1.0+5877765` (`50f7915` plus guarded migration `0007_hubs_url_shared.sql`, schema v7, which
-  restores `hubs.url_shared` on databases from `d5ead6d`; bindings and `GIMCore.swift` byte-identical to `50f7915`).
 - Mirror sources: `GimClientAPI.swift` (objects, callback interfaces, hooks, `createClient`) and `Models.swift`
   (records, enums, diffs, errors).
 - Everything else in GIMClientKit (`Fake/`, `GimClientFactory`, `CoreGimClientFactory`) is app-level and stays after
@@ -14,12 +12,15 @@
 
 ## Records
 
-All records are structs with every field public and a memberwise `init` without default values, in field order.
+All records are structs with every field public and a memberwise `init` without default values, in field order,
+except `ClientConfig.mode`, which defaults to `nil` like the generated init.
 Generated records are `Equatable, Hashable` plus `extension …: Sendable`; the mirror declares `Sendable, Hashable`.
 
 | Mirror | GIMCore | Fields |
 |---|---|---|
-| `ClientConfig` | `ClientConfig` | `serverUrl` |
+| `ClientConfig` | `ClientConfig` | `serverUrl`, `mode: ClientMode?` (`nil` is `app`) |
+| `PushRegistration` | `PushRegistration` | `provider`, `token`, `appId: String?`, `sandbox: Bool?`, `p256dh: String?`, `auth: String?` |
+| `NotificationContent` | `NotificationContent` | `chatId: String?`, `chatTitle: String?`, `senderUserId: String?`, `senderDisplayName: String?`, `body`, `messageId: String?`, `collapseId: String?`, `kind: NotificationKind`, `shouldDisplay`, `timestamp: UInt64` |
 | `Session` | `Session` | `userId`, `deviceId`, `handle` (empty until `claimHandle`), `displayName` |
 | `DeviceInfo` | `DeviceInfo` | `deviceId`, `createdAtMs: UInt64` (0 for revoked devices), `isCurrent`, `revoked` |
 | `HubInfo` | `HubInfo` | `hubId`, `url: String?`, `state: HubState`, `priority: UInt8`, `isPrimary`, `isHome`, `signedIn` |
@@ -38,6 +39,8 @@ Generated records are `Equatable, Hashable` plus `extension …: Sendable`; the 
 | `ChatKind` | `ChatKind` | `direct`, `group` |
 | `ChatState` | `ChatState` | `active`, `leaving`, `left` |
 | `HubState` | `HubState` | `unverified`, `verified`, `removed` |
+| `ClientMode` | `ClientMode` | `app`, `` `extension` `` |
+| `NotificationKind` | `NotificationKind` | `message`, `reaction`, `invite`, `membership`, `generic` |
 | `TimelineItem` | `TimelineItem` | `message(item:)`, `dateSeparator(dayStartMs:)`, `membershipChange(userName:change:atMs:userId:actorUserId:)` (`actorUserId: String?`) |
 | `MembershipChangeKind` | `MembershipChangeKind` | `added`, `removed`, `left` |
 | `MessageContent` | `MessageContent` | `text(body:)`, `image(media:width:height:caption:)`, `file(media:fileName:caption:)`, `deleted`, `unsupported` |
@@ -82,7 +85,7 @@ generated code writes the bare protocol name, which is the same type.
 
 ## GimClient methods
 
-Every method of `GimClientProtocol` at `50f7915`, with identical labels, argument types and `async`/`throws`. The
+Every method of `GimClientProtocol` at `f8db42c`, with identical labels, argument types and `async`/`throws`. The
 only type differences are `any Timeline` / `any LinkSession` / `any PendingApproval` (generated: the classes) and the
 listener parameter spelling above.
 
@@ -140,12 +143,46 @@ listener parameter spelling above.
 | `removeHub(hubId:confirmOwnedGroups:) async throws` | same |
 | `setPrimaryHub(hubId:) async throws` | same |
 | `hubList(listener:) async throws -> TaskHandle` | same |
+| `registerPush(registration:) async throws` | same |
+| `unregisterPush() async throws` | same |
+| `processPush(payload:) async throws -> NotificationContent` | same |
 
 `chatMembers` has no listener in M1. `GroupInfoViewModel` queries it again when a `ChatListDiff` changes that chat or
 a `TimelineItem.membershipChange` arrives. When a query fails before any list has loaded it shows the error with
 `ChatSummary.memberCount` (no member list, no removal); a list that loaded before stays on later failures.
 Renaming a group goes `GroupInfoViewModel.saveName()` → `GimClientAPI.setGroupInfo(name:)` →
 `RealGimClient` → `GIMCore.GimClient.setGroupInfo`.
+
+## Changes since `5877765`
+
+`f8db42c` (built on the macOS host from gim-core `f8db42c` with `scripts/build-xcframework.sh`, the CI size gate and
+the 4 link tests, then vendored with `scripts/sync-gim-core.sh --from-dir`). Diff of the generated `GIMCore.swift`:
+
+- App extensions (gim-core `docs/API.md`, "App extensions"): `ClientConfig.mode: ClientMode?` (`init` default `nil`,
+  which is `app`) and `enum ClientMode { app, extension }`. In `extension` mode `startSync()` throws `InvalidInput`,
+  `registerPush`/`unregisterPush` do nothing, and local state is never reset.
+- Push (gim-core `docs/API.md`, "Push"): `GimClientProtocol.registerPush(registration:)`, `unregisterPush()` and
+  `processPush(payload:) -> NotificationContent` (all async, throwing); records `PushRegistration` and
+  `NotificationContent`, enum `NotificationKind { message, reaction, invite, membership, generic }`.
+- No `GimError` case changed. Behaviour only: chats are created on the primary hub, submissions pass hubs that do not
+  have the group, and `findUser` looks a handle up on every listed hub (C4-T9).
+
+App adaptations:
+
+- Mirror and `CoreMapping`: `ClientMode` and `PushRegistration` mirror → core, `NotificationContent` and
+  `NotificationKind` core → mirror; `RealGimClient` forwards the three push methods. The app keeps creating clients
+  with `mode == nil` (`app`).
+- `FakeGimClient(mode:)` (`createClient` passes `ClientConfig.mode`): `registerPush` rejects an empty provider or
+  token (`InvalidInput`) and keeps the registration in `pushRegistration` until `unregisterPush` or `signOut`;
+  `processPush` throws `InvalidInput` for a payload that is not a JSON object, describes
+  `{"type":"message","chat_id":…,"body":…}` as a displayed `message` (title from the chat list), and returns the
+  generic content (`New message`, displayed) for anything else. In `extension` mode `startSync` throws `InvalidInput`
+  and `registerPush`/`unregisterPush` do nothing, like gim-core.
+
+## Changes since `50f7915`
+
+`5877765` adds the guarded migration `0007_hubs_url_shared.sql` (schema v7), which restores `hubs.url_shared` on
+databases from `d5ead6d`; bindings and `GIMCore.swift` are byte-identical to `50f7915`.
 
 ## Changes since `d5ead6d`
 

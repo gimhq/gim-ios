@@ -24,6 +24,11 @@ import Synchronization
 /// `removeHub` of that hub throw `HubNotDrained`, one containing "owner" makes the hub own 2 groups.
 /// `removeHub` refuses the home hub (`HomeHub`), the only listed hub (`LastHub`) and a hub owning groups
 /// (`simulateOwnedGroups(hubId:count:)`) without `confirmOwnedGroups` (`HubOwnsGroups`).
+///
+/// Push: `registerPush` keeps the registration (`pushRegistration`) until `unregisterPush` or `signOut`.
+/// `processPush` understands `{"type":"message","chat_id":…,"body":…}` (a displayed `message`); any other JSON
+/// object gives the generic content (`New message`, displayed). With `ClientMode.extension`, like gim-core,
+/// `startSync` throws `InvalidInput` and `registerPush`/`unregisterPush` do nothing.
 public actor FakeGimClient: GimClientAPI {
     struct Reaction: Sendable {
         var emoji: String
@@ -108,6 +113,7 @@ public actor FakeGimClient: GimClientAPI {
         var autoReply: Bool
         var networkReachable: Bool
         var homeHubUrl: String
+        var mode: ClientMode? = nil
     }
 
     /// Number of newest timeline entries exposed before `paginateBackwards` is called.
@@ -171,6 +177,8 @@ public actor FakeGimClient: GimClientAPI {
     private var outbox: [String] = []
     /// The hub registry; see `hubInfos()` for the order reported.
     private var storedHubs: [StoredHub]
+    /// The registration stored by `registerPush`, `nil` before it and after `unregisterPush` or `signOut`.
+    public private(set) var pushRegistration: PushRegistration?
     private var homeHubId: String { Self.hubId(forUrl: options.homeHubUrl) }
     private var nextId = 1
     private var nextReply = 0
@@ -185,6 +193,7 @@ public actor FakeGimClient: GimClientAPI {
     ///   - autoReply: peers type and reply in direct chats after each own send.
     ///   - networkReachable: initial reachability, as `PlatformHooks.isNetworkReachable()` reports it.
     ///   - homeHubUrl: `ClientConfig.serverUrl`, the home hub of the hub registry.
+    ///   - mode: `ClientConfig.mode`.
     ///   - users: directory of users `findUser` can return.
     ///   - session: the signed-in user (added to the directory, with a second device `fakeOtherDeviceId`), or `nil`
     ///     before `createIdentity`.
@@ -195,6 +204,7 @@ public actor FakeGimClient: GimClientAPI {
         autoReply: Bool = false,
         networkReachable: Bool = true,
         homeHubUrl: String = FakeGimClient.defaultHomeHubUrl,
+        mode: ClientMode? = nil,
         users: [UserProfile] = [],
         session: Session? = nil
     ) {
@@ -206,7 +216,7 @@ public actor FakeGimClient: GimClientAPI {
         self.init(
             options: Options(
                 scheduler: scheduler, dataDirectory: dataDirectory, now: now, autoReply: autoReply,
-                networkReachable: networkReachable, homeHubUrl: homeHubUrl),
+                networkReachable: networkReachable, homeHubUrl: homeHubUrl, mode: mode),
             seed: seed, seedsDemoOnRegister: false)
     }
 
@@ -419,6 +429,7 @@ public actor FakeGimClient: GimClientAPI {
         publishChatList()
         storedHubs = [Self.homeHub(url: options.homeHubUrl)]
         publishHubList()
+        pushRegistration = nil
     }
 
     // MARK: - Identity and devices
@@ -605,6 +616,9 @@ public actor FakeGimClient: GimClientAPI {
     // MARK: - Sync
 
     public func startSync() async throws {
+        guard options.mode != .`extension` else {
+            throw GimError.InvalidInput(reason: "no sync loop in extension mode")
+        }
         _ = try requireSession()
         syncRunning = true
         reconnect()
@@ -1118,6 +1132,40 @@ public actor FakeGimClient: GimClientAPI {
     private func publishHubList() {
         let hubs = hubInfos()
         hubListSubscribers.deliver { $0.onUpdate(hubs: hubs) }
+    }
+
+    // MARK: - Push
+
+    public func registerPush(registration: PushRegistration) async throws {
+        guard !registration.provider.isEmpty, !registration.token.isEmpty else {
+            throw GimError.InvalidInput(reason: "push registration: empty provider or token")
+        }
+        guard options.mode != .`extension` else { return }
+        pushRegistration = registration
+    }
+
+    public func unregisterPush() async throws {
+        guard options.mode != .`extension` else { return }
+        pushRegistration = nil
+    }
+
+    public func processPush(payload: String) async throws -> NotificationContent {
+        guard let data = payload.data(using: .utf8),
+            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
+            throw GimError.InvalidInput(reason: "push payload is not a JSON object")
+        }
+        let chatId = object["chat_id"] as? String
+        let chatTitle = chatId.flatMap { id in publishedChatList.first { $0.chatId == id }?.name }
+        let timestamp = Self.milliseconds(options.now())
+        if object["type"] as? String == "message", let body = object["body"] as? String {
+            return NotificationContent(
+                chatId: chatId, chatTitle: chatTitle, senderUserId: nil, senderDisplayName: nil, body: body,
+                messageId: nil, collapseId: nil, kind: .message, shouldDisplay: true, timestamp: timestamp)
+        }
+        return NotificationContent(
+            chatId: chatId, chatTitle: chatTitle, senderUserId: nil, senderDisplayName: nil, body: "New message",
+            messageId: nil, collapseId: nil, kind: .generic, shouldDisplay: true, timestamp: timestamp)
     }
 
     // MARK: - Listeners

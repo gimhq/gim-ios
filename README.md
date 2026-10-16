@@ -71,13 +71,17 @@ automated the step is skipped with a screenshot attachment. Each test class prin
 
 ```sh
 scripts/mac-gate.sh build-test [--sha <commit>] [--keep]
-scripts/mac-gate.sh e2e --hub-url <url> [--sha <commit>] [--keep]
+scripts/mac-gate.sh e2e --hub-url <url> [--hub-b-url <url>] [--push-mock-url <url>] [--sha <commit>] [--keep]
 ```
 
 Runs from station against the shared Mac build host (`GIM_MAC_HOST`, default `a@100.99.1.8`): ships `git archive` of
 the commit (default `HEAD`, clean tree required) to `~/gim-ci/<id>-<short sha>/` (`GIM_GATE_ID`, default the branch
 name's last component), takes the `~/gim-ci/.lock-xcode` lock and creates a simulator for the run. `build-test` builds
-the app and runs the GIMKit and GIMUI package tests; `e2e` also runs `GIMUITests` against the hub at `<url>`. Logs,
+the app and runs the GIMKit and GIMUI package tests; `e2e` also runs `GIMUITests` against the hub at `<url>`
+(`--hub-b-url`: the second federated hub). With `--push-mock-url` (from `scripts/e2e-hub.sh push-url`) a helper on the
+Mac long-polls the push mock for new `mock-ios-sim` deliveries while the tests run and hands each to
+`xcrun simctl push` on the run's simulator, logging seq, delivery id, bundle id and the simctl exit code to
+`push-helper.log`; the tests get the URL as `TEST_RUNNER_GIM_E2E_PUSH_MOCK_URL` (for `/deliveries` and `/stats`). Logs,
 the `[e2e-summary]` lines and zipped xcresult bundles land in `.tmp/mac/<short sha>/`; the last line is the
 `[mac-gate] mode=… build=… kit=… ui=… e2e=…` summary. The Mac work dir is kept on failure or with `--keep`.
 
@@ -109,3 +113,13 @@ named volumes), each with its own published port (default: the first free ones f
 `fed-start` returns once both are healthy and have bound each other. The run id defaults to `GIM_GATE_ID` or the
 branch name's last component; containers, network and volumes are labelled `ai-agent-run=gim-ios-e2e-<run>` and
 `fed-stop` removes exactly those.
+
+Both `start` and `fed-start` also run a mock push server for the run (`ai-agent/gim-push-mock:<short sha>`, built from
+`Dockerfile.push-mock` of the same gim-hub commit; see the hub's `docs/push-mock.md`) on the `traefik` network with
+the first free port from 18190 and a random webhook secret in the run's state dir (`.tmp/e2e-hub-<run>/push.env` or
+`.tmp/e2e-fed-<run>/push.env`, never printed). Every hub of the run posts its push webhook to it. Start returns once
+its `/healthz` is OK; `fed-start` also prints `GIM_E2E_PUSH_MOCK_URL`, and the matching stop removes it.
+
+```sh
+scripts/e2e-hub.sh push-url [--run <id>]   # the mock's URL as seen from the Mac
+```

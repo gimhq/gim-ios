@@ -265,4 +265,16 @@ private final class FailingChatListClient: GimClientAPI {
     func hubList(listener: any HubListListener) async throws -> TaskHandle {
         throw GimError.NotRegistered
     }
+
+    func registerPush(registration: PushRegistration) async throws {
+        throw GimError.NotRegistered
+    }
+
+    func unregisterPush() async throws {
+        throw GimError.NotRegistered
+    }
+
+    func processPush(payload: String) async throws -> NotificationContent {
+        throw GimError.NotRegistered
+    }
 }

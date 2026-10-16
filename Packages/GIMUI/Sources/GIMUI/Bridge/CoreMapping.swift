@@ -106,7 +106,46 @@ extension GIMCore.ChatState {
 
 extension GIMCore.ClientConfig {
     init(_ mirror: GIMClientKit.ClientConfig) {
-        self.init(serverUrl: mirror.serverUrl)
+        self.init(serverUrl: mirror.serverUrl, mode: mirror.mode.map { GIMCore.ClientMode($0) })
+    }
+}
+
+extension GIMCore.ClientMode {
+    init(_ mirror: GIMClientKit.ClientMode) {
+        switch mirror {
+        case .app: self = .app
+        case .`extension`: self = .`extension`
+        }
+    }
+}
+
+extension GIMCore.PushRegistration {
+    init(_ mirror: GIMClientKit.PushRegistration) {
+        self.init(
+            provider: mirror.provider, token: mirror.token, appId: mirror.appId, sandbox: mirror.sandbox,
+            p256dh: mirror.p256dh, auth: mirror.auth)
+    }
+}
+
+extension GIMClientKit.NotificationKind {
+    init(_ core: GIMCore.NotificationKind) {
+        switch core {
+        case .message: self = .message
+        case .reaction: self = .reaction
+        case .invite: self = .invite
+        case .membership: self = .membership
+        case .generic: self = .generic
+        }
+    }
+}
+
+extension GIMClientKit.NotificationContent {
+    init(_ core: GIMCore.NotificationContent) {
+        self.init(
+            chatId: core.chatId, chatTitle: core.chatTitle, senderUserId: core.senderUserId,
+            senderDisplayName: core.senderDisplayName, body: core.body, messageId: core.messageId,
+            collapseId: core.collapseId, kind: GIMClientKit.NotificationKind(core.kind),
+            shouldDisplay: core.shouldDisplay, timestamp: core.timestamp)
     }
 }
 
