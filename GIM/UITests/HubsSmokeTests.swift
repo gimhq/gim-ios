@@ -2,8 +2,12 @@ import GIMCore
 import XCTest
 
 /// End-to-end hub management on two federated hubs (`scripts/e2e-hub.sh fed-start`): the app onboards on hub A (the
-/// `E2ETestCase` server URL), adds hub B (`TEST_RUNNER_GIM_E2E_SERVER_URL_B`), makes it primary, exchanges messages
-/// with scripted peers on A, then removes B again. Skipped without a hub B URL.
+/// `E2ETestCase` server URL) and creates a group with scripted peers on A, adds hub B
+/// (`TEST_RUNNER_GIM_E2E_SERVER_URL_B`), makes it primary, exchanges messages with the peers, then removes B again.
+/// Skipped without a hub B URL.
+///
+/// The group is created while A is primary: with B primary, inviting users of A failed with NotFound (KeyPackages
+/// claimed through B) against gim-hub 50b3401.
 final class HubsSmokeTests: E2ETestCase {
     private let summary = StepSummary("HubsSmokeTests", steps: ["a", "b", "c", "d", "e", "f"])
     /// How step e's removal went, for the summary line: "removed", or "owned-groups" after the HubOwnsGroups
@@ -30,7 +34,9 @@ final class HubsSmokeTests: E2ETestCase {
         }
 
         summary.start("a")
-        let (peer, bystander) = try XCTContext.runActivity(named: "step a: peers register on A, app onboarding") { _ in
+        let (peer, chatId) = try XCTContext.runActivity(
+            named: "step a: peers register on A, app onboarding, app creates \(groupName)"
+        ) { _ in
             let peer = try waitForPeer("step a: peer registers as peer_\(suffix)", app) {
                 try await ScriptedPeer.register(
                     serverUrl: serverUrl, handle: "peer_\(suffix)", displayName: "Peer \(suffix)")
@@ -44,7 +50,10 @@ final class HubsSmokeTests: E2ETestCase {
             addTeardownBlock { await bystander.shutdown() }
             try launchToOnboarding(app, "step a")
             try createIdentity(displayName: "Alice \(suffix)", handle: "alice_\(suffix)", "step a", app)
-            return (peer, bystander)
+            try createGroup(groupName, members: [peer.session, bystander.session], "step a", app)
+            let chatId = try eventually("step a: peer joins \(groupName)", app) { peer.chatId(named: groupName) }
+            try tap(backButton(app), "step a: back to Chats", app)
+            return (peer, chatId)
         }
         summary.finish("a")
 
@@ -70,8 +79,7 @@ final class HubsSmokeTests: E2ETestCase {
 
         summary.start("d")
         try XCTContext.runActivity(named: "step d: messaging with the peer on A keeps working") { _ in
-            try createGroup(groupName, members: [peer.session, bystander.session], "step d", app)
-            let chatId = try eventually("step d: peer joins \(groupName)", app) { peer.chatId(named: groupName) }
+            try tap(chatRow(groupName, in: app), "step d: \(groupName) row", app)
             let appText = "Through B \(suffix)"
             try send(appText, "step d", app)
             _ = try eventually("step d: peer receives \"\(appText)\"", app) {
@@ -103,7 +111,6 @@ final class HubsSmokeTests: E2ETestCase {
         try XCTContext.runActivity(named: "step f: messaging still works, then sign out") { _ in
             try closeHubs("step f", app)
             try tap(chatRow(groupName, in: app), "step f: \(groupName) row", app)
-            let chatId = try eventually("step f: peer knows \(groupName)", app) { peer.chatId(named: groupName) }
             let appText = "Through A \(suffix)"
             try send(appText, "step f", app)
             _ = try eventually("step f: peer receives \"\(appText)\"", app) {
