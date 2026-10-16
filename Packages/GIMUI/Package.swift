@@ -5,7 +5,9 @@ let package = Package(
     name: "GIMUI",
     platforms: [.iOS(.v18)],
     products: [
-        .library(name: "GIMUI", targets: ["GIMUI"])
+        .library(name: "GIMUI", targets: ["GIMUI"]),
+        // The gim-core bridge and the platform hooks without SwiftUI, for the Notification Service Extension.
+        .library(name: "GIMPlatform", targets: ["GIMPlatform"]),
     ],
     dependencies: [
         .package(path: "../GIMKit"),
@@ -13,13 +15,20 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "GIMUI",
+            name: "GIMPlatform",
             dependencies: [
                 .product(name: "GIMClientKit", package: "GIMKit"),
-                .product(name: "GIMFeatures", package: "GIMKit"),
                 .product(name: "GIMCore", package: "GIMCore"),
             ]
         ),
-        .testTarget(name: "GIMUITests", dependencies: ["GIMUI"]),
+        .target(
+            name: "GIMUI",
+            dependencies: [
+                "GIMPlatform",
+                .product(name: "GIMClientKit", package: "GIMKit"),
+                .product(name: "GIMFeatures", package: "GIMKit"),
+            ]
+        ),
+        .testTarget(name: "GIMUITests", dependencies: ["GIMUI", "GIMPlatform"]),
     ]
 )

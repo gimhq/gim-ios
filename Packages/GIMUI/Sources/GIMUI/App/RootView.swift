@@ -6,6 +6,9 @@ import SwiftUI
 public struct RootView: View {
     private let model: AppModel
     @Environment(\.scenePhase) private var scenePhase
+    #if DEBUG
+        @State private var debugPush = DebugPushProcessor()
+    #endif
 
     public init(model: AppModel) {
         self.model = model
@@ -32,6 +35,19 @@ public struct RootView: View {
         .onChange(of: scenePhase, initial: true) { _, newPhase in
             Task { await model.scenePhaseChanged(newPhase) }
         }
+        #if DEBUG
+            .onOpenURL { url in
+                Task { await debugPush.handle(url) }
+            }
+            .sheet(
+                isPresented: Binding(
+                    get: { debugPush.presentation != nil }, set: { if !$0 { debugPush.presentation = nil } })
+            ) {
+                if let presentation = debugPush.presentation {
+                    DebugPushSheet(presentation: presentation)
+                }
+            }
+        #endif
     }
 }
 

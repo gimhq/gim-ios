@@ -1,6 +1,7 @@
 import Foundation
 import GIMClientKit
 import GIMFeatures
+import GIMPlatform
 import SwiftUI
 import XCTest
 
@@ -367,6 +368,29 @@ final class AppModelTests: XCTestCase {
         await model.scenePhaseChanged(.background)
         let offline = await states.next()
         XCTAssertEqual(offline, .offline)
+    }
+
+    @MainActor
+    func testSignedInHookRunsAtLaunchAndAfterEachSignIn() async throws {
+        let launched = FakeGimClient(session: session)
+        let factory = ClientFactory(launched, FakeGimClient())
+        let defaults = makeDefaults()
+        defaults.set("https://gim.example.eu", forKey: AppModel.serverUrlKey)
+        var signedIn: [ObjectIdentifier] = []
+        let hooks = MemoryHooks()
+        let model = AppModel(
+            factory: factory, defaults: defaults, bundledServerUrl: nil, makeHooks: { hooks },
+            signedIn: { signedIn.append(ObjectIdentifier($0)) })
+
+        await model.start()
+        for _ in 0..<100 where signedIn.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertEqual(signedIn, [ObjectIdentifier(launched)])
+
+        _ = await model.signOut()
+        try await register(try XCTUnwrap(model.onboarding))
+        for _ in 0..<100 where signedIn.count < 2 { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertEqual(signedIn.count, 2)
+        XCTAssertNotEqual(signedIn.last, ObjectIdentifier(launched))
     }
 
     @MainActor
