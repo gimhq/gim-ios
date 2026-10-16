@@ -5,6 +5,8 @@
 
 - Mirrored commit: gim-core `50f7915` (`bindings/gim-ffi/src/`, generated
   `bindings/gim-ffi/generated/swift/GIMCore.swift`, contract in `docs/API.md`).
+- Vendored GIMCore: `0.1.0+5877765` (`50f7915` plus guarded migration `0007_hubs_url_shared.sql`, schema v7, which
+  restores `hubs.url_shared` on databases from `d5ead6d`; bindings and `GIMCore.swift` byte-identical to `50f7915`).
 - Mirror sources: `GimClientAPI.swift` (objects, callback interfaces, hooks, `createClient`) and `Models.swift`
   (records, enums, diffs, errors).
 - Everything else in GIMClientKit (`Fake/`, `GimClientFactory`, `CoreGimClientFactory`) is app-level and stays after
