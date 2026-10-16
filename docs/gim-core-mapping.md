@@ -3,7 +3,7 @@
 `Packages/GIMKit/Sources/GIMClientKit` mirrors the UniFFI Swift bindings of gim-core so that switching to the real
 `GIMCore.xcframework` is a mechanical swap.
 
-- Mirrored and vendored commit: gim-core `225b809`, GIMCore `0.1.0+225b809` (`bindings/gim-ffi/src/`, generated
+- Mirrored and vendored commit: gim-core `9c6022c`, GIMCore `0.1.0+9c6022c` (`bindings/gim-ffi/src/`, generated
   `bindings/gim-ffi/generated/swift/GIMCore.swift`, contract in `docs/API.md`).
 - Mirror sources: `GimClientAPI.swift` (objects, callback interfaces, hooks, `createClient`) and `Models.swift`
   (records, enums, diffs, errors).
@@ -85,7 +85,7 @@ generated code writes the bare protocol name, which is the same type.
 
 ## GimClient methods
 
-Every method of `GimClientProtocol` at `225b809`, with identical labels, argument types and `async`/`throws`. The
+Every method of `GimClientProtocol` at `9c6022c`, with identical labels, argument types and `async`/`throws`. The
 only type differences are `any Timeline` / `any LinkSession` / `any PendingApproval` (generated: the classes) and the
 listener parameter spelling above.
 
@@ -152,6 +152,18 @@ a `TimelineItem.membershipChange` arrives. When a query fails before any list ha
 `ChatSummary.memberCount` (no member list, no removal); a list that loaded before stays on later failures.
 Renaming a group goes `GroupInfoViewModel.saveName()` → `GimClientAPI.setGroupInfo(name:)` →
 `RealGimClient` → `GIMCore.GimClient.setGroupInfo`.
+
+## Changes since `225b809`
+
+`9c6022c` (built on the macOS host from gim-core `9c6022c` like `f8db42c` below, vendored with
+`scripts/sync-gim-core.sh --from-dir`). Diff of the generated `GIMCore.swift`: the `signOut` doc comment and its
+UniFFI checksum; no signature changed, no mirror change. Behaviour only (gim-core `docs/API.md`, "Sign-out"):
+`signOut` throws `InvalidInput` in `extension` mode and deletes nothing; the app's `signOut` deletes the store under the
+store lock, after which every client opened before it fails its changes of the local state with
+`Storage("the local store was deleted by sign-out")`, and a new extension client fails with `InvalidInput` (no
+database key). `PushNotificationHandler` shows the generic content for both. `FakeGimClient` mirrors this per data
+directory: `signOut` throws `InvalidInput` in `extension` mode, and `processPush` of a client created before a
+sign-out of its directory throws that `Storage` error.
 
 ## Changes since `f8db42c`
 
