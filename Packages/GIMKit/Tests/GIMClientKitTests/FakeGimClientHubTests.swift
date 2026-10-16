@@ -284,6 +284,28 @@ final class FakeGimClientHubTests: XCTestCase {
         XCTAssertEqual(state, .removed)
     }
 
+    func testAddHubOfAnUnreachableUrlThrowsNetworkAndOfANonHubUrlInvalidInput() async throws {
+        let client = try makeClient()
+
+        await assertThrows(.Network(reason: "https://unreachable.example.eu: connection refused")) {
+            try await client.addHub(url: "https://unreachable.example.eu")
+        }
+        await assertThrows(.InvalidInput(reason: "url: https://nohub.example.eu does not serve a gim hub")) {
+            try await client.addHub(url: "https://nohub.example.eu")
+        }
+        let hubs = try await client.hubs()
+        XCTAssertEqual(hubs, [homeInfo()])
+    }
+
+    func testAnOwnerHubOwnsTwoGroups() async throws {
+        let client = try makeClient()
+        let owner = try await addVerified(client, "https://owner.example.eu")
+
+        await assertThrows(.HubOwnsGroups(hubId: owner.hubId, groupCount: 2)) {
+            try await client.removeHub(hubId: owner.hubId, confirmOwnedGroups: false)
+        }
+    }
+
     func testSignOutForgetsTheAddedHubs() async throws {
         let client = try makeClient()
         try await addVerified(client, secondUrl)

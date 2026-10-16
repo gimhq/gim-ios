@@ -20,7 +20,8 @@ import Synchronization
 ///
 /// Hubs: a deterministic registry with the home hub at `homeHubUrl` (hub id `hubId(forUrl:)`). `addHub` lists a hub
 /// `unverified` and makes it `verified` and signed in `hubVerifyDelay` later; a URL containing "unverified" throws
-/// `HubNotVerified`, one containing "busy" makes the first `removeHub` of that hub throw `HubNotDrained`.
+/// `HubNotVerified`, "unreachable" `Network`, "nohub" `InvalidInput`; one containing "busy" makes the first
+/// `removeHub` of that hub throw `HubNotDrained`, one containing "owner" makes the hub own 2 groups.
 /// `removeHub` refuses the home hub (`HomeHub`), the only listed hub (`LastHub`) and a hub owning groups
 /// (`simulateOwnedGroups(hubId:count:)`) without `confirmOwnedGroups` (`HubOwnsGroups`).
 public actor FakeGimClient: GimClientAPI {
@@ -982,6 +983,12 @@ public actor FakeGimClient: GimClientAPI {
         if url.contains("unverified") {
             throw GimError.HubNotVerified(reason: "\(url) did not prove the hub at that URL")
         }
+        if url.contains("unreachable") {
+            throw GimError.Network(reason: "\(url): connection refused")
+        }
+        if url.contains("nohub") {
+            throw GimError.InvalidInput(reason: "url: \(url) does not serve a gim hub")
+        }
         let hubId = Self.hubId(forUrl: url)
         if let index = storedHubs.firstIndex(where: { $0.hubId == hubId && $0.state != .removed }) {
             // A listed hub: only records the URL entered here; a hub known from another device is verified then.
@@ -994,7 +1001,7 @@ public actor FakeGimClient: GimClientAPI {
             listUnverified(
                 StoredHub(
                     hubId: hubId, url: url, state: .unverified, priority: nextHubPriority(),
-                    undrainedRemovals: url.contains("busy") ? 1 : 0))
+                    ownedGroupCount: url.contains("owner") ? 2 : 0, undrainedRemovals: url.contains("busy") ? 1 : 0))
             scheduleHubVerification(hubId)
         }
         return try hubInfo(hubId)

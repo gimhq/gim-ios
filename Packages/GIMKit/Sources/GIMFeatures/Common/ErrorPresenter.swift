@@ -34,7 +34,7 @@ public enum ErrorPresenter {
         case .ChatNotActive:
             return "You're no longer a member of this chat."
         case .HubNotVerified:
-            return "This server couldn't prove it is the hub at this address. Check the address and try again."
+            return "This hub couldn't prove it is reachable at this address. Check the address and try again."
         case .HubOwnsGroups(_, let groupCount):
             return groupCount == 1 ? "This hub hosts 1 group you own." : "This hub hosts \(groupCount) groups you own."
         case .LastHub:
@@ -42,7 +42,7 @@ public enum ErrorPresenter {
         case .HomeHub:
             return "This device's home hub can't be removed. Make another hub primary instead."
         case .HubNotDrained:
-            return "Messages sent through this hub are still on their way. Try again in a moment."
+            return "Messages sent through this hub are still on their way. Try again later."
         }
     }
 

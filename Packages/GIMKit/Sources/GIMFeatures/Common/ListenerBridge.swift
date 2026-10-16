@@ -35,6 +35,13 @@ public enum ListenerBridge {
         }
     }
 
+    /// The user's hubs, primary first, including removed ones.
+    public static func hubList(_ client: any GimClientAPI) async throws -> AsyncStream<[HubInfo]> {
+        try await stream { continuation in
+            try await client.hubList(listener: HubListStreamListener(continuation))
+        }
+    }
+
     private static func stream<Value: Sendable>(
         _ subscribe: (AsyncStream<Value>.Continuation) async throws -> TaskHandle
     ) async throws -> AsyncStream<Value> {
@@ -72,4 +79,10 @@ private final class TypingStreamListener: TypingListener {
     let continuation: AsyncStream<[String]>.Continuation
     init(_ continuation: AsyncStream<[String]>.Continuation) { self.continuation = continuation }
     func onUpdate(userIds: [String]) { continuation.yield(userIds) }
+}
+
+private final class HubListStreamListener: HubListListener {
+    let continuation: AsyncStream<[HubInfo]>.Continuation
+    init(_ continuation: AsyncStream<[HubInfo]>.Continuation) { self.continuation = continuation }
+    func onUpdate(hubs: [HubInfo]) { continuation.yield(hubs) }
 }
