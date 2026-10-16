@@ -25,6 +25,9 @@ public final class AppModel {
     public nonisolated static let defaultServerUrlKey = "GIMDefaultServerURL"
     /// Debug builds use the demo client instead of gim-core when launched with `-GIMUseFakeCore YES`.
     public nonisolated static let useFakeCoreKey = "GIMUseFakeCore"
+    /// With the demo client, `-GIMFakeRejectFirstSend YES` makes the hub reject the first own send for good (403
+    /// `not_member`), for UI tests of failed messages.
+    public nonisolated static let fakeRejectFirstSendKey = "GIMFakeRejectFirstSend"
 
     public private(set) var phase: Phase = .launching
     public private(set) var session: Session?
@@ -65,10 +68,13 @@ public final class AppModel {
     }
 
     /// gim-core (`RealGimClientFactory`); in debug builds the `useFakeCoreKey` launch argument selects the demo
-    /// client (`CoreGimClientFactory`). Release builds always use gim-core.
+    /// client (`CoreGimClientFactory`, see `fakeRejectFirstSendKey`). Release builds always use gim-core.
     public nonisolated static func defaultFactory(defaults: UserDefaults = .standard) -> any GimClientFactory {
         #if DEBUG
-            if defaults.bool(forKey: useFakeCoreKey) { return CoreGimClientFactory() }
+            if defaults.bool(forKey: useFakeCoreKey) {
+                guard defaults.bool(forKey: fakeRejectFirstSendKey) else { return CoreGimClientFactory() }
+                return RejectingFakeFactory()
+            }
         #endif
         return RealGimClientFactory()
     }
@@ -213,3 +219,14 @@ private struct TimeZoneAttachingFactory: GimClientFactory {
         return client
     }
 }
+
+#if DEBUG
+    /// Demo clients whose first own send the hub rejects for good; see `AppModel.fakeRejectFirstSendKey`.
+    private struct RejectingFakeFactory: GimClientFactory {
+        func make(config: ClientConfig, hooks: any PlatformHooks) async throws -> any GimClientAPI {
+            let client = try await CoreGimClientFactory().make(config: config, hooks: hooks)
+            await (client as? FakeGimClient)?.rejectNextSend()
+            return client
+        }
+    }
+#endif

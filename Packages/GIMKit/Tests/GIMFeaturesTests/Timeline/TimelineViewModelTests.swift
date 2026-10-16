@@ -121,6 +121,75 @@ final class TimelineViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testDefinite4xxShowsFailedAtOnceWithRetryAndDelete() async throws {
+        let (client, scheduler) = await connected(makeDemoClient())
+        let chatId = FakeGimClient.demoGroupChatId
+        let viewModel = await startedViewModel(client, chatId: chatId)
+        await client.rejectNextSend(status: 403, code: "not_member")
+
+        let messageId = try await client.sendText(chatId: chatId, body: "Still here?", replyTo: nil)
+
+        // No pending phase to wait out: the rejection is final.
+        await eventually { self.status(viewModel, messageId) == .failed(reason: "rejected (403 not_member)") }
+        let message = try XCTUnwrap(viewModel.message(withId: messageId))
+        XCTAssertEqual(MessageActionsViewModel.actions(for: message), [.reply, .react, .copy, .edit, .delete, .retry])
+        await scheduler.runUntilIdle()
+        XCTAssertEqual(status(viewModel, messageId), .failed(reason: "rejected (403 not_member)"), "never resent")
+        XCTAssertNil(viewModel.errorMessage)
+
+        await viewModel.retry(messageId: messageId)
+        await scheduler.advance(by: .milliseconds(300))
+        await eventually { self.status(viewModel, messageId) == .sent }
+    }
+
+    @MainActor
+    func testChatStateFollowsLeaveAndOwnLeftChange() async throws {
+        let (client, scheduler) = await connected(makeDemoClient())
+        let chatId = FakeGimClient.demoGroupChatId
+        let viewModel = await startedViewModel(client, chatId: chatId)
+        await eventually { viewModel.chatState == .active }
+        XCTAssertFalse(viewModel.isReadOnly)
+
+        try await client.leaveChat(chatId: chatId)
+        await eventually { viewModel.chatState == .leaving }
+        XCTAssertTrue(viewModel.isReadOnly)
+        await settle()
+        await scheduler.advance(by: FakeGimClient.leaveCommitDelay)
+
+        await eventually { viewModel.chatState == .left }
+        await eventually { viewModel.items.last?.kind == .membership("You left") }
+    }
+
+    @MainActor
+    func testRemovalShowsWhoRemovedTheUser() async throws {
+        let (client, _) = await connected(makeDemoClient())
+        let chatId = FakeGimClient.demoGroupChatId
+        let viewModel = await startedViewModel(client, chatId: chatId)
+
+        try await client.simulateRemoval(chatId: chatId, by: "user-nikos")
+
+        await eventually { viewModel.chatState == .left }
+        await eventually { viewModel.items.last?.kind == .membership("You were removed by Nikos Papadopoulos") }
+    }
+
+    @MainActor
+    func testRetryRefusedWithChatNotActiveMakesTheChatReadOnly() async throws {
+        let (client, scheduler) = await connected(makeDemoClient())
+        let chatId = FakeGimClient.demoGroupChatId
+        let viewModel = await startedViewModel(client, chatId: chatId)
+        await client.rejectNextSend()
+        let messageId = try await client.sendText(chatId: chatId, body: "Hello?", replyTo: nil)
+        await eventually { self.status(viewModel, messageId) == .failed(reason: "rejected (403 not_member)") }
+        try await client.simulateRemoval(chatId: chatId, by: "user-nikos")
+
+        await viewModel.retry(messageId: messageId)
+
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertEqual(viewModel.chatState, .left)
+        await scheduler.runUntilIdle()
+    }
+
+    @MainActor
     func testMarkReadConditions() async throws {
         let (client, _) = await connected(makeDemoClient())
         let viewModel = await startedViewModel(client, chatId: FakeGimClient.demoDirectChatId)

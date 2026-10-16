@@ -128,26 +128,55 @@ final class ChatListViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testLeavingChatSubtitle() async throws {
+    func testSubtitleFollowsChatStateAfterOwnLeave() async throws {
         let (client, scheduler) = await connected(makeDemoClient())
-        let leavingChats = LeavingChats(client: client, now: { fixedNow })
-        let viewModel = ChatListViewModel(client: client, dateFormatter: makeFormatter(), leavingChats: leavingChats)
-        viewModel.start()
-        await eventually { viewModel.rows.count == 2 }
-        let group = viewModel.rows[0]
-        XCTAssertEqual(viewModel.subtitle(for: group), "Nikos Papadopoulos: Me, grilled octopus 🐙")
+        let viewModel = await startedViewModel(client)
+        let groupId = FakeGimClient.demoGroupChatId
+        XCTAssertEqual(
+            viewModel.subtitle(for: try row(groupId, viewModel)), "Nikos Papadopoulos: Me, grilled octopus 🐙")
 
-        try await leavingChats.leave(chatId: group.id)
+        try await client.leaveChat(chatId: groupId)
 
-        XCTAssertEqual(viewModel.subtitle(for: group), "Leaving…")
-        XCTAssertEqual(viewModel.subtitle(for: viewModel.rows[1]), viewModel.rows[1].preview)
+        await eventually { (try? self.row(groupId, viewModel).state) == .leaving }
+        XCTAssertEqual(viewModel.subtitle(for: try row(groupId, viewModel)), "Leaving…")
+        let direct = try row(FakeGimClient.demoDirectChatId, viewModel)
+        XCTAssertEqual(viewModel.subtitle(for: direct), direct.preview)
         await settle()
         await scheduler.advance(by: FakeGimClient.leaveCommitDelay)
-        await eventually { !leavingChats.contains(group.id) }
+        await eventually { (try? self.row(groupId, viewModel).state) == .left }
+        await eventually { (try? viewModel.subtitle(for: self.row(groupId, viewModel))) == "You left" }
         // A left chat stays in the list with its history.
-        XCTAssertEqual(Set(viewModel.rows.map(\.id)), [group.id, FakeGimClient.demoDirectChatId])
-        let state = try await client.chatState(chatId: group.id)
-        XCTAssertEqual(state, .left)
+        XCTAssertEqual(Set(viewModel.rows.map(\.id)), [groupId, FakeGimClient.demoDirectChatId])
+    }
+
+    @MainActor
+    func testSubtitleOfChatTheUserWasRemovedFrom() async throws {
+        let (client, _) = await connected(makeDemoClient())
+        let viewModel = await startedViewModel(client)
+        let groupId = FakeGimClient.demoGroupChatId
+
+        try await client.simulateRemoval(chatId: groupId, by: "user-nikos")
+
+        await eventually { (try? viewModel.subtitle(for: self.row(groupId, viewModel))) == "You were removed" }
+        XCTAssertEqual(try row(groupId, viewModel).state, .left)
+    }
+
+    @MainActor
+    func testLeftSubtitleWithoutOwnMembershipChange() async throws {
+        let summary = ChatSummary(
+            chatId: "h/g1", kind: .group, name: "Old crew", avatar: nil, lastMessage: nil, unreadCount: 0,
+            updatedAtMs: 0, memberCount: 2, state: .left)
+        let viewModel = ChatListViewModel(client: FakeGimClient(), dateFormatter: makeFormatter())
+
+        XCTAssertEqual(viewModel.subtitle(for: ChatRow(summary: summary, dateFormatter: makeFormatter())), "Left")
+        var leaving = summary
+        leaving.state = .leaving
+        XCTAssertEqual(viewModel.subtitle(for: ChatRow(summary: leaving, dateFormatter: makeFormatter())), "Leaving…")
+    }
+
+    @MainActor
+    private func row(_ chatId: String, _ viewModel: ChatListViewModel) throws -> ChatRow {
+        try XCTUnwrap(viewModel.rows.first { $0.id == chatId })
     }
 }
 

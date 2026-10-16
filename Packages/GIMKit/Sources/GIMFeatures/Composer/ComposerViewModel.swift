@@ -33,7 +33,7 @@ public final class ComposerViewModel {
 
     private let client: any GimClientAPI
     private let drafts: ComposerDrafts
-    private let leavingChats: LeavingChats?
+    private let timeline: TimelineViewModel?
     private let now: () -> Date
     /// When `setTyping(active: true)` was last sent; `nil` while the indicator is off.
     @ObservationIgnored private var typingSentAt: Date?
@@ -43,33 +43,49 @@ public final class ComposerViewModel {
     @ObservationIgnored private var draftBeforeEdit = ""
 
     /// - Parameters:
-    ///   - leavingChats: the chats the user is leaving; the composer is disabled in them.
+    ///   - timeline: the chat's timeline, which knows the chat's state; the composer is disabled unless the chat is
+    ///     active.
     ///   - now: clock for the typing throttle.
     public init(
         client: any GimClientAPI, chatId: String, drafts: ComposerDrafts = ComposerDrafts(),
-        leavingChats: LeavingChats? = nil, now: @escaping () -> Date = Date.init
+        timeline: TimelineViewModel? = nil, now: @escaping () -> Date = Date.init
     ) {
         self.client = client
         self.chatId = chatId
         self.drafts = drafts
-        self.leavingChats = leavingChats
+        self.timeline = timeline
         self.now = now
         text = drafts[chatId]
     }
 
-    /// The user is leaving the chat: gim-core refuses sends until the own `Left` change arrives.
-    public var isLeaving: Bool {
-        leavingChats?.contains(chatId) ?? false
+    /// The chat is leaving or left: gim-core refuses every send (`ChatNotActive`), so the composer shows
+    /// `readOnlyText` instead of the input. Also right after a restart, as the state comes from local state.
+    public var isReadOnly: Bool {
+        readOnlyText != nil
+    }
+
+    /// The chat's state from the timeline; `nil` until known.
+    public var chatState: ChatState? {
+        timeline?.chatState
+    }
+
+    /// The banner shown instead of the input; `nil` while the chat is active (or its state is not known yet).
+    public var readOnlyText: String? {
+        switch chatState {
+        case .leaving: "Leaving…"
+        case .left: "You can no longer send messages in this chat."
+        case .active, nil: nil
+        }
     }
 
     /// Whether the send button is enabled.
     public var canSend: Bool {
-        !isSending && !isLeaving && !trimmedText.isEmpty
+        !isSending && !isReadOnly && !trimmedText.isEmpty
     }
 
     /// Whether attachments can be sent; not while editing.
     public var canAttach: Bool {
-        !isSending && !isLeaving && editTarget == nil
+        !isSending && !isReadOnly && editTarget == nil
     }
 
     // MARK: - Input
@@ -208,9 +224,9 @@ public final class ComposerViewModel {
 
     // MARK: - Private
 
-    /// A send refused because the chat is leaving shows the leaving state instead of an error.
+    /// A send refused because the chat is not active makes the chat read-only instead of showing an error.
     private func fail(_ error: any Error) {
-        guard leavingChats?.handleSendError(error, chatId: chatId) != true else { return }
+        guard timeline?.handleChatNotActive(error) != true else { return }
         errorMessage = ErrorPresenter.message(for: error)
     }
 

@@ -295,40 +295,79 @@ final class ComposerViewModelTests: XCTestCase {
         XCTAssertEqual(preview(.deleted), "This message was deleted")
     }
 
-    // MARK: - Leaving
+    // MARK: - Chat state
 
     @MainActor
-    func testComposerIsDisabledWhileLeaving() async throws {
-        let client = await makeClient()
+    func testComposerFollowsChatStateWhileLeaving() async throws {
+        let (fake, scheduler) = await connected(makeDemoClient())
         let group = FakeGimClient.demoGroupChatId
-        let leavingChats = LeavingChats(client: client)
-        let viewModel = ComposerViewModel(client: client, chatId: group, leavingChats: leavingChats)
+        let timeline = TimelineViewModel(client: fake, chatId: group, mediaDirectory: makeTemporaryDirectory())
+        timeline.start()
+        let viewModel = ComposerViewModel(client: fake, chatId: group, timeline: timeline)
         viewModel.textChanged("Bye")
+        await eventually { timeline.chatState == .active }
+        XCTAssertNil(viewModel.readOnlyText)
         XCTAssertTrue(viewModel.canSend)
         XCTAssertTrue(viewModel.canAttach)
 
-        try await leavingChats.leave(chatId: group)
+        try await fake.leaveChat(chatId: group)
 
-        XCTAssertTrue(viewModel.isLeaving)
+        await eventually { viewModel.readOnlyText == "Leaving…" }
+        XCTAssertTrue(viewModel.isReadOnly)
         XCTAssertFalse(viewModel.canSend)
         XCTAssertFalse(viewModel.canAttach)
+        await settle()
+        await scheduler.advance(by: FakeGimClient.leaveCommitDelay)
+        await eventually { viewModel.readOnlyText == "You can no longer send messages in this chat." }
+        XCTAssertFalse(viewModel.canSend)
+        timeline.stop()
     }
 
     @MainActor
-    func testSendRefusedWhileLeavingShowsLeavingInsteadOfError() async throws {
-        let client = await makeClient()
+    func testComposerIsReadOnlyFromLocalStateAfterRestart() async throws {
+        let (fake, _) = await connected(makeDemoClient())
         let group = FakeGimClient.demoGroupChatId
-        // Left in an earlier run: only the refused send tells this session.
-        try await client.fake.leaveChat(chatId: group)
-        let leavingChats = LeavingChats(client: client)
-        let viewModel = ComposerViewModel(client: client, chatId: group, leavingChats: leavingChats)
+        // Removed in an earlier run: the state comes from local state before any diff.
+        try await fake.simulateRemoval(chatId: group, by: "user-nikos")
+        let timeline = TimelineViewModel(client: fake, chatId: group, mediaDirectory: makeTemporaryDirectory())
+        let viewModel = ComposerViewModel(client: fake, chatId: group, timeline: timeline)
+
+        timeline.start()
+
+        await eventually { viewModel.readOnlyText == "You can no longer send messages in this chat." }
+        XCTAssertFalse(viewModel.canSend)
+        timeline.stop()
+    }
+
+    @MainActor
+    func testSendRefusedWithChatNotActiveMakesTheChatReadOnly() async throws {
+        let client = await makeClient()
+        let timeline = TimelineViewModel(client: client, chatId: chatId, mediaDirectory: makeTemporaryDirectory())
+        timeline.start()
+        let viewModel = ComposerViewModel(client: client, chatId: chatId, timeline: timeline)
+        await eventually { timeline.chatState == .active }
         viewModel.textChanged("Bye")
+        await client.failNext(with: .ChatNotActive(chatId: chatId, state: .leaving))
 
         await viewModel.send()
 
         XCTAssertNil(viewModel.errorMessage)
-        XCTAssertTrue(viewModel.isLeaving)
+        XCTAssertEqual(timeline.chatState, .leaving)
+        XCTAssertEqual(viewModel.readOnlyText, "Leaving…")
         XCTAssertEqual(viewModel.text, "Bye")
+        timeline.stop()
+    }
+
+    @MainActor
+    func testChatNotActiveWithoutTimelineShowsTheError() async {
+        let client = await makeClient()
+        let viewModel = makeViewModel(client)
+        viewModel.textChanged("Bye")
+        await client.failNext(with: .ChatNotActive(chatId: chatId, state: .left))
+
+        await viewModel.send()
+
+        XCTAssertEqual(viewModel.errorMessage, "You're no longer a member of this chat.")
     }
 
     @MainActor

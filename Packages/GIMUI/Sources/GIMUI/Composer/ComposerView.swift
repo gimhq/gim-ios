@@ -5,8 +5,8 @@ import SwiftUI
 /// The message input of a chat: growing text field, send button, attachments, and the reply or edit bar.
 ///
 /// `replyingTo` and `editing` are the chat screen's targets (set from the message menu); the composer adopts them
-/// and clears them when the message is sent or the bar is cancelled. While the user is leaving the chat it only says
-/// so.
+/// and clears them when the message is sent or the bar is cancelled. While the chat is leaving or left it only shows a
+/// banner saying so.
 public struct ComposerView: View {
     @Binding private var replyingTo: MessageItem?
     @Binding private var editing: MessageItem?
@@ -16,23 +16,24 @@ public struct ComposerView: View {
     @State private var showsDocumentPicker = false
     @State private var isPreparingAttachment = false
 
-    /// - Parameter leavingChats: the chats the user is leaving; the composer is disabled in them.
+    /// - Parameter timeline: the chat's timeline, which knows the chat's state; the composer is disabled unless the
+    ///   chat is active.
     public init(
-        client: any GimClientAPI, chatId: String, drafts: ComposerDrafts, leavingChats: LeavingChats? = nil,
+        client: any GimClientAPI, chatId: String, drafts: ComposerDrafts, timeline: TimelineViewModel? = nil,
         replyingTo: Binding<MessageItem?>, editing: Binding<MessageItem?>
     ) {
         _replyingTo = replyingTo
         _editing = editing
         _viewModel = State(
             initialValue: ComposerViewModel(
-                client: client, chatId: chatId, drafts: drafts, leavingChats: leavingChats))
+                client: client, chatId: chatId, drafts: drafts, timeline: timeline))
     }
 
     public var body: some View {
         VStack(spacing: 0) {
             Divider()
-            if viewModel.isLeaving {
-                leavingBar
+            if let text = viewModel.readOnlyText {
+                readOnlyBar(text)
             } else {
                 input
             }
@@ -116,16 +117,19 @@ public struct ComposerView: View {
         .padding(.vertical, 6)
     }
 
-    private var leavingBar: some View {
+    /// "Leaving…" with a spinner, or that the chat was left.
+    private func readOnlyBar(_ text: String) -> some View {
         HStack(spacing: 8) {
-            ProgressView()
-            Text("Leaving…")
+            if viewModel.chatState == .leaving { ProgressView() }
+            Text(text)
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity, minHeight: 36)
+        .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("composer.leaving")
+        .accessibilityIdentifier("composer.readOnly")
     }
 
     @ViewBuilder
