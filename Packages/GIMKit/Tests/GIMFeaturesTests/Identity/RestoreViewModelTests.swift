@@ -156,6 +156,34 @@ final class RestoreViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testRestoreErrorIsPresentedAndRetryRestoresOnTheSameClient() async throws {
+        let (fake, userId, code) = try await restorableClient()
+        let client = IdentityStubClient(fake, restoreErrors: [.Network(reason: "offline")])
+        var clientRequests = 0
+        let (viewModel, registered) = makeViewModel {
+            clientRequests += 1
+            return client
+        }
+        viewModel.userId = userId
+        viewModel.recoveryCode = code
+
+        await viewModel.submit()
+
+        XCTAssertEqual(viewModel.errorMessage, ErrorPresenter.message(for: GimError.Network(reason: "offline")))
+        XCTAssertEqual(viewModel.recoveryCode, code, "kept for the retry")
+        XCTAssertFalse(viewModel.showsRejoinNotice)
+
+        await viewModel.submit()
+        viewModel.finish()
+
+        XCTAssertNil(viewModel.errorMessage)
+        let registration = try XCTUnwrap(registered.registrations.first)
+        XCTAssertTrue(registration.client === client)
+        XCTAssertEqual(registration.session.userId, userId)
+        XCTAssertEqual(clientRequests, 2)
+    }
+
+    @MainActor
     func testClientCreationErrorIsPresented() async {
         let (viewModel, registered) = makeViewModel { throw GimError.Network(reason: "offline") }
         viewModel.userId = "user-sofia"

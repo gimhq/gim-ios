@@ -152,6 +152,7 @@ private final class FailingChatListClient: GimClientAPI {
     func startSync() async throws {}
     func stopSync() async throws {}
     func setNetworkReachable(reachable: Bool) {}
+    func setLocalTimeZone(zone: (any LocalTimeZone)?) {}
     func findUser(handle: String) async throws -> UserProfile? { nil }
     func createDirectChat(userId: String) async throws -> String { throw GimError.NotRegistered }
     func createGroupChat(name: String, memberUserIds: [String]) async throws -> String {
