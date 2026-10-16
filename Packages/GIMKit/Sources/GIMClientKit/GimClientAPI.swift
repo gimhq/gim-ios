@@ -30,6 +30,12 @@ public protocol TypingListener: AnyObject, Sendable {
     func onUpdate(userIds: [String])
 }
 
+/// Receives the user's hubs (see `GimClientAPI.hubs()`) whenever they may have changed: added, removed, verified,
+/// reprioritized, or a URL shared by another own device. The first callback carries the current list.
+public protocol HubListListener: AnyObject, Sendable {
+    func onUpdate(hubs: [HubInfo])
+}
+
 /// The local time zone timeline date separators split calendar days in, set with
 /// `GimClientAPI.setLocalTimeZone(zone:)`. Called from any thread (gim-core: its callback thread); do not call back
 /// into the client from it.
@@ -228,6 +234,29 @@ public protocol GimClientAPI: AnyObject, Sendable {
     func setLocalTimeZone(zone: (any LocalTimeZone)?)
     func connectionState(listener: any ConnectionStateListener) async throws -> TaskHandle
     func typing(chatId: String, listener: any TypingListener) async throws -> TaskHandle
+
+    // Hub management (gim-core docs/API.md, "Hub management").
+
+    /// The hubs of the user's hosting record known to this device, primary first (by priority, then hub id),
+    /// including removed ones. With a single hub: the home hub.
+    func hubs() async throws -> [HubInfo]
+    /// Adds the hub at `url` (entered by the user) to the hosting record: checks that it is a gim hub, signs in there,
+    /// lists it last (least preferred), uploads this device's KeyPackages there, follows its events and shares its URL
+    /// with the own other devices. Adding a listed hub again only records `url` for it on this device. Returns the
+    /// hub. `InvalidInput` for a URL that is not `http(s)://host…` or does not serve a gim hub, `Network` if it cannot
+    /// be reached.
+    func addHub(url: String) async throws -> HubInfo
+    /// Removes a hub from the hosting record. `HomeHub` for the hub this client was created for, `LastHub` for the
+    /// only listed hub, `HubOwnsGroups` (with the number of chats) unless `confirmOwnedGroups` if the hub owns chats
+    /// of this user, `HubNotDrained` while something sent through it is not settled; `InvalidInput` for a hub that
+    /// is not listed.
+    func removeHub(hubId: String, confirmOwnedGroups: Bool) async throws
+    /// Makes a listed hub the primary hub (priority 0, the others follow in their order). Every hub whose priority
+    /// changes must be reachable from this device (`HubInfo.signedIn`), else `InvalidInput`. Nothing happens for the
+    /// current primary.
+    func setPrimaryHub(hubId: String) async throws
+    /// Subscribes to the user's hubs; the first callback carries the current list.
+    func hubList(listener: any HubListListener) async throws -> TaskHandle
 }
 
 /// Creates the client. Opens (or creates) local state under `hooks.dataDir()`; does not touch the network.
@@ -237,19 +266,20 @@ public protocol GimClientAPI: AnyObject, Sendable {
 public func createClient(config: ClientConfig, hooks: any PlatformHooks) async throws -> any GimClientAPI {
     try validateServerUrl(config.serverUrl)
     return FakeGimClient.demo(
-        dataDirectory: hooks.dataDir(), registered: false, networkReachable: hooks.isNetworkReachable())
+        dataDirectory: hooks.dataDir(), registered: false, networkReachable: hooks.isNetworkReachable(),
+        homeHubUrl: config.serverUrl)
 }
 
-/// Same rules as gim-core: an `http` or `https` URL with a host.
-private func validateServerUrl(_ value: String) throws {
+/// Same rules as gim-core: an `http` or `https` URL with a host. `what` prefixes the `InvalidInput` reason.
+func validateServerUrl(_ value: String, what: String = "server_url") throws {
     guard let components = URLComponents(string: value), let scheme = components.scheme else {
-        throw GimError.InvalidInput(reason: "server_url: relative URL without a base")
+        throw GimError.InvalidInput(reason: "\(what): relative URL without a base")
     }
     guard ["http", "https"].contains(scheme.lowercased()) else {
-        throw GimError.InvalidInput(reason: "server_url: unsupported scheme '\(scheme)'")
+        throw GimError.InvalidInput(reason: "\(what): unsupported scheme '\(scheme)'")
     }
     guard let host = components.host, !host.isEmpty else {
-        throw GimError.InvalidInput(reason: "server_url: missing host")
+        throw GimError.InvalidInput(reason: "\(what): missing host")
     }
 }
 

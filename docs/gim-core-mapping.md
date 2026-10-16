@@ -3,7 +3,7 @@
 `Packages/GIMKit/Sources/GIMClientKit` mirrors the UniFFI Swift bindings of gim-core so that switching to the real
 `GIMCore.xcframework` is a mechanical swap.
 
-- Mirrored commit: gim-core `d5ead6d` (`bindings/gim-ffi/src/`, generated
+- Mirrored commit: gim-core `50f7915` (`bindings/gim-ffi/src/`, generated
   `bindings/gim-ffi/generated/swift/GIMCore.swift`, contract in `docs/API.md`).
 - Mirror sources: `GimClientAPI.swift` (objects, callback interfaces, hooks, `createClient`) and `Models.swift`
   (records, enums, diffs, errors).
@@ -20,6 +20,7 @@ Generated records are `Equatable, Hashable` plus `extension …: Sendable`; the 
 | `ClientConfig` | `ClientConfig` | `serverUrl` |
 | `Session` | `Session` | `userId`, `deviceId`, `handle` (empty until `claimHandle`), `displayName` |
 | `DeviceInfo` | `DeviceInfo` | `deviceId`, `createdAtMs: UInt64` (0 for revoked devices), `isCurrent`, `revoked` |
+| `HubInfo` | `HubInfo` | `hubId`, `url: String?`, `state: HubState`, `priority: UInt8`, `isPrimary`, `isHome`, `signedIn` |
 | `UserProfile` | `UserProfile` | `userId`, `handle`, `displayName` |
 | `ChatSummary` | `ChatSummary` | `chatId`, `kind`, `name`, `avatar: MediaRef?`, `lastMessage: MessagePreview?`, `unreadCount: UInt32`, `updatedAtMs: UInt64`, `memberCount: UInt32`, `state: ChatState` |
 | `MessagePreview` | `MessagePreview` | `senderName`, `text`, `sentAtMs: UInt64`, `isOwn` |
@@ -34,6 +35,7 @@ Generated records are `Equatable, Hashable` plus `extension …: Sendable`; the 
 |---|---|---|
 | `ChatKind` | `ChatKind` | `direct`, `group` |
 | `ChatState` | `ChatState` | `active`, `leaving`, `left` |
+| `HubState` | `HubState` | `unverified`, `verified`, `removed` |
 | `TimelineItem` | `TimelineItem` | `message(item:)`, `dateSeparator(dayStartMs:)`, `membershipChange(userName:change:atMs:userId:actorUserId:)` (`actorUserId: String?`) |
 | `MembershipChangeKind` | `MembershipChangeKind` | `added`, `removed`, `left` |
 | `MessageContent` | `MessageContent` | `text(body:)`, `image(media:width:height:caption:)`, `file(media:fileName:caption:)`, `deleted`, `unsupported` |
@@ -41,7 +43,7 @@ Generated records are `Equatable, Hashable` plus `extension …: Sendable`; the 
 | `ConnectionState` | `ConnectionState` | `offline`, `connecting`, `connected`, `syncing` |
 | `ChatListDiff` | `ChatListDiff` | `append(values:)`, `clear`, `pushFront(value:)`, `pushBack(value:)`, `popFront`, `popBack`, `insert(index:value:)`, `set(index:value:)`, `remove(index:)`, `truncate(length:)`, `reset(values:)` |
 | `TimelineDiff` | `TimelineDiff` | same cases as `ChatListDiff`, with `TimelineItem` values |
-| `GimError` | `GimError` | `Network(reason:)`, `NotRegistered`, `InvalidInput(reason:)`, `NotFound(reason:)`, `Crypto(reason:)`, `Storage(reason:)`, `Server(status: UInt16, reason:)`, `RetryLater(status: UInt16, retryAfterSecs: UInt64, reason:)`, `Cancelled`, `NotImplemented`, `Internal(reason:)`, `ChatNotActive(chatId:state: ChatState)` |
+| `GimError` | `GimError` | `Network(reason:)`, `NotRegistered`, `InvalidInput(reason:)`, `NotFound(reason:)`, `Crypto(reason:)`, `Storage(reason:)`, `Server(status: UInt16, reason:)`, `RetryLater(status: UInt16, retryAfterSecs: UInt64, reason:)`, `Cancelled`, `NotImplemented`, `Internal(reason:)`, `ChatNotActive(chatId:state: ChatState)`, `HubNotVerified(reason:)`, `HubOwnsGroups(hubId:groupCount: UInt32)`, `LastHub(hubId:)`, `HomeHub(hubId:)`, `HubNotDrained(hubId:reason:)` |
 
 `GimError` keeps the generated UpperCamelCase case names (hence the `swift-format-ignore: AlwaysUseLowerCamelCase`
 on its declaration) and conforms to `Error, Sendable, Hashable, LocalizedError` with
@@ -55,6 +57,7 @@ on its declaration) and conforms to `Error, Sendable, Hashable, LocalizedError` 
 | `TimelineListener` | `TimelineListener` | `onUpdate(diffs: [TimelineDiff])` |
 | `ConnectionStateListener` | `ConnectionStateListener` | `onChange(state: ConnectionState)` |
 | `TypingListener` | `TypingListener` | `onUpdate(userIds: [String])` |
+| `HubListListener` | `HubListListener` | `onUpdate(hubs: [HubInfo])` |
 | `PlatformHooks` | `PlatformHooks` | `secureStoreGet(key:) throws -> Data?`, `secureStoreSet(key:value:) throws`, `secureStoreDelete(key:)`, `dataDir() -> String`, `isNetworkReachable() -> Bool` |
 | `LocalTimeZone` | `LocalTimeZone` | `utcOffsetSecs(atMs: Int64) -> Int32` |
 
@@ -77,7 +80,7 @@ generated code writes the bare protocol name, which is the same type.
 
 ## GimClient methods
 
-Every method of `GimClientProtocol` at `d5ead6d`, with identical labels, argument types and `async`/`throws`. The
+Every method of `GimClientProtocol` at `50f7915`, with identical labels, argument types and `async`/`throws`. The
 only type differences are `any Timeline` / `any LinkSession` / `any PendingApproval` (generated: the classes) and the
 listener parameter spelling above.
 
@@ -130,12 +133,60 @@ listener parameter spelling above.
 | `setLocalTimeZone(zone: (any LocalTimeZone)?)` | `zone: LocalTimeZone?` (synchronous, never throws) |
 | `connectionState(listener:) async throws -> TaskHandle` | same |
 | `typing(chatId:listener:) async throws -> TaskHandle` | same |
+| `hubs() async throws -> [HubInfo]` | same |
+| `addHub(url:) async throws -> HubInfo` | same |
+| `removeHub(hubId:confirmOwnedGroups:) async throws` | same |
+| `setPrimaryHub(hubId:) async throws` | same |
+| `hubList(listener:) async throws -> TaskHandle` | same |
 
 `chatMembers` has no listener in M1. `GroupInfoViewModel` queries it again when a `ChatListDiff` changes that chat or
 a `TimelineItem.membershipChange` arrives. When a query fails before any list has loaded it shows the error with
 `ChatSummary.memberCount` (no member list, no removal); a list that loaded before stays on later failures.
 Renaming a group goes `GroupInfoViewModel.saveName()` → `GimClientAPI.setGroupInfo(name:)` →
 `RealGimClient` → `GIMCore.GimClient.setGroupInfo`.
+
+## Changes since `d5ead6d`
+
+`50f7915` (built on the macOS host from gim-core `50f7915` with `scripts/build-xcframework.sh`, the CI size gate and
+the 4 link tests, then vendored with `scripts/sync-gim-core.sh --from-dir`; local database schema v6, see below). Diff
+of the generated `GIMCore.swift`:
+
+- Hub management (gim-core `docs/API.md`, "Hub management"): `GimClientProtocol.hubs()`, `addHub(url:)`,
+  `removeHub(hubId:confirmOwnedGroups:)`, `setPrimaryHub(hubId:)` (all async, throwing) and
+  `hubList(listener:) -> TaskHandle`; record `HubInfo`, enum `HubState { unverified, verified, removed }`, callback
+  interface `HubListListener` (`onUpdate(hubs:)`, the current list first, then on every possible registry change).
+  `hubs()` lists primary first (priority, then hub id), removed hubs included; the first hub not removed is
+  `isPrimary`.
+- `GimError`: new cases 13–17, appended after `ChatNotActive`: `HubNotVerified(reason:)` (the server at a URL did not
+  prove it is that hub, URL-bound hub proof and `AuthChallenge` v2, gim-core `docs/identity.md`, "Hub proof of
+  possession"; the device did not sign in there), `HubOwnsGroups(hubId:groupCount: UInt32)`, `LastHub(hubId:)`,
+  `HomeHub(hubId:)`, `HubNotDrained(hubId:reason:)` (all from `removeHub`). `addHub` reports a URL that does not serve
+  a gim hub as `InvalidInput`.
+- Multi-hub receive and submit (primary/fallback, per-hub cursors and KeyPackages, read fallback): behaviour only, no
+  further signature change. With a single hub nothing changes.
+
+Schema: `0005_hub_cursors.sql` and `0006_key_package_ledger.sql` are forward migrations (v4 → v5 → v6, keeping rows;
+`migrates_a_v4_database_keeping_its_rows`, `migrates_a_v5_database_keeping_its_rows`), so `localStateReset()` stays
+`false` and `AppModel`'s routing is unchanged (`AppModelTests`). Caveat: `0004_hubs.sql` was edited in place after
+`d5ead6d` (new column `hubs.url_shared`), so a v4 database written by `d5ead6d` lacks that column after the migration
+and gim-core's hub reads fail with "no such column: url_shared" instead of a reset; reported to the gim-core
+workstream.
+
+App adaptations:
+
+- Mirror and `CoreMapping`: `HubInfo`/`HubState` core → mirror, the five errors both ways; `RealGimClient` forwards
+  the five methods; `CoreHubListListener` converts and hops to the main queue through `MainQueueRelay` like the other
+  listeners, never calling the client.
+- `FakeGimClient` keeps a deterministic hub registry. The home hub is `homeHubUrl` (`createClient` passes
+  `ClientConfig.serverUrl`; default `defaultHomeHubUrl`), with hub id `hubId(forUrl:)` (`hub-` and the host). `addHub`
+  validates the URL like `createClient` (`InvalidInput("url: …")`), throws `HubNotVerified` for a URL containing
+  "unverified", lists the hub last as `unverified` and makes it `verified` and signed in `hubVerifyDelay` later.
+  `setPrimaryHub` reorders like gim-core (`InvalidInput` for an unlisted hub or a reprioritized hub without a
+  session). `removeHub` checks in gim-core's order: unlisted (`InvalidInput`), `HomeHub`, `LastHub`, `HubOwnsGroups`
+  (`simulateOwnedGroups(hubId:count:)`) unless confirmed, `HubNotDrained` once for a URL containing "busy"; the hub
+  stays listed as `removed`. `simulateHubSharedByOtherDevice(url:)` and `simulateHubRemovedElsewhere(hubId:)` play
+  the other own devices (the latter also makes `LastHub` reachable). `signOut` resets the registry to the home hub.
+- `ErrorPresenter` maps the five errors (e.g. "This hub hosts 3 groups you own."); I3b-3 may refine the wording.
 
 ## Changes since `7077421`
 
