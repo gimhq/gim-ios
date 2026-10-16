@@ -3,7 +3,7 @@
 `Packages/GIMKit/Sources/GIMClientKit` mirrors the UniFFI Swift bindings of gim-core so that switching to the real
 `GIMCore.xcframework` is a mechanical swap.
 
-- Mirrored commit: gim-core `7077421` (`bindings/gim-ffi/src/`, generated
+- Mirrored commit: gim-core `d5ead6d` (`bindings/gim-ffi/src/`, generated
   `bindings/gim-ffi/generated/swift/GIMCore.swift`, contract in `docs/API.md`).
 - Mirror sources: `GimClientAPI.swift` (objects, callback interfaces, hooks, `createClient`) and `Models.swift`
   (records, enums, diffs, errors).
@@ -21,7 +21,7 @@ Generated records are `Equatable, Hashable` plus `extension …: Sendable`; the 
 | `Session` | `Session` | `userId`, `deviceId`, `handle` (empty until `claimHandle`), `displayName` |
 | `DeviceInfo` | `DeviceInfo` | `deviceId`, `createdAtMs: UInt64` (0 for revoked devices), `isCurrent`, `revoked` |
 | `UserProfile` | `UserProfile` | `userId`, `handle`, `displayName` |
-| `ChatSummary` | `ChatSummary` | `chatId`, `kind`, `name`, `avatar: MediaRef?`, `lastMessage: MessagePreview?`, `unreadCount: UInt32`, `updatedAtMs: UInt64`, `memberCount: UInt32` |
+| `ChatSummary` | `ChatSummary` | `chatId`, `kind`, `name`, `avatar: MediaRef?`, `lastMessage: MessagePreview?`, `unreadCount: UInt32`, `updatedAtMs: UInt64`, `memberCount: UInt32`, `state: ChatState` |
 | `MessagePreview` | `MessagePreview` | `senderName`, `text`, `sentAtMs: UInt64`, `isOwn` |
 | `MessageItem` | `MessageItem` | `messageId`, `chatId`, `sender: UserProfile`, `isOwn`, `sentAtMs: UInt64`, `content`, `replyTo: ReplyPreview?`, `reactions: [ReactionGroup]`, `edited`, `sendState: SendState?` |
 | `MediaRef` | `MediaRef` | `chatId`, `messageId`, `mime`, `size: UInt64`, `hasThumbnail` |
@@ -33,14 +33,15 @@ Generated records are `Equatable, Hashable` plus `extension …: Sendable`; the 
 | Mirror | GIMCore | Cases |
 |---|---|---|
 | `ChatKind` | `ChatKind` | `direct`, `group` |
-| `TimelineItem` | `TimelineItem` | `message(item:)`, `dateSeparator(dayStartMs:)`, `membershipChange(userName:change:atMs:)` |
+| `ChatState` | `ChatState` | `active`, `leaving`, `left` |
+| `TimelineItem` | `TimelineItem` | `message(item:)`, `dateSeparator(dayStartMs:)`, `membershipChange(userName:change:atMs:userId:actorUserId:)` (`actorUserId: String?`) |
 | `MembershipChangeKind` | `MembershipChangeKind` | `added`, `removed`, `left` |
 | `MessageContent` | `MessageContent` | `text(body:)`, `image(media:width:height:caption:)`, `file(media:fileName:caption:)`, `deleted`, `unsupported` |
 | `SendState` | `SendState` | `pending`, `sent`, `delivered`, `read`, `failed(reason:)` |
 | `ConnectionState` | `ConnectionState` | `offline`, `connecting`, `connected`, `syncing` |
 | `ChatListDiff` | `ChatListDiff` | `append(values:)`, `clear`, `pushFront(value:)`, `pushBack(value:)`, `popFront`, `popBack`, `insert(index:value:)`, `set(index:value:)`, `remove(index:)`, `truncate(length:)`, `reset(values:)` |
 | `TimelineDiff` | `TimelineDiff` | same cases as `ChatListDiff`, with `TimelineItem` values |
-| `GimError` | `GimError` | `Network(reason:)`, `NotRegistered`, `InvalidInput(reason:)`, `NotFound(reason:)`, `Crypto(reason:)`, `Storage(reason:)`, `Server(status: UInt16, reason:)`, `RetryLater(status: UInt16, retryAfterSecs: UInt64, reason:)`, `Cancelled`, `NotImplemented`, `Internal(reason:)` |
+| `GimError` | `GimError` | `Network(reason:)`, `NotRegistered`, `InvalidInput(reason:)`, `NotFound(reason:)`, `Crypto(reason:)`, `Storage(reason:)`, `Server(status: UInt16, reason:)`, `RetryLater(status: UInt16, retryAfterSecs: UInt64, reason:)`, `Cancelled`, `NotImplemented`, `Internal(reason:)`, `ChatNotActive(chatId:state: ChatState)` |
 
 `GimError` keeps the generated UpperCamelCase case names (hence the `swift-format-ignore: AlwaysUseLowerCamelCase`
 on its declaration) and conforms to `Error, Sendable, Hashable, LocalizedError` with
@@ -65,7 +66,7 @@ generated code writes the bare protocol name, which is the same type.
 | Mirror | GIMCore | Notes |
 |---|---|---|
 | `protocol GimClientAPI` | `protocol GimClientProtocol` / `open class GimClient` | Intentional: ViewModels depend on the protocol so `FakeGimClient` can implement it. |
-| `protocol Timeline` | `open class Timeline: TimelineProtocol` | Intentional: protocol instead of class. `chatId()`, `addListener(listener:) async -> TaskHandle`, `paginateBackwards(count: UInt16) async throws -> Bool`. |
+| `protocol Timeline` | `open class Timeline: TimelineProtocol` | Intentional: protocol instead of class. `chatId()`, `addListener(listener:) async -> TaskHandle`, `paginateBackwards(count: UInt16) async throws -> Bool`, `chatState() -> ChatState?` (synchronous). |
 | `protocol LinkSession` | `open class LinkSession: LinkSessionProtocol` | Intentional: protocol instead of class. `qrString() -> String`. `RealGimClient.waitLink` only accepts the `RealLinkSession` it created. |
 | `protocol PendingApproval` | `open class PendingApproval: PendingApprovalProtocol` | Intentional: protocol instead of class. `deviceId() -> String`, `sas() -> String`. `RealGimClient.confirmApproval` only accepts the `RealPendingApproval` it created. |
 | `final class TaskHandle` | `open class TaskHandle: TaskHandleProtocol` | Intentional: concrete class with `init(onCancel:)`. `cancel()`, `isFinished() -> Bool`; releasing the last reference cancels, like the Rust `Drop`. No `TaskHandleProtocol` mirror. |
@@ -76,7 +77,7 @@ generated code writes the bare protocol name, which is the same type.
 
 ## GimClient methods
 
-Every method of `GimClientProtocol` at `7077421`, with identical labels, argument types and `async`/`throws`. The
+Every method of `GimClientProtocol` at `d5ead6d`, with identical labels, argument types and `async`/`throws`. The
 only type differences are `any Timeline` / `any LinkSession` / `any PendingApproval` (generated: the classes) and the
 listener parameter spelling above.
 
@@ -109,6 +110,7 @@ listener parameter spelling above.
 | `addMembers(chatId:userIds:) async throws` | same |
 | `removeMember(chatId:userId:) async throws` | same |
 | `leaveChat(chatId:) async throws` | same |
+| `chatState(chatId:) async throws -> ChatState` | same; `NotFound` for an unknown chat |
 | `setGroupInfo(chatId:name:avatarFilePath:) async throws` | same; at least one of `name`/`avatarFilePath` must be set, `InvalidInput` for direct chats |
 | `sendText(chatId:body:replyTo:) async throws -> String` | same |
 | `sendMedia(chatId:filePath:mime:caption:replyTo:) async throws -> String` | same |
@@ -134,6 +136,57 @@ a `TimelineItem.membershipChange` arrives. When a query fails before any list ha
 `ChatSummary.memberCount` (no member list, no removal); a list that loaded before stays on later failures.
 Renaming a group goes `GroupInfoViewModel.saveName()` → `GimClientAPI.setGroupInfo(name:)` →
 `RealGimClient` → `GIMCore.GimClient.setGroupInfo`.
+
+## Changes since `7077421`
+
+`d5ead6d` (built on the macOS host from gim-core `d5ead6d` with `scripts/build-xcframework.sh`, the CI size gate and
+the 4 link tests, then vendored with `scripts/sync-gim-core.sh --from-dir`; local database schema v4, migrated from v3
+by gim-core, see below). Diff of the generated `GIMCore.swift`:
+
+- Added `enum ChatState { active, leaving, left }`, `ChatSummary.state`, `GimClientProtocol.chatState(chatId:)` (async,
+  throws, `NotFound` for an unknown chat; local state, no network) and `TimelineProtocol.chatState() -> ChatState?`
+  (synchronous, `nil` while the chat is not known locally). A chat is `leaving` once `leaveChat` returned (also across
+  restarts; calling it again re-sends the leave), `left` once removed (after leaving, by another member or hub-side);
+  history is kept and the chat stays in the list. Transitions arrive as a `set` of the row.
+- `GimError.ChatNotActive(chatId:state:)` (new case 12): sends and changes to a `leaving`/`left` chat (`sendText`,
+  `sendMedia`, `editMessage`, `deleteMessage`, `react`, `unreact`, `retrySend`, `setGroupInfo`, `addMembers`,
+  `removeMember`; `leaveChat` once `left`) throw it instead of `InvalidInput("invalid state: leaving chat …")`.
+- `TimelineItem.membershipChange` gains `userId` (who joined or left; the own `left` carries the own user id) and
+  `actorUserId: String?` (the adder/remover, the user themselves for `left`, `nil` if unknown; an invitee that could
+  not be added is `removed` by the inviter).
+- Typed 4xx semantics, no signature change: a 4xx is a definite rejection that gim-core does not resend
+  (`Server(403, …)`, `InvalidInput` for 400 `validation_failed`/422); a 5xx, 408 or 429 is resent unchanged. A
+  rejected message send still returns its id and the message is `SendState.failed(reason:)` at once (the reason is
+  gim-core's error text); `SendState` is unchanged.
+- Hub registry (multi-homing groundwork): internal to gim-core, nothing generated for the app.
+- Doc-only (checksums changed): `leaveChat`, `signOut` (also stops the listeners and returns only after every callback
+  in flight returned, waiting at most 5 s; no callback runs afterwards). Every callback interface (`PlatformHooks`,
+  `LocalTimeZone`, the four listeners) is now called on gim-core's single `gim-callbacks` thread, one call at a time;
+  objects passed in may be released there.
+
+Schema: `0004_hubs.sql` adds the `hubs` table; gim-core migrates a v3 database (written by `7077421`) in place,
+keeping its rows (`migrates_a_v3_database_keeping_its_rows`), so `localStateReset()` stays `false` after the update.
+Only a database it cannot open (wrong key, foreign `application_id`, or a schema newer than the build, e.g. after a
+downgrade back to `7077421`) is discarded with `localStateReset() == true`, which `AppModel` routes to onboarding with
+the "local history was lost" notice (D5; `AppModelTests`).
+
+App adaptations:
+
+- Mirror and `CoreMapping`: `ChatState` both ways (core → mirror for summaries and `chatState`, mirror → core for
+  `ChatNotActive` thrown back from hooks), the new `membershipChange` fields, `RealGimClient.chatState(chatId:)` and
+  `RealTimeline.chatState()`.
+- `FakeGimClient` keeps a `ChatState` per chat: `leaveChat` → `leaving` → `left` after `leaveCommitDelay` (with the own
+  `left` change; a repeated `leaveChat` while leaving does not restart it), `simulateRemoval(chatId:by:)` → `left` at
+  once with the own `removed` change; left chats stay in the list with their history (they used to be removed).
+  Sends and changes to a chat that is not `active` throw `ChatNotActive` (the `InvalidInput("invalid state: leaving
+  chat …")` is gone). Membership changes carry `userId`/`actorUserId`. `rejectNextSend(status:code:)` (default 403
+  `not_member`) makes the next own send `failed` at once with `"rejected (403 not_member)"`, without resending.
+- `ErrorPresenter` maps `ChatNotActive` to a neutral "no longer a member" text; `LeavingChats.isLeavingRefusal`
+  recognizes `ChatNotActive(_, .leaving)` (and still the old reason text). The screens switch to `ChatState` in I3a-2.
+- Callback threading (gim-core `docs/API.md`, "Threading of platform callbacks"): the listener adapters convert and hop
+  to the main queue; `CorePlatformHooks`/`KeychainSecureStorage`, `CoreLocalTimeZone`/`SystemLocalTimeZone` answer
+  directly without calling the client. `MainQueueRelay` now cancels and releases the gim-core `TaskHandle` on the main
+  queue: a stream listener released by gim-core on its callback thread (after `signOut`) cancels its subscription there.
 
 ## Changes since `3724543`
 

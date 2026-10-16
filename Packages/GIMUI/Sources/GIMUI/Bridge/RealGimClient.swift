@@ -141,6 +141,10 @@ public final class RealGimClient: GimClientAPI {
         try await bridged { try await core.leaveChat(chatId: chatId) }
     }
 
+    public func chatState(chatId: String) async throws -> GIMClientKit.ChatState {
+        try await bridged { GIMClientKit.ChatState(try await core.chatState(chatId: chatId)) }
+    }
+
     public func setGroupInfo(chatId: String, name: String?, avatarFilePath: String?) async throws {
         try await bridged { try await core.setGroupInfo(chatId: chatId, name: name, avatarFilePath: avatarFilePath) }
     }
@@ -257,6 +261,10 @@ final class RealTimeline: GIMClientKit.Timeline {
 
     func paginateBackwards(count: UInt16) async throws -> Bool {
         try await bridged { try await core.paginateBackwards(count: count) }
+    }
+
+    func chatState() -> GIMClientKit.ChatState? {
+        core.chatState().map { GIMClientKit.ChatState($0) }
     }
 }
 

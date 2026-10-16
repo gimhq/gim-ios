@@ -71,7 +71,7 @@ public final class TimelineItemBuilder {
                 append(TimelineDisplayItem.id(forMessage: message.messageId), .message(row))
             case .dateSeparator(let dayStartMs):
                 append("day:\(dayStartMs)", .dateSeparator(dayLabel(dayStartMs)))
-            case .membershipChange(let userName, let change, let atMs):
+            case .membershipChange(let userName, let change, let atMs, _, _):
                 append("member:\(atMs):\(userName):\(change)", .membership(Self.membershipText(userName, change)))
             }
         }

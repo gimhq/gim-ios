@@ -46,6 +46,8 @@ extension GIMClientKit.GimError {
         case .Cancelled: self = .Cancelled
         case .NotImplemented: self = .NotImplemented
         case .Internal(let reason): self = .Internal(reason: reason)
+        case .ChatNotActive(let chatId, let state):
+            self = .ChatNotActive(chatId: chatId, state: GIMClientKit.ChatState(state))
         }
     }
 }
@@ -66,6 +68,28 @@ extension GIMCore.GimError {
         case .Cancelled: self = .Cancelled
         case .NotImplemented: self = .NotImplemented
         case .Internal(let reason): self = .Internal(reason: reason)
+        case .ChatNotActive(let chatId, let state):
+            self = .ChatNotActive(chatId: chatId, state: GIMCore.ChatState(state))
+        }
+    }
+}
+
+extension GIMClientKit.ChatState {
+    init(_ core: GIMCore.ChatState) {
+        switch core {
+        case .active: self = .active
+        case .leaving: self = .leaving
+        case .left: self = .left
+        }
+    }
+}
+
+extension GIMCore.ChatState {
+    init(_ mirror: GIMClientKit.ChatState) {
+        switch mirror {
+        case .active: self = .active
+        case .leaving: self = .leaving
+        case .left: self = .left
         }
     }
 }
@@ -110,7 +134,7 @@ extension GIMClientKit.ChatSummary {
             chatId: core.chatId, kind: GIMClientKit.ChatKind(core.kind), name: core.name,
             avatar: core.avatar.map { GIMClientKit.MediaRef($0) },
             lastMessage: core.lastMessage.map { GIMClientKit.MessagePreview($0) }, unreadCount: core.unreadCount,
-            updatedAtMs: core.updatedAtMs, memberCount: core.memberCount)
+            updatedAtMs: core.updatedAtMs, memberCount: core.memberCount, state: GIMClientKit.ChatState(core.state))
     }
 }
 
@@ -135,8 +159,10 @@ extension GIMClientKit.TimelineItem {
             self = .message(item: GIMClientKit.MessageItem(item))
         case .dateSeparator(let dayStartMs):
             self = .dateSeparator(dayStartMs: dayStartMs)
-        case .membershipChange(let userName, let change, let atMs):
-            self = .membershipChange(userName: userName, change: GIMClientKit.MembershipChangeKind(change), atMs: atMs)
+        case .membershipChange(let userName, let change, let atMs, let userId, let actorUserId):
+            self = .membershipChange(
+                userName: userName, change: GIMClientKit.MembershipChangeKind(change), atMs: atMs, userId: userId,
+                actorUserId: actorUserId)
         }
     }
 }

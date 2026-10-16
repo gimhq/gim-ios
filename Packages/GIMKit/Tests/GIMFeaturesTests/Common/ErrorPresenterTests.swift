@@ -29,6 +29,7 @@ final class ErrorPresenterTests: XCTestCase {
             (.Cancelled, "The operation was cancelled."),
             (.NotImplemented, "This isn't available in this version yet."),
             (.Internal(reason: "sqlite busy"), "Something went wrong. Please try again."),
+            (.ChatNotActive(chatId: "h/g1", state: .left), "You're no longer a member of this chat."),
         ]
         for (error, message) in cases {
             XCTAssertEqual(ErrorPresenter.message(for: error), message, "\(error)")
