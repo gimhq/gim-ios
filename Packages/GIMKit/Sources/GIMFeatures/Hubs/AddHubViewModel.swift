@@ -36,7 +36,7 @@ public final class AddHubViewModel {
         do {
             addedHub = try await client.addHub(url: OnboardingValidation.normalizedServerUrl(url))
         } catch {
-            errorMessage = ErrorPresenter.message(for: error)
+            errorMessage = await ErrorPresenter.message(for: error, client: client)
         }
     }
 }

@@ -13,8 +13,8 @@ import UniformTypeIdentifiers
 public final class TimelineViewController: UIViewController, UICollectionViewDelegate {
     /// Called by the default context menu's Reply action.
     public var onReply: ((MessageItem) -> Void)?
-    /// Builds the long-press menu of a message; `nil` (the default) shows Reply, Copy and, for failed messages,
-    /// Retry. Return `nil` from the provider for no menu.
+    /// Builds the long-press menu of a message; `nil` (the default) shows Reply, Copy and, for failed messages that
+    /// can be resent (`MessageActionsViewModel.canRetry`), Retry. Return `nil` from the provider for no menu.
     public var contextMenuProvider: ((MessageItem) -> UIMenu?)?
 
     private let viewModel: TimelineViewModel
@@ -481,7 +481,7 @@ public final class TimelineViewController: UIViewController, UICollectionViewDel
                     UIPasteboard.general.string = body
                 })
         }
-        if case .failed = message.sendState {
+        if MessageActionsViewModel.canRetry(message) {
             let viewModel = viewModel
             let messageId = message.messageId
             actions.append(

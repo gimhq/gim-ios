@@ -131,7 +131,7 @@ public final class GroupInfoViewModel {
             guard claimResult(generation) else { return }
             // A list that loaded before stays; it is only stale until the next query.
             if members == nil { membersUnavailable = true }
-            errorMessage = ErrorPresenter.message(for: error)
+            errorMessage = await ErrorPresenter.message(for: error, client: client)
         }
     }
 
@@ -200,7 +200,7 @@ public final class GroupInfoViewModel {
         do {
             try await client.setGroupInfo(chatId: chatId, name: name, avatarFilePath: nil)
         } catch {
-            errorMessage = ErrorPresenter.message(for: error)
+            errorMessage = await ErrorPresenter.message(for: error, client: client)
         }
     }
 
@@ -215,7 +215,7 @@ public final class GroupInfoViewModel {
             hasLeft = true
             errorMessage = nil
         } catch {
-            errorMessage = ErrorPresenter.message(for: error)
+            errorMessage = await ErrorPresenter.message(for: error, client: client)
         }
     }
 
@@ -228,7 +228,7 @@ public final class GroupInfoViewModel {
         do {
             guard try await change() else { return }
         } catch {
-            errorMessage = ErrorPresenter.message(for: error)
+            errorMessage = await ErrorPresenter.message(for: error, client: client)
             return
         }
         await load()

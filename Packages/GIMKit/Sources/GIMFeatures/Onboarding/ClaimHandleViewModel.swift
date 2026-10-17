@@ -45,7 +45,7 @@ public final class ClaimHandleViewModel {
             errorMessage = Self.takenMessage
             return
         } catch {
-            errorMessage = ErrorPresenter.message(for: error)
+            errorMessage = await ErrorPresenter.message(for: error, client: client)
             return
         }
         await finish()

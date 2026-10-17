@@ -60,7 +60,7 @@ public final class ApproveLinkViewModel {
             newDeviceId = approval.deviceId()
             sas = approval.sas()
         } catch {
-            errorMessage = ErrorPresenter.message(for: error)
+            errorMessage = await ErrorPresenter.message(for: error, client: client)
         }
     }
 
@@ -75,7 +75,7 @@ public final class ApproveLinkViewModel {
             self.approval = nil
             outcome = codesMatch ? .linked : .rejected
         } catch {
-            errorMessage = ErrorPresenter.message(for: error)
+            errorMessage = await ErrorPresenter.message(for: error, client: client)
         }
     }
 

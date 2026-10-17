@@ -57,7 +57,7 @@ public final class NewGroupViewModel {
             if !members.contains(where: { $0.userId == user.userId }) { members.append(user) }
             memberHandle = ""
         } catch {
-            memberError = ErrorPresenter.message(for: error)
+            memberError = await ErrorPresenter.message(for: error, client: client)
         }
     }
 
@@ -78,7 +78,7 @@ public final class NewGroupViewModel {
             errorMessage = Self.noneFoundMessage
             return nil
         } catch {
-            errorMessage = ErrorPresenter.message(for: error)
+            errorMessage = await ErrorPresenter.message(for: error, client: client)
             return nil
         }
     }

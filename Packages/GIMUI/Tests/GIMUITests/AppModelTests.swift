@@ -371,6 +371,31 @@ final class AppModelTests: XCTestCase {
     }
 
     @MainActor
+    func testSuspensionKeepsTheAppSignedInWithoutWiping() async throws {
+        let session = session
+        let hooks = MemoryHooks()
+        let client = FakeGimClient(session: session)
+        await client.simulateSuspension(hubId: FakeGimClient.hubId(forUrl: "https://gim.example.eu"))
+        let defaults = makeDefaults()
+        defaults.set("https://gim.example.eu", forKey: AppModel.serverUrlKey)
+        let model = makeModel(factory: ClientFactory(client), defaults: defaults, hooks: hooks)
+
+        await model.start()
+        await model.scenePhaseChanged(.active)
+        await model.refreshSession()
+        let devices = DevicesViewModel(client: client)
+        await devices.load()
+
+        XCTAssertEqual(devices.errorMessage, ErrorPresenter.message(for: GimError.UserSuspended(hubId: "")))
+        guard case .ready = model.phase else { return XCTFail("expected ready, got \(model.phase)") }
+        XCTAssertEqual(model.session, session)
+        XCTAssertNil(model.launchError)
+        XCTAssertEqual(hooks.wipeCount, 0)
+        let kept = try await client.session()
+        XCTAssertEqual(kept, session, "not signed out")
+    }
+
+    @MainActor
     func testHeldSyncStaysStoppedWhileActiveUntilReleased() async throws {
         let session = session
         let scheduler = ManualFakeScheduler()

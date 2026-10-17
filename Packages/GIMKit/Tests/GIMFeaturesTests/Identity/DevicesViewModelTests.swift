@@ -34,6 +34,19 @@ final class DevicesViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testSuspensionIsPresentedAndKeepsTheSession() async throws {
+        let client = FakeGimClient(session: session)
+        await client.simulateSuspension(hubId: FakeGimClient.hubId(forUrl: FakeGimClient.defaultHomeHubUrl))
+        let viewModel = DevicesViewModel(client: client)
+
+        await viewModel.load()
+
+        XCTAssertEqual(viewModel.errorMessage, ErrorPresenter.message(for: GimError.UserSuspended(hubId: "")))
+        let kept = try await client.session()
+        XCTAssertEqual(kept, session)
+    }
+
+    @MainActor
     func testRevokeMarksTheDeviceRevokedAndMovesItLast() async {
         let client = FakeGimClient(session: session)
         let viewModel = DevicesViewModel(client: client)

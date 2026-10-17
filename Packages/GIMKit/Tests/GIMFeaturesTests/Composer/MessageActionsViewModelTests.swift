@@ -32,6 +32,14 @@ final class MessageActionsViewModelTests: XCTestCase {
         XCTAssertEqual(MessageActionsViewModel.quickReactions.count, 6)
     }
 
+    func testASendRefusedForASuspensionOffersNoRetry() {
+        let message = makeMessage(sendState: .failed(reason: "user suspended on hub hub-gim.example.eu"))
+        XCTAssertFalse(MessageActionsViewModel.canRetry(message))
+        XCTAssertEqual(MessageActionsViewModel.actions(for: message), [.reply, .react, .copy, .edit, .delete])
+        XCTAssertTrue(MessageActionsViewModel.canRetry(makeMessage(sendState: .failed(reason: "x"))))
+        XCTAssertFalse(MessageActionsViewModel.canRetry(makeMessage()))
+    }
+
     func testReadOnlyChatOffersCopyAndDeleteOfUnsentMessages() {
         XCTAssertEqual(MessageActionsViewModel.actions(for: makeMessage(), isReadOnly: true), [.copy])
         XCTAssertEqual(MessageActionsViewModel.actions(for: makeMessage(isOwn: false), isReadOnly: true), [.copy])

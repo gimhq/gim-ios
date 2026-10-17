@@ -61,7 +61,7 @@ public final class NewChatViewModel {
             startError = Self.notFoundMessage
             return nil
         } catch {
-            startError = ErrorPresenter.message(for: error)
+            startError = await ErrorPresenter.message(for: error, client: client)
             return nil
         }
     }
@@ -89,7 +89,7 @@ public final class NewChatViewModel {
                 return
             } catch {
                 guard !Task.isCancelled else { return }
-                self?.state = .error(ErrorPresenter.message(for: error))
+                self?.state = .error(await ErrorPresenter.message(for: error, client: client))
             }
         }
     }

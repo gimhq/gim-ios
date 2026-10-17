@@ -17,6 +17,12 @@ final class CoreMappingTests: XCTestCase {
             .extension)
     }
 
+    func testUserSuspendedMapsBothWays() {
+        XCTAssertEqual(
+            GIMClientKit.GimError(GIMCore.GimError.UserSuspended(hubId: "hub-a")), .UserSuspended(hubId: "hub-a"))
+        XCTAssertEqual(GIMCore.GimError(GIMClientKit.GimError.UserSuspended(hubId: "")), .UserSuspended(hubId: ""))
+    }
+
     func testPushRegistrationMapsEveryField() {
         let mirror = GIMClientKit.PushRegistration(
             provider: "unifiedpush", token: "https://push.example.eu/up/abc", appId: "im.g.apps", sandbox: false,
