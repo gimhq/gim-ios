@@ -30,7 +30,9 @@ The app uses gim-core by default. Debug builds run against the in-memory `FakeGi
 ## Default server
 
 Onboarding pre-fills the last used server, else the `-GIMDefaultServerURL <url>` launch argument, else the
-`GIM_DEFAULT_SERVER_URL` build setting (Debug: `http://localhost:8080`, Release: empty).
+`GIM_DEFAULT_SERVER_URL` build setting (Debug: `http://localhost:8080`, Release: `https://hub.g.im`), else the
+built-in `https://hub.g.im`. That hub is not deployed yet: it is only pre-filled, nothing probes it, and the tests
+always pass explicit hub URLs.
 
 ## Push
 
