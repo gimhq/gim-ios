@@ -316,4 +316,26 @@ final class FakeGimClientHubTests: XCTestCase {
 
         XCTAssertEqual(recorder.events, [[homeInfo(signedIn: false)]])
     }
+
+    func testSuspensionRefusesCallsThatNeedASessionAndKeepsTheSession() async throws {
+        let client = try makeClient()
+        try await addVerified(client, secondUrl)
+
+        await client.simulateSuspension(hubId: second)
+
+        await assertThrows(.UserSuspended(hubId: second)) { _ = try await client.devices() }
+        await assertThrows(.UserSuspended(hubId: second)) {
+            _ = try await client.addHub(url: "https://hub3.example.eu")
+        }
+        let session = try await client.session()
+        XCTAssertEqual(session, me, "the session is kept")
+        let hubs = try await client.hubs()
+        XCTAssertEqual(hubs.map(\.hubId), [home, second])
+        try await client.startSync()
+
+        await client.simulateSuspension(hubId: nil)
+
+        let devices = try await client.devices()
+        XCTAssertFalse(devices.isEmpty)
+    }
 }

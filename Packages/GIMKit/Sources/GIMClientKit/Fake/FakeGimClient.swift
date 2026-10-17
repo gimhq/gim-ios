@@ -173,6 +173,8 @@ public actor FakeGimClient: GimClientAPI {
     private var sendFailuresRemaining = 0
     /// Status and error code of the hub's definite rejection of the next own send.
     private var nextSendRejection: (status: UInt16, code: String)?
+    /// Hub id of `simulateSuspension(hubId:)`; `nil` while the user is not suspended.
+    private var suspendedHubId: String?
     /// `ChatState` of every chat, for the synchronous `Timeline.chatState()`.
     private let chatStates = Mutex<[String: ChatState]>([:])
     private var fetchMediaFailure: GimError?
@@ -301,6 +303,14 @@ public actor FakeGimClient: GimClientAPI {
             throw GimError.NotFound(reason: "member \(actorUserId)")
         }
         markLeft(chatId, change: .removed, actorUserId: actorUserId)
+    }
+
+    /// Simulates an admin of the hub `hubId` (empty: a home hub without a hub identity) suspending the user; `nil`
+    /// lifts it. Like gim-core, every call that needs a session then throws `UserSuspended(hubId:)`, while the session,
+    /// the local chats and `hubs()` stay. Own sends are still accepted and end `failed` with gim-core's reason
+    /// (`user suspended on hub <hubId>`), and `startSync` still starts the sync loop.
+    public func simulateSuspension(hubId: String?) {
+        suspendedHubId = hubId
     }
 
     /// The next `fetchMedia` call throws `error` (for example `.RetryLater`); later calls succeed again.
@@ -631,7 +641,7 @@ public actor FakeGimClient: GimClientAPI {
         guard options.mode != .`extension` else {
             throw GimError.InvalidInput(reason: "no sync loop in extension mode")
         }
-        _ = try requireSession()
+        _ = try requireSession(allowingSuspension: true)
         syncRunning = true
         reconnect()
     }
@@ -1244,7 +1254,7 @@ public actor FakeGimClient: GimClientAPI {
     private func sendOwn(
         _ chatId: String, messageId: String, content: MessageContent, replyTo: String?
     ) throws -> String {
-        let session = try requireSession()
+        let session = try requireSession(allowingSuspension: true)
         try requireActive(existingChat(chatId))
         let reply = try replyTo.map { try replyPreview(for: $0, in: chatId) }
         let item = MessageItem(
@@ -1253,7 +1263,11 @@ public actor FakeGimClient: GimClientAPI {
             isOwn: true, sentAtMs: nowMs(), content: content, replyTo: reply, reactions: [], edited: false,
             sendState: .pending)
         appendEntry(.message(StoredMessage(item: item)), chatId)
-        if let rejection = nextSendRejection {
+        if let suspendedHubId {
+            updateMessage(chatId, messageId) {
+                $0.item.sendState = .failed(reason: "user suspended on hub \(suspendedHubId)")
+            }
+        } else if let rejection = nextSendRejection {
             nextSendRejection = nil
             updateMessage(chatId, messageId) {
                 $0.item.sendState = .failed(reason: "rejected (\(rejection.status) \(rejection.code))")
@@ -1345,8 +1359,10 @@ public actor FakeGimClient: GimClientAPI {
 
     // MARK: - State helpers
 
-    private func requireSession() throws -> Session {
+    /// The session; `UserSuspended` while `simulateSuspension(hubId:)` is on, unless `allowingSuspension`.
+    private func requireSession(allowingSuspension: Bool = false) throws -> Session {
         guard let session else { throw GimError.NotRegistered }
+        if let suspendedHubId, !allowingSuspension { throw GimError.UserSuspended(hubId: suspendedHubId) }
         return session
     }
 

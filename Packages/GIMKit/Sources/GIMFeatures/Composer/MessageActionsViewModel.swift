@@ -44,8 +44,14 @@ public final class MessageActionsViewModel {
         if copyText(for: message) != nil { actions.append(.copy) }
         if ComposerViewModel.canEdit(message) { actions.append(.edit) }
         if message.isOwn { actions.append(.delete) }
-        if case .failed = message.sendState { actions.append(.retry) }
+        if canRetry(message) { actions.append(.retry) }
         return actions
+    }
+
+    /// Whether a failed send can be resent: not when the hub refused it because the user is suspended there.
+    public nonisolated static func canRetry(_ message: MessageItem) -> Bool {
+        guard case .failed(let reason) = message.sendState else { return false }
+        return ErrorPresenter.suspendedHubId(failureReason: reason) == nil
     }
 
     private nonisolated static func isUnsent(_ message: MessageItem) -> Bool {
@@ -78,7 +84,7 @@ public final class MessageActionsViewModel {
                 try await client.react(chatId: chatId, messageId: message.messageId, emoji: emoji)
             }
         } catch {
-            fail(error)
+            await fail(error)
         }
     }
 
@@ -102,7 +108,7 @@ public final class MessageActionsViewModel {
                 try await client.deleteMessage(chatId: chatId, messageId: message.messageId)
             }
         } catch {
-            fail(error)
+            await fail(error)
         }
     }
 
@@ -112,8 +118,8 @@ public final class MessageActionsViewModel {
 
     /// `ChatNotActive` shows no error: gim-core moved the chat out of `active`, so the chat list and timeline bring
     /// the new state and the conversation turns read-only.
-    private func fail(_ error: any Error) {
+    private func fail(_ error: any Error) async {
         if case .ChatNotActive = error as? GimError { return }
-        errorMessage = ErrorPresenter.message(for: error)
+        errorMessage = await ErrorPresenter.message(for: error, client: client)
     }
 }

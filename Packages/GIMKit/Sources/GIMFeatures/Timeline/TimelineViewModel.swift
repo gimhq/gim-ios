@@ -129,7 +129,7 @@ public final class TimelineViewModel {
         do {
             hasMore = try await timeline.paginateBackwards(count: pageSize)
         } catch {
-            errorMessage = ErrorPresenter.message(for: error)
+            errorMessage = await ErrorPresenter.message(for: error, client: client)
         }
     }
 
@@ -145,13 +145,20 @@ public final class TimelineViewModel {
         }
     }
 
-    /// Sends a failed message again.
+    /// Sends a failed message again. A send the hub refused because the user is suspended there is not resent; the
+    /// suspension is explained instead.
     public func retry(messageId: String) async {
+        if case .failed(let reason)? = message(withId: messageId)?.sendState,
+            let hubId = ErrorPresenter.suspendedHubId(failureReason: reason)
+        {
+            errorMessage = await ErrorPresenter.message(for: GimError.UserSuspended(hubId: hubId), client: client)
+            return
+        }
         do {
             try await client.retrySend(chatId: chatId, messageId: messageId)
         } catch {
             guard !handleChatNotActive(error) else { return }
-            errorMessage = ErrorPresenter.message(for: error)
+            errorMessage = await ErrorPresenter.message(for: error, client: client)
         }
     }
 

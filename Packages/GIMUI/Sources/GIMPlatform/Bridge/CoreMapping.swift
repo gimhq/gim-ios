@@ -53,6 +53,7 @@ extension GIMClientKit.GimError {
         case .LastHub(let hubId): self = .LastHub(hubId: hubId)
         case .HomeHub(let hubId): self = .HomeHub(hubId: hubId)
         case .HubNotDrained(let hubId, let reason): self = .HubNotDrained(hubId: hubId, reason: reason)
+        case .UserSuspended(let hubId): self = .UserSuspended(hubId: hubId)
         }
     }
 }
@@ -80,6 +81,7 @@ extension GIMCore.GimError {
         case .LastHub(let hubId): self = .LastHub(hubId: hubId)
         case .HomeHub(let hubId): self = .HomeHub(hubId: hubId)
         case .HubNotDrained(let hubId, let reason): self = .HubNotDrained(hubId: hubId, reason: reason)
+        case .UserSuspended(let hubId): self = .UserSuspended(hubId: hubId)
         }
     }
 }

@@ -140,7 +140,7 @@ public final class HubsViewModel {
         do {
             try await operation(client)
         } catch {
-            errorMessage = ErrorPresenter.message(for: error)
+            errorMessage = await ErrorPresenter.message(for: error, client: client)
         }
     }
 
