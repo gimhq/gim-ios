@@ -73,7 +73,7 @@ targets:
           GIM_PUSH_PROVIDER: mock-ios-sim
           GIM_DEBUG_URL_SCHEME: gim-debug
         Release:
-          GIM_DEFAULT_SERVER_URL: ""
+          GIM_DEFAULT_SERVER_URL: https://hub.g.im
           GIM_PUSH_PROVIDER: ""
           GIM_DEBUG_URL_SCHEME: ""
   # Decrypts pushes with gim-core on the App Group's local state; links no SwiftUI (GIMPlatform, not GIMUI).

@@ -34,13 +34,16 @@ public enum OnboardingValidation {
         return nil
     }
 
+    /// The production hub: the last fallback of `defaultServerUrl`, only pre-filled, never probed.
+    public static let builtInServerUrl = "https://hub.g.im"
+
     /// The initial server field value: the first of the last used server, the launch argument and the bundled
-    /// default that is a valid server URL, normalised; empty when none is.
+    /// default that is a valid server URL, normalised; `builtInServerUrl` when none is.
     public static func defaultServerUrl(stored: String?, argument: String?, bundled: String?) -> String {
         for candidate in [stored, argument, bundled] {
             if let candidate, serverUrlError(candidate) == nil { return normalizedServerUrl(candidate) }
         }
-        return ""
+        return builtInServerUrl
     }
 
     /// Returns an error message, or `nil` when the normalised handle matches `^[a-z0-9_.]{3,32}$`.

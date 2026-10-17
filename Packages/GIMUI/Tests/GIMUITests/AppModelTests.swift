@@ -295,7 +295,7 @@ final class AppModelTests: XCTestCase {
         await model.start()
         guard case .onboarding = model.phase else { return XCTFail("expected onboarding, got \(model.phase)") }
         XCTAssertTrue(factory.configs.isEmpty, "no server URL yet, so no client")
-        XCTAssertEqual(model.onboarding?.serverUrl, "")
+        XCTAssertEqual(model.onboarding?.serverUrl, "https://hub.g.im")
 
         let onboarding = try XCTUnwrap(model.onboarding)
         onboarding.serverUrl = "http://192.168.1.20:8080"
