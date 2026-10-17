@@ -449,6 +449,11 @@ public enum GimError: Error, Sendable, Hashable, LocalizedError {
     /// Messages or membership changes sent through the hub are not settled yet, so it cannot be removed now; try again
     /// later.
     case HubNotDrained(hubId: String, reason: String)
+    /// An admin of the hub `hubId` suspended this user: the hub refuses to sign this device in. The session and the
+    /// local data are kept; show "account suspended" and do not retry or sign out. gim-core does not sign in there
+    /// again for 10 minutes and keeps using the user's other hubs meanwhile. `hubId` is empty if the home hub has no
+    /// hub identity.
+    case UserSuspended(hubId: String)
 
     public var errorDescription: String? {
         String(reflecting: self)

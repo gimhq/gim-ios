@@ -143,6 +143,49 @@ final class TimelineViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testSuspendedSendIsNotRetriedAndExplainsTheSuspension() async throws {
+        let (client, scheduler) = await connected(makeDemoClient())
+        let chatId = FakeGimClient.demoDirectChatId
+        let viewModel = await startedViewModel(client, chatId: chatId)
+        _ = try await client.addHub(url: "https://hub2.example.eu")
+        await scheduler.advance(by: FakeGimClient.hubVerifyDelay)
+        let hubId = FakeGimClient.hubId(forUrl: "https://hub2.example.eu")
+        await client.simulateSuspension(hubId: hubId)
+
+        let messageId = try await client.sendText(chatId: chatId, body: "Anchored off Hydra", replyTo: nil)
+
+        let reason = "user suspended on hub \(hubId)"
+        await eventually { self.status(viewModel, messageId) == .failed(reason: reason) }
+        let message = try XCTUnwrap(viewModel.message(withId: messageId))
+        XCTAssertFalse(MessageActionsViewModel.actions(for: message).contains(.retry))
+        XCTAssertTrue(MessageActionsViewModel.actions(for: message).contains(.delete))
+
+        await viewModel.retry(messageId: messageId)
+        await scheduler.runUntilIdle()
+
+        XCTAssertEqual(status(viewModel, messageId), .failed(reason: reason), "never resent")
+        XCTAssertEqual(
+            viewModel.errorMessage,
+            "Your account is suspended on hub2.example.eu. Your chats on this device stay readable. Contact the hub's"
+                + " operator to restore access.")
+        XCTAssertGreaterThan(messageCount(viewModel), 1, "the local chat stays readable")
+        let session = try await client.session()
+        XCTAssertNotNil(session, "no sign-out")
+    }
+
+    @MainActor
+    func testSuspendedCallShowsThePlainWordingWithOneHub() async throws {
+        let (client, _) = await connected(makeDemoClient())
+        let viewModel = await startedViewModel(client, chatId: FakeGimClient.demoGroupChatId)
+        await client.simulateSuspension(hubId: "")
+
+        await viewModel.retry(messageId: "missing")
+
+        XCTAssertEqual(viewModel.errorMessage, ErrorPresenter.message(for: GimError.UserSuspended(hubId: "")))
+        XCTAssertFalse(TimelineViewModel.isTemporaryMediaFailure(GimError.UserSuspended(hubId: "")))
+    }
+
+    @MainActor
     func testChatStateFollowsLeaveAndOwnLeftChange() async throws {
         let (client, scheduler) = await connected(makeDemoClient())
         let chatId = FakeGimClient.demoGroupChatId

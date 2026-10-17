@@ -166,7 +166,7 @@ public final class ComposerViewModel {
                 drafts[chatId] = ""
             }
         } catch {
-            fail(error)
+            await fail(error)
         }
     }
 
@@ -188,7 +188,7 @@ public final class ComposerViewModel {
         } catch let error as MediaPreparationError {
             errorMessage = error.message
         } catch {
-            fail(error)
+            await fail(error)
         }
         return false
     }
@@ -225,9 +225,9 @@ public final class ComposerViewModel {
     // MARK: - Private
 
     /// A send refused because the chat is not active makes the chat read-only instead of showing an error.
-    private func fail(_ error: any Error) {
+    private func fail(_ error: any Error) async {
         guard timeline?.handleChatNotActive(error) != true else { return }
-        errorMessage = ErrorPresenter.message(for: error)
+        errorMessage = await ErrorPresenter.message(for: error, client: client)
     }
 
     private nonisolated static func nonEmpty(_ value: String?) -> String? {

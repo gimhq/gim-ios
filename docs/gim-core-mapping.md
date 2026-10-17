@@ -3,7 +3,7 @@
 `Packages/GIMKit/Sources/GIMClientKit` mirrors the UniFFI Swift bindings of gim-core so that switching to the real
 `GIMCore.xcframework` is a mechanical swap.
 
-- Mirrored and vendored commit: gim-core `9c6022c`, GIMCore `0.1.0+9c6022c` (`bindings/gim-ffi/src/`, generated
+- Mirrored and vendored commit: gim-core `fa6f7e9`, GIMCore `0.1.0+fa6f7e9` (`bindings/gim-ffi/src/`, generated
   `bindings/gim-ffi/generated/swift/GIMCore.swift`, contract in `docs/API.md`).
 - Mirror sources: `GimClientAPI.swift` (objects, callback interfaces, hooks, `createClient`) and `Models.swift`
   (records, enums, diffs, errors).
@@ -48,7 +48,7 @@ Generated records are `Equatable, Hashable` plus `extension …: Sendable`; the 
 | `ConnectionState` | `ConnectionState` | `offline`, `connecting`, `connected`, `syncing` |
 | `ChatListDiff` | `ChatListDiff` | `append(values:)`, `clear`, `pushFront(value:)`, `pushBack(value:)`, `popFront`, `popBack`, `insert(index:value:)`, `set(index:value:)`, `remove(index:)`, `truncate(length:)`, `reset(values:)` |
 | `TimelineDiff` | `TimelineDiff` | same cases as `ChatListDiff`, with `TimelineItem` values |
-| `GimError` | `GimError` | `Network(reason:)`, `NotRegistered`, `InvalidInput(reason:)`, `NotFound(reason:)`, `Crypto(reason:)`, `Storage(reason:)`, `Server(status: UInt16, reason:)`, `RetryLater(status: UInt16, retryAfterSecs: UInt64, reason:)`, `Cancelled`, `NotImplemented`, `Internal(reason:)`, `ChatNotActive(chatId:state: ChatState)`, `HubNotVerified(reason:)`, `HubOwnsGroups(hubId:groupCount: UInt32)`, `LastHub(hubId:)`, `HomeHub(hubId:)`, `HubNotDrained(hubId:reason:)` |
+| `GimError` | `GimError` | `Network(reason:)`, `NotRegistered`, `InvalidInput(reason:)`, `NotFound(reason:)`, `Crypto(reason:)`, `Storage(reason:)`, `Server(status: UInt16, reason:)`, `RetryLater(status: UInt16, retryAfterSecs: UInt64, reason:)`, `Cancelled`, `NotImplemented`, `Internal(reason:)`, `ChatNotActive(chatId:state: ChatState)`, `HubNotVerified(reason:)`, `HubOwnsGroups(hubId:groupCount: UInt32)`, `LastHub(hubId:)`, `HomeHub(hubId:)`, `HubNotDrained(hubId:reason:)`, `UserSuspended(hubId:)` |
 
 `GimError` keeps the generated UpperCamelCase case names (hence the `swift-format-ignore: AlwaysUseLowerCamelCase`
 on its declaration) and conforms to `Error, Sendable, Hashable, LocalizedError` with
@@ -85,7 +85,7 @@ generated code writes the bare protocol name, which is the same type.
 
 ## GimClient methods
 
-Every method of `GimClientProtocol` at `9c6022c`, with identical labels, argument types and `async`/`throws`. The
+Every method of `GimClientProtocol` at `fa6f7e9`, with identical labels, argument types and `async`/`throws`. The
 only type differences are `any Timeline` / `any LinkSession` / `any PendingApproval` (generated: the classes) and the
 listener parameter spelling above.
 
@@ -152,6 +152,28 @@ a `TimelineItem.membershipChange` arrives. When a query fails before any list ha
 `ChatSummary.memberCount` (no member list, no removal); a list that loaded before stays on later failures.
 Renaming a group goes `GroupInfoViewModel.saveName()` → `GimClientAPI.setGroupInfo(name:)` →
 `RealGimClient` → `GIMCore.GimClient.setGroupInfo`.
+
+## Changes since `9c6022c`
+
+`fa6f7e9` (built on the macOS host from gim-core `fa6f7e9` like `f8db42c` below, vendored with
+`scripts/sync-gim-core.sh --from-dir`). Diff of the generated `GIMCore.swift`: one `GimError` case appended last,
+`UserSuspended(hubId:)` (index 18; an admin of the hub suspended the user, the hub refused the sign-in with 403
+`user_suspended`), and the UniFFI checksums; nothing else changed. Behaviour (gim-core `docs/API.md`, "Suspended
+users"): every call that may sign in can throw it; the session and local data are kept; gim-core does not sign in on
+that hub again for 10 minutes; a failed send keeps the error's text as its reason (`user suspended on hub <hub id>`);
+`ConnectionState` has no extra value and there is no callback.
+
+App adaptations:
+
+- Mirror and `CoreMapping`: `GimError.UserSuspended(hubId:)` both ways.
+- `ErrorPresenter` shows "Your account is suspended." plus that the chats on this device stay readable;
+  `message(for:client:)` (used by the signed-in view models) names the hub by its URL host ("… suspended on
+  <host>.") when more than one hub is listed and `hubId` matches one. Not retryable: a failed send whose reason is a
+  suspension (`ErrorPresenter.suspendedHubId(failureReason:)`) offers no Retry (`MessageActionsViewModel.canRetry`,
+  the timeline's default menu); tapping its status explains the suspension instead of resending
+  (`TimelineViewModel.retry`). Nothing signs out, wipes or retries on it; `AppModel` stays signed in.
+- `FakeGimClient.simulateSuspension(hubId:)`: calls that need a session throw `UserSuspended`; own sends end
+  `failed` with the suspension reason; `startSync`, `session()` and `hubs()` keep working.
 
 ## Changes since `225b809`
 

@@ -38,7 +38,7 @@ public final class DevicesViewModel {
             hasLoaded = true
             errorMessage = nil
         } catch {
-            errorMessage = ErrorPresenter.message(for: error)
+            errorMessage = await ErrorPresenter.message(for: error, client: client)
         }
     }
 
@@ -51,7 +51,7 @@ public final class DevicesViewModel {
         do {
             try await client.revokeDevice(deviceId: deviceId)
         } catch {
-            errorMessage = ErrorPresenter.message(for: error)
+            errorMessage = await ErrorPresenter.message(for: error, client: client)
             return
         }
         await load()
