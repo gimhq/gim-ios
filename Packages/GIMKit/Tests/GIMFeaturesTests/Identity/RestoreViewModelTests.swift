@@ -194,4 +194,19 @@ final class RestoreViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.errorMessage, ErrorPresenter.message(for: GimError.Network(reason: "offline")))
         XCTAssertTrue(registered.registrations.isEmpty)
     }
+
+    @MainActor
+    func testAHubThatDoesNotAdmitTheUserRefusesTheRestore() async throws {
+        let (client, userId, code) = try await restorableClient()
+        await client.simulateNotAdmitted(hubId: "")
+        let (viewModel, registered) = makeViewModel { client }
+        viewModel.userId = userId
+        viewModel.recoveryCode = code
+
+        await viewModel.submit()
+
+        XCTAssertEqual(viewModel.errorMessage, "This hub does not admit your account.")
+        XCTAssertFalse(viewModel.showsRejoinNotice)
+        XCTAssertTrue(registered.registrations.isEmpty)
+    }
 }

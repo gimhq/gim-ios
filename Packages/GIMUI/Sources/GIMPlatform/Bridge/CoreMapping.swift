@@ -54,6 +54,9 @@ extension GIMClientKit.GimError {
         case .HomeHub(let hubId): self = .HomeHub(hubId: hubId)
         case .HubNotDrained(let hubId, let reason): self = .HubNotDrained(hubId: hubId, reason: reason)
         case .UserSuspended(let hubId): self = .UserSuspended(hubId: hubId)
+        case .UserNotAdmitted(let hubId): self = .UserNotAdmitted(hubId: hubId)
+        case .NotAdmittedByPeer(let hubId, let chatId): self = .NotAdmittedByPeer(hubId: hubId, chatId: chatId)
+        case .ContactNotAdmitted(let userIds): self = .ContactNotAdmitted(userIds: userIds)
         }
     }
 }
@@ -82,6 +85,9 @@ extension GIMCore.GimError {
         case .HomeHub(let hubId): self = .HomeHub(hubId: hubId)
         case .HubNotDrained(let hubId, let reason): self = .HubNotDrained(hubId: hubId, reason: reason)
         case .UserSuspended(let hubId): self = .UserSuspended(hubId: hubId)
+        case .UserNotAdmitted(let hubId): self = .UserNotAdmitted(hubId: hubId)
+        case .NotAdmittedByPeer(let hubId, let chatId): self = .NotAdmittedByPeer(hubId: hubId, chatId: chatId)
+        case .ContactNotAdmitted(let userIds): self = .ContactNotAdmitted(userIds: userIds)
         }
     }
 }
@@ -293,7 +299,19 @@ extension GIMClientKit.SendState {
         case .sent: self = .sent
         case .delivered: self = .delivered
         case .read: self = .read
-        case .failed(let reason): self = .failed(reason: reason)
+        case .failed(let reason, let cause): self = .failed(reason: reason, cause: GIMClientKit.SendFailure(cause))
+        }
+    }
+}
+
+extension GIMClientKit.SendFailure {
+    init(_ core: GIMCore.SendFailure) {
+        switch core {
+        case .userSuspended: self = .userSuspended
+        case .userNotAdmitted: self = .userNotAdmitted
+        case .notAdmittedByPeer: self = .notAdmittedByPeer
+        case .rejected: self = .rejected
+        case .other: self = .other
         }
     }
 }

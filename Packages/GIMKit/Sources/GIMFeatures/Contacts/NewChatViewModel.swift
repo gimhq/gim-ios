@@ -60,6 +60,9 @@ public final class NewChatViewModel {
         } catch GimError.NotFound {
             startError = Self.notFoundMessage
             return nil
+        } catch GimError.ContactNotAdmitted(let userIds) {
+            startError = ErrorPresenter.contactNotAdmittedMessage(userIds: userIds, profiles: [user])
+            return nil
         } catch {
             startError = await ErrorPresenter.message(for: error, client: client)
             return nil

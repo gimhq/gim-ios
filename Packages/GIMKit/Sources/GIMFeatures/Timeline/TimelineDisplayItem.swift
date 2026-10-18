@@ -6,7 +6,7 @@ public enum MessageStatus: Sendable, Hashable {
     case sent
     case delivered
     case read
-    case failed(reason: String)
+    case failed(reason: String, cause: SendFailure)
 
     public init(_ state: SendState) {
         switch state {
@@ -14,7 +14,7 @@ public enum MessageStatus: Sendable, Hashable {
         case .sent: self = .sent
         case .delivered: self = .delivered
         case .read: self = .read
-        case .failed(let reason): self = .failed(reason: reason)
+        case .failed(let reason, let cause): self = .failed(reason: reason, cause: cause)
         }
     }
 }

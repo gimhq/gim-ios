@@ -126,4 +126,20 @@ final class NewChatViewModelTests: XCTestCase {
         XCTAssertNil(chatId)
         XCTAssertEqual(viewModel.startError, "User not found")
     }
+
+    @MainActor
+    func testStartChatWithAUserWhoseHubRefusesShowsTheirName() async {
+        let (client, _) = await connected(makeDemoClient())
+        await client.refuseContacts(["user-luca"])
+        let (viewModel, sleeper) = makeViewModel(client: client)
+
+        viewModel.query = "luca"
+        await eventually { sleeper.pendingCount == 1 }
+        sleeper.releaseAll()
+        await eventually { viewModel.state != .searching }
+
+        let chatId = await viewModel.startChat()
+        XCTAssertNil(chatId)
+        XCTAssertEqual(viewModel.startError, "Luca Bianchi does not accept contacts from you.")
+    }
 }
