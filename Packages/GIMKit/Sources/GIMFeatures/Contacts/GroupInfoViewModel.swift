@@ -158,6 +158,9 @@ public final class GroupInfoViewModel {
                 // Every invitee is unknown or has no device; nothing was committed.
                 self.errorMessage = NewGroupViewModel.noneFoundMessage
                 return false
+            } catch GimError.ContactNotAdmitted(let userIds) {
+                self.errorMessage = ErrorPresenter.contactNotAdmittedMessage(userIds: userIds, profiles: [user])
+                return false
             }
             self.memberHandle = ""
             return true

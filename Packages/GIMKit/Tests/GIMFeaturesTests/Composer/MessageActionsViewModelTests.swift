@@ -18,7 +18,7 @@ final class MessageActionsViewModelTests: XCTestCase {
             MessageActionsViewModel.actions(for: makeMessage()), [.reply, .react, .copy, .edit, .delete])
         XCTAssertEqual(MessageActionsViewModel.actions(for: makeMessage(isOwn: false)), [.reply, .react, .copy])
         XCTAssertEqual(
-            MessageActionsViewModel.actions(for: makeMessage(sendState: .failed(reason: "x"))),
+            MessageActionsViewModel.actions(for: makeMessage(sendState: .failed(reason: "x", cause: .other))),
             [.reply, .react, .copy, .edit, .delete, .retry])
         XCTAssertEqual(
             MessageActionsViewModel.actions(
@@ -32,11 +32,20 @@ final class MessageActionsViewModelTests: XCTestCase {
         XCTAssertEqual(MessageActionsViewModel.quickReactions.count, 6)
     }
 
-    func testASendRefusedForASuspensionOffersNoRetry() {
-        let message = makeMessage(sendState: .failed(reason: "user suspended on hub hub-gim.example.eu"))
-        XCTAssertFalse(MessageActionsViewModel.canRetry(message))
-        XCTAssertEqual(MessageActionsViewModel.actions(for: message), [.reply, .react, .copy, .edit, .delete])
-        XCTAssertTrue(MessageActionsViewModel.canRetry(makeMessage(sendState: .failed(reason: "x"))))
+    func testRetryIsHiddenForAccountAndPeerRefusalsOnly() {
+        for cause in [SendFailure.userSuspended, .userNotAdmitted, .notAdmittedByPeer] {
+            let message = makeMessage(sendState: .failed(reason: "refused", cause: cause))
+            XCTAssertFalse(MessageActionsViewModel.canRetry(message), "\(cause)")
+            XCTAssertEqual(
+                MessageActionsViewModel.actions(for: message), [.reply, .react, .copy, .edit, .delete], "\(cause)")
+        }
+        for cause in [SendFailure.rejected, .other] {
+            let message = makeMessage(sendState: .failed(reason: "refused", cause: cause))
+            XCTAssertTrue(MessageActionsViewModel.canRetry(message), "\(cause)")
+            XCTAssertEqual(
+                MessageActionsViewModel.actions(for: message), [.reply, .react, .copy, .edit, .delete, .retry],
+                "\(cause)")
+        }
         XCTAssertFalse(MessageActionsViewModel.canRetry(makeMessage()))
     }
 
@@ -44,7 +53,8 @@ final class MessageActionsViewModelTests: XCTestCase {
         XCTAssertEqual(MessageActionsViewModel.actions(for: makeMessage(), isReadOnly: true), [.copy])
         XCTAssertEqual(MessageActionsViewModel.actions(for: makeMessage(isOwn: false), isReadOnly: true), [.copy])
         XCTAssertEqual(
-            MessageActionsViewModel.actions(for: makeMessage(sendState: .failed(reason: "x")), isReadOnly: true),
+            MessageActionsViewModel.actions(
+                for: makeMessage(sendState: .failed(reason: "x", cause: .other)), isReadOnly: true),
             [.copy, .delete])
         XCTAssertEqual(
             MessageActionsViewModel.actions(for: makeMessage(sendState: .pending), isReadOnly: true), [.copy, .delete])

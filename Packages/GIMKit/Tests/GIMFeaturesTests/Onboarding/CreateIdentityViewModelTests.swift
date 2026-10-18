@@ -120,4 +120,20 @@ final class CreateIdentityViewModelTests: XCTestCase {
         let current = try await client.session()
         XCTAssertEqual(current, session)
     }
+
+    @MainActor
+    func testAHubThatDoesNotAdmitTheUserRefusesTheRegistration() async throws {
+        let client = FakeGimClient()
+        await client.simulateNotAdmitted(hubId: "")
+        let (viewModel, created) = makeViewModel { client }
+        viewModel.displayName = "Sofia"
+
+        await viewModel.submit()
+
+        XCTAssertEqual(viewModel.errorMessage, "This hub does not admit your account.")
+        XCTAssertTrue(created.results.isEmpty)
+        let session = try await client.session()
+        XCTAssertNil(session, "nothing is kept")
+        XCTAssertFalse(viewModel.isSubmitting)
+    }
 }

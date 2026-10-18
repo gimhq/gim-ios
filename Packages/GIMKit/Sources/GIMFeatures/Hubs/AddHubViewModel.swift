@@ -10,7 +10,7 @@ public final class AddHubViewModel {
     public var url = ""
 
     public private(set) var isSubmitting = false
-    /// Error from the last failed attempt: `InvalidInput`, `Network`, `HubNotVerified`, …
+    /// Error from the last failed attempt: `InvalidInput`, `Network`, `HubNotVerified`, `UserNotAdmitted`, …
     public private(set) var errorMessage: String?
     /// The hub once added; the screen should close.
     public private(set) var addedHub: HubInfo?
@@ -35,6 +35,9 @@ public final class AddHubViewModel {
         defer { isSubmitting = false }
         do {
             addedHub = try await client.addHub(url: OnboardingValidation.normalizedServerUrl(url))
+        } catch GimError.UserNotAdmitted {
+            // The hub refused this user and was not listed.
+            errorMessage = ErrorPresenter.hubRefusedMessage
         } catch {
             errorMessage = await ErrorPresenter.message(for: error, client: client)
         }

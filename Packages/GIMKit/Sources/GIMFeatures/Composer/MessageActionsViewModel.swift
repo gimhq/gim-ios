@@ -48,10 +48,15 @@ public final class MessageActionsViewModel {
         return actions
     }
 
-    /// Whether a failed send can be resent: not when the hub refused it because the user is suspended there.
+    /// Whether a failed send can be resent: not when it failed because a hub suspended or does not admit the user.
     public nonisolated static func canRetry(_ message: MessageItem) -> Bool {
-        guard case .failed(let reason) = message.sendState else { return false }
-        return ErrorPresenter.suspendedHubId(failureReason: reason) == nil
+        guard case .failed(_, let cause) = message.sendState else { return false }
+        return canRetry(cause)
+    }
+
+    /// Whether a send that failed with `cause` can be resent: only for `rejected` and `other`.
+    public nonisolated static func canRetry(_ cause: SendFailure) -> Bool {
+        ErrorPresenter.sendFailureMessage(cause) == nil
     }
 
     private nonisolated static func isUnsent(_ message: MessageItem) -> Bool {

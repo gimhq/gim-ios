@@ -360,8 +360,23 @@ public enum SendState: Sendable, Hashable {
     case delivered
     /// Read by at least one recipient.
     case read
-    /// Gave up; `retrySend` or `cancelSend`.
-    case failed(reason: String)
+    /// Gave up; `retrySend` or `cancelSend`. Hide Retry when `cause` is `userSuspended`, `userNotAdmitted` or
+    /// `notAdmittedByPeer`.
+    case failed(reason: String, cause: SendFailure)
+}
+
+/// Why a message is `SendState.failed`.
+public enum SendFailure: Sendable, Hashable {
+    /// A hub suspended this user.
+    case userSuspended
+    /// The user's hub does not admit this user.
+    case userNotAdmitted
+    /// The hub owning the chat does not admit this user.
+    case notAdmittedByPeer
+    /// The hub refused the message for good (e.g. not a member any more).
+    case rejected
+    /// Anything else (retries used up, a local failure, an older failure).
+    case other
 }
 
 public enum ConnectionState: Sendable, Hashable {
@@ -454,6 +469,16 @@ public enum GimError: Error, Sendable, Hashable, LocalizedError {
     /// again for 10 minutes and keeps using the user's other hubs meanwhile. `hubId` is empty if the home hub has no
     /// hub identity.
     case UserSuspended(hubId: String)
+    /// The user policy of the hub `hubId` does not admit this user: it refused the registration (`createIdentity`,
+    /// `restoreFromRecovery`, `waitLink`, `addHub`: nothing was kept) or a sign-in. Handled like `UserSuspended`; do not
+    /// retry. `hubId` is empty if unknown.
+    case UserNotAdmitted(hubId: String)
+    /// The hub `hubId` owning the chat `chatId` does not admit this user: a member change or leave was refused there
+    /// and is not retried (messages fail with `SendFailure.notAdmittedByPeer` instead). Other chats are not affected.
+    case NotAdmittedByPeer(hubId: String, chatId: String)
+    /// `createDirectChat` / `createGroupChat` / `addMembers`: no user could be added, and the hubs of `userIds` do not
+    /// admit this user. Users refused while others were added do not fail the call.
+    case ContactNotAdmitted(userIds: [String])
 
     public var errorDescription: String? {
         String(reflecting: self)

@@ -144,7 +144,7 @@ final class TimelineItemBuilderTests: XCTestCase {
     }
 
     func testStatusOnlyForOwnMessages() {
-        let states: [SendState] = [.pending, .sent, .delivered, .read, .failed(reason: "x")]
+        let states: [SendState] = [.pending, .sent, .delivered, .read, .failed(reason: "x", cause: .other)]
         var items = states.enumerated().map { index, state in
             message("own\(index)", bob, at: nowMs, isOwn: true, sendState: state)
         }
@@ -153,7 +153,7 @@ final class TimelineItemBuilderTests: XCTestCase {
 
         let statuses = rows(makeBuilder().build(items, isGroup: false, typingText: nil)).map(\.status)
 
-        XCTAssertEqual(statuses, [.sending, .sent, .delivered, .read, .failed(reason: "x"), nil, nil])
+        XCTAssertEqual(statuses, [.sending, .sent, .delivered, .read, .failed(reason: "x", cause: .other), nil, nil])
     }
 
     func testTypingRowAtBottom() {

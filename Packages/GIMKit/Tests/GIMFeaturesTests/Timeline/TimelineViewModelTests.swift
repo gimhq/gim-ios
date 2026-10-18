@@ -108,7 +108,9 @@ final class TimelineViewModelTests: XCTestCase {
 
         let messageId = try await client.sendText(chatId: FakeGimClient.demoDirectChatId, body: "Ready", replyTo: nil)
         await scheduler.advance(by: .milliseconds(300))
-        await eventually { self.status(viewModel, messageId) == .failed(reason: FakeGimClient.failureReason) }
+        await eventually {
+            self.status(viewModel, messageId) == .failed(reason: FakeGimClient.failureReason, cause: .other)
+        }
 
         await viewModel.retry(messageId: messageId)
         await eventually { self.status(viewModel, messageId) == .sending }
@@ -130,11 +132,15 @@ final class TimelineViewModelTests: XCTestCase {
         let messageId = try await client.sendText(chatId: chatId, body: "Still here?", replyTo: nil)
 
         // No pending phase to wait out: the rejection is final.
-        await eventually { self.status(viewModel, messageId) == .failed(reason: "rejected (403 not_member)") }
+        await eventually {
+            self.status(viewModel, messageId) == .failed(reason: "rejected (403 not_member)", cause: .rejected)
+        }
         let message = try XCTUnwrap(viewModel.message(withId: messageId))
         XCTAssertEqual(MessageActionsViewModel.actions(for: message), [.reply, .react, .copy, .edit, .delete, .retry])
         await scheduler.runUntilIdle()
-        XCTAssertEqual(status(viewModel, messageId), .failed(reason: "rejected (403 not_member)"), "never resent")
+        XCTAssertEqual(
+            status(viewModel, messageId), .failed(reason: "rejected (403 not_member)", cause: .rejected), "never resent"
+        )
         XCTAssertNil(viewModel.errorMessage)
 
         await viewModel.retry(messageId: messageId)
@@ -143,34 +149,49 @@ final class TimelineViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testSuspendedSendIsNotRetriedAndExplainsTheSuspension() async throws {
-        let (client, scheduler) = await connected(makeDemoClient())
-        let chatId = FakeGimClient.demoDirectChatId
-        let viewModel = await startedViewModel(client, chatId: chatId)
-        _ = try await client.addHub(url: "https://hub2.example.eu")
-        await scheduler.advance(by: FakeGimClient.hubVerifyDelay)
+    func testSendsRefusedForTheAccountOrByThePeerHubAreNotRetriedAndExplainTheCause() async throws {
         let hubId = FakeGimClient.hubId(forUrl: "https://hub2.example.eu")
-        await client.simulateSuspension(hubId: hubId)
+        let cases: [(SendFailure, String, (FakeGimClient, String) async -> Void)] = [
+            (
+                .userSuspended, ErrorPresenter.message(for: GimError.UserSuspended(hubId: "")),
+                { client, _ in await client.simulateSuspension(hubId: hubId) }
+            ),
+            (
+                .userNotAdmitted, "Your account is not admitted on this hub.",
+                { client, _ in await client.simulateNotAdmitted(hubId: hubId) }
+            ),
+            (
+                .notAdmittedByPeer, "This chat's hub does not accept messages from you.",
+                { client, chatId in await client.simulateNotAdmittedByPeer(chatId: chatId, hubId: hubId) }
+            ),
+        ]
+        for (cause, explanation, refuse) in cases {
+            let (client, scheduler) = await connected(makeDemoClient())
+            let chatId = FakeGimClient.demoDirectChatId
+            let viewModel = await startedViewModel(client, chatId: chatId)
+            _ = try await client.addHub(url: "https://hub2.example.eu")
+            await scheduler.advance(by: FakeGimClient.hubVerifyDelay)
+            await refuse(client, chatId)
 
-        let messageId = try await client.sendText(chatId: chatId, body: "Anchored off Hydra", replyTo: nil)
+            let messageId = try await client.sendText(chatId: chatId, body: "Anchored off Hydra", replyTo: nil)
 
-        let reason = "user suspended on hub \(hubId)"
-        await eventually { self.status(viewModel, messageId) == .failed(reason: reason) }
-        let message = try XCTUnwrap(viewModel.message(withId: messageId))
-        XCTAssertFalse(MessageActionsViewModel.actions(for: message).contains(.retry))
-        XCTAssertTrue(MessageActionsViewModel.actions(for: message).contains(.delete))
+            await eventually {
+                if case .failed(_, cause)? = self.status(viewModel, messageId) { true } else { false }
+            }
+            let message = try XCTUnwrap(viewModel.message(withId: messageId))
+            XCTAssertFalse(MessageActionsViewModel.actions(for: message).contains(.retry), "\(cause)")
+            XCTAssertTrue(MessageActionsViewModel.actions(for: message).contains(.delete), "\(cause)")
 
-        await viewModel.retry(messageId: messageId)
-        await scheduler.runUntilIdle()
+            await viewModel.retry(messageId: messageId)
+            await scheduler.runUntilIdle()
 
-        XCTAssertEqual(status(viewModel, messageId), .failed(reason: reason), "never resent")
-        XCTAssertEqual(
-            viewModel.errorMessage,
-            "Your account is suspended on hub2.example.eu. Your chats on this device stay readable. Contact the hub's"
-                + " operator to restore access.")
-        XCTAssertGreaterThan(messageCount(viewModel), 1, "the local chat stays readable")
-        let session = try await client.session()
-        XCTAssertNotNil(session, "no sign-out")
+            XCTAssertEqual(
+                status(viewModel, messageId), message.sendState.map(MessageStatus.init), "never resent: \(cause)")
+            XCTAssertEqual(viewModel.errorMessage, explanation)
+            XCTAssertGreaterThan(messageCount(viewModel), 1, "the local chat stays readable")
+            let session = try await client.session()
+            XCTAssertNotNil(session, "no sign-out")
+        }
     }
 
     @MainActor
@@ -222,7 +243,9 @@ final class TimelineViewModelTests: XCTestCase {
         let viewModel = await startedViewModel(client, chatId: chatId)
         await client.rejectNextSend()
         let messageId = try await client.sendText(chatId: chatId, body: "Hello?", replyTo: nil)
-        await eventually { self.status(viewModel, messageId) == .failed(reason: "rejected (403 not_member)") }
+        await eventually {
+            self.status(viewModel, messageId) == .failed(reason: "rejected (403 not_member)", cause: .rejected)
+        }
         try await client.simulateRemoval(chatId: chatId, by: "user-nikos")
 
         await viewModel.retry(messageId: messageId)

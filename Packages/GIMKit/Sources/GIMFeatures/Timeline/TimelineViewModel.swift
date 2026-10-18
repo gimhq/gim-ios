@@ -145,13 +145,13 @@ public final class TimelineViewModel {
         }
     }
 
-    /// Sends a failed message again. A send the hub refused because the user is suspended there is not resent; the
-    /// suspension is explained instead.
+    /// Sends a failed message again. A send that failed because a hub suspended or does not admit the user is not
+    /// resent; the cause is explained instead.
     public func retry(messageId: String) async {
-        if case .failed(let reason)? = message(withId: messageId)?.sendState,
-            let hubId = ErrorPresenter.suspendedHubId(failureReason: reason)
+        if case .failed(_, let cause)? = message(withId: messageId)?.sendState,
+            let explanation = ErrorPresenter.sendFailureMessage(cause)
         {
-            errorMessage = await ErrorPresenter.message(for: GimError.UserSuspended(hubId: hubId), client: client)
+            errorMessage = explanation
             return
         }
         do {

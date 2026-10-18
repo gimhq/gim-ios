@@ -114,4 +114,37 @@ final class NewGroupViewModelTests: XCTestCase {
         XCTAssertNil(created)
         XCTAssertEqual(viewModel.errorMessage, "None of these users could be found")
     }
+
+    @MainActor
+    func testCreateWithSomeRefusedInviteesStillAddsTheOthers() async throws {
+        let (client, _) = await connected(makeDemoClient())
+        await client.refuseContacts(["user-luca"])
+        let viewModel = NewGroupViewModel(client: client)
+        viewModel.name = "Regatta"
+        await add("sofia", to: viewModel)
+        await add("luca", to: viewModel)
+        await add("nikos", to: viewModel)
+
+        let created = await viewModel.create()
+
+        let chatId = try XCTUnwrap(created, "a partial result is not a failure")
+        XCTAssertNil(viewModel.errorMessage)
+        let members = try await client.chatMembers(chatId: chatId)
+        XCTAssertEqual(Set(members.map(\.handle)), ["alex", "sofia", "nikos"])
+    }
+
+    @MainActor
+    func testCreateWithOnlyRefusedInviteesNamesThem() async {
+        let (client, _) = await connected(makeDemoClient())
+        await client.refuseContacts(["user-sofia", "user-luca"])
+        let viewModel = NewGroupViewModel(client: client)
+        viewModel.name = "Regatta"
+        await add("sofia", to: viewModel)
+        await add("luca", to: viewModel)
+
+        let created = await viewModel.create()
+
+        XCTAssertNil(created)
+        XCTAssertEqual(viewModel.errorMessage, "Sofia Marin and Luca Bianchi do not accept contacts from you.")
+    }
 }

@@ -47,7 +47,7 @@ public final class CreateIdentityViewModel {
                 displayName: OnboardingValidation.normalizedDisplayName(displayName))
             onCreated(client, recoveryCode)
         } catch {
-            errorMessage = ErrorPresenter.message(for: error)
+            errorMessage = ErrorPresenter.registrationMessage(for: error)
         }
     }
 }

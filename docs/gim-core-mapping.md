@@ -3,7 +3,7 @@
 `Packages/GIMKit/Sources/GIMClientKit` mirrors the UniFFI Swift bindings of gim-core so that switching to the real
 `GIMCore.xcframework` is a mechanical swap.
 
-- Mirrored and vendored commit: gim-core `fa6f7e9`, GIMCore `0.1.0+fa6f7e9` (`bindings/gim-ffi/src/`, generated
+- Mirrored and vendored commit: gim-core `c1b7503`, GIMCore `0.1.0+c1b7503` (`bindings/gim-ffi/src/`, generated
   `bindings/gim-ffi/generated/swift/GIMCore.swift`, contract in `docs/API.md`).
 - Mirror sources: `GimClientAPI.swift` (objects, callback interfaces, hooks, `createClient`) and `Models.swift`
   (records, enums, diffs, errors).
@@ -44,11 +44,12 @@ Generated records are `Equatable, Hashable` plus `extension …: Sendable`; the 
 | `TimelineItem` | `TimelineItem` | `message(item:)`, `dateSeparator(dayStartMs:)`, `membershipChange(userName:change:atMs:userId:actorUserId:)` (`actorUserId: String?`) |
 | `MembershipChangeKind` | `MembershipChangeKind` | `added`, `removed`, `left` |
 | `MessageContent` | `MessageContent` | `text(body:)`, `image(media:width:height:caption:)`, `file(media:fileName:caption:)`, `deleted`, `unsupported` |
-| `SendState` | `SendState` | `pending`, `sent`, `delivered`, `read`, `failed(reason:)` |
+| `SendState` | `SendState` | `pending`, `sent`, `delivered`, `read`, `failed(reason:cause: SendFailure)` |
+| `SendFailure` | `SendFailure` | `userSuspended`, `userNotAdmitted`, `notAdmittedByPeer`, `rejected`, `other` |
 | `ConnectionState` | `ConnectionState` | `offline`, `connecting`, `connected`, `syncing` |
 | `ChatListDiff` | `ChatListDiff` | `append(values:)`, `clear`, `pushFront(value:)`, `pushBack(value:)`, `popFront`, `popBack`, `insert(index:value:)`, `set(index:value:)`, `remove(index:)`, `truncate(length:)`, `reset(values:)` |
 | `TimelineDiff` | `TimelineDiff` | same cases as `ChatListDiff`, with `TimelineItem` values |
-| `GimError` | `GimError` | `Network(reason:)`, `NotRegistered`, `InvalidInput(reason:)`, `NotFound(reason:)`, `Crypto(reason:)`, `Storage(reason:)`, `Server(status: UInt16, reason:)`, `RetryLater(status: UInt16, retryAfterSecs: UInt64, reason:)`, `Cancelled`, `NotImplemented`, `Internal(reason:)`, `ChatNotActive(chatId:state: ChatState)`, `HubNotVerified(reason:)`, `HubOwnsGroups(hubId:groupCount: UInt32)`, `LastHub(hubId:)`, `HomeHub(hubId:)`, `HubNotDrained(hubId:reason:)`, `UserSuspended(hubId:)` |
+| `GimError` | `GimError` | `Network(reason:)`, `NotRegistered`, `InvalidInput(reason:)`, `NotFound(reason:)`, `Crypto(reason:)`, `Storage(reason:)`, `Server(status: UInt16, reason:)`, `RetryLater(status: UInt16, retryAfterSecs: UInt64, reason:)`, `Cancelled`, `NotImplemented`, `Internal(reason:)`, `ChatNotActive(chatId:state: ChatState)`, `HubNotVerified(reason:)`, `HubOwnsGroups(hubId:groupCount: UInt32)`, `LastHub(hubId:)`, `HomeHub(hubId:)`, `HubNotDrained(hubId:reason:)`, `UserSuspended(hubId:)`, `UserNotAdmitted(hubId:)`, `NotAdmittedByPeer(hubId:chatId:)`, `ContactNotAdmitted(userIds: [String])` |
 
 `GimError` keeps the generated UpperCamelCase case names (hence the `swift-format-ignore: AlwaysUseLowerCamelCase`
 on its declaration) and conforms to `Error, Sendable, Hashable, LocalizedError` with
@@ -85,7 +86,7 @@ generated code writes the bare protocol name, which is the same type.
 
 ## GimClient methods
 
-Every method of `GimClientProtocol` at `fa6f7e9`, with identical labels, argument types and `async`/`throws`. The
+Every method of `GimClientProtocol` at `c1b7503`, with identical labels, argument types and `async`/`throws`. The
 only type differences are `any Timeline` / `any LinkSession` / `any PendingApproval` (generated: the classes) and the
 listener parameter spelling above.
 
@@ -152,6 +153,40 @@ a `TimelineItem.membershipChange` arrives. When a query fails before any list ha
 `ChatSummary.memberCount` (no member list, no removal); a list that loaded before stays on later failures.
 Renaming a group goes `GroupInfoViewModel.saveName()` → `GimClientAPI.setGroupInfo(name:)` →
 `RealGimClient` → `GIMCore.GimClient.setGroupInfo`.
+
+## Changes since `fa6f7e9`
+
+`c1b7503` (gim-core C-policy, hub H12 user allow/deny policy; built on the macOS host from gim-core `c1b7503` like
+`f8db42c` below, vendored with `scripts/sync-gim-core.sh --from-dir`). Diff of the generated `GIMCore.swift`: three
+`GimError` cases appended last, `UserNotAdmitted(hubId:)` (index 19), `NotAdmittedByPeer(hubId:chatId:)` (20) and
+`ContactNotAdmitted(userIds:)` (21); a new enum `SendFailure`; and, breaking, `SendState.failed(reason:)` became
+`failed(reason:cause:)`. No function changed. Behaviour (gim-core `docs/API.md`, "User policy"): `UserNotAdmitted` is
+handled like `UserSuspended`, and a refused registration (`createIdentity`, `restoreFromRecovery`, `waitLink`) or
+`addHub` keeps nothing; `NotAdmittedByPeer` refuses member changes and leaves of one chat (its messages fail with
+cause `notAdmittedByPeer`); `ContactNotAdmitted` only when no invitee could be added, refused invitees among others are
+skipped and reported as `MembershipChanged(Removed)`. Retry is hidden for the causes `userSuspended`,
+`userNotAdmitted` and `notAdmittedByPeer`.
+
+App adaptations:
+
+- Mirror and `CoreMapping`: the three errors both ways, `SendFailure` and `SendState.failed(reason:cause:)` from
+  gim-core. `MessageStatus.failed(reason:cause:)` carries the cause to the timeline cells.
+- The typed cause replaces the reason prefix match of `fa6f7e9` (`ErrorPresenter.suspendedHubId(failureReason:)` is
+  gone): `MessageActionsViewModel.canRetry` offers Retry only for `rejected` and `other`; for the other causes tapping
+  the status shows `ErrorPresenter.sendFailureMessage(_:)` instead of resending (`TimelineViewModel.retry`), and the
+  status's accessibility hint says so. Delete stays available.
+- `ErrorPresenter`: `UserNotAdmitted` → "Your account is not admitted on this hub." (`message(for:client:)` names the
+  host like for a suspension); onboarding and Add Hub show "This hub does not admit your account."
+  (`registrationMessage(for:)`, `hubRefusedMessage`), without retrying. `NotAdmittedByPeer` → "This chat's hub does not
+  accept messages from you." `ContactNotAdmitted` → "<names> does/do not accept contacts from you."
+  (`contactNotAdmittedMessage(userIds:profiles:)`; New Chat, New Group and Group Info pass the profiles they know,
+  falling back to the handle, then the user id). A partial result of `createGroupChat` / `addMembers` is a success.
+  Nothing signs out or wipes on these errors; `AppModel` stays signed in.
+- `FakeGimClient`: `simulateNotAdmitted(hubId:)` (registration, `addHub` of that hub, then calls and sends like a
+  suspension), `simulateNotAdmittedByPeer(chatId:hubId:)` (sends fail with cause `notAdmittedByPeer`; `addMembers`,
+  `removeMember` and `leaveChat` throw), `refuseContacts(_:)` (`createDirectChat` throws; `createGroupChat` /
+  `addMembers` skip the refused users and throw only if nobody could be added). Every fake failure carries its cause
+  (`simulateSuspension` → `userSuspended`, `rejectNextSend` → `rejected`, `failNextSends` → `other`).
 
 ## Changes since `9c6022c`
 
