@@ -281,7 +281,7 @@ final class AppModelTests: XCTestCase {
                 guard case .message(let message) = item, message.messageId == messageId else { return nil }
                 return message.sendState
             }
-            XCTAssertEqual(sendStates, [.failed(reason: "rejected (403 not_member)")])
+            XCTAssertEqual(sendStates, [.failed(reason: "rejected (403 not_member)", cause: .rejected)])
         #else
             XCTAssertTrue(AppModel.defaultFactory(defaults: defaults) is RealGimClientFactory)
         #endif
@@ -387,6 +387,31 @@ final class AppModelTests: XCTestCase {
         await devices.load()
 
         XCTAssertEqual(devices.errorMessage, ErrorPresenter.message(for: GimError.UserSuspended(hubId: "")))
+        guard case .ready = model.phase else { return XCTFail("expected ready, got \(model.phase)") }
+        XCTAssertEqual(model.session, session)
+        XCTAssertNil(model.launchError)
+        XCTAssertEqual(hooks.wipeCount, 0)
+        let kept = try await client.session()
+        XCTAssertEqual(kept, session, "not signed out")
+    }
+
+    @MainActor
+    func testNotAdmittedKeepsTheAppSignedInWithoutWiping() async throws {
+        let session = session
+        let hooks = MemoryHooks()
+        let client = FakeGimClient(session: session)
+        await client.simulateNotAdmitted(hubId: FakeGimClient.hubId(forUrl: FakeGimClient.defaultHomeHubUrl))
+        let defaults = makeDefaults()
+        defaults.set("https://gim.example.eu", forKey: AppModel.serverUrlKey)
+        let model = makeModel(factory: ClientFactory(client), defaults: defaults, hooks: hooks)
+
+        await model.start()
+        await model.scenePhaseChanged(.active)
+        await model.refreshSession()
+        let devices = DevicesViewModel(client: client)
+        await devices.load()
+
+        XCTAssertEqual(devices.errorMessage, "Your account is not admitted on this hub.")
         guard case .ready = model.phase else { return XCTFail("expected ready, got \(model.phase)") }
         XCTAssertEqual(model.session, session)
         XCTAssertNil(model.launchError)

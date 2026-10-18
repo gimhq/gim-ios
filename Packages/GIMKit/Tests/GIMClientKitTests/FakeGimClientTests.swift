@@ -449,7 +449,7 @@ final class FakeGimClientTests: XCTestCase {
 
         let id = try await client.sendText(chatId: direct, body: "Fails once", replyTo: nil)
         await scheduler.runUntilIdle()
-        XCTAssertEqual(timeline.messages.last?.sendState, .failed(reason: FakeGimClient.failureReason))
+        XCTAssertEqual(timeline.messages.last?.sendState, .failed(reason: FakeGimClient.failureReason, cause: .other))
         await assertThrows(.InvalidInput(reason: "Message has not failed")) {
             try await client.retrySend(chatId: self.direct, messageId: "msg-sofia-147")
         }
@@ -462,7 +462,7 @@ final class FakeGimClientTests: XCTestCase {
             guard case .set(_, .message(let message)) = diff, message.messageId == id else { return nil }
             return message.sendState
         }
-        XCTAssertEqual(states, [.pending, .failed(reason: FakeGimClient.failureReason)])
+        XCTAssertEqual(states, [.pending, .failed(reason: FakeGimClient.failureReason, cause: .other)])
 
         let itemsBefore = timeline.items.count
         timeline.clear()
@@ -917,10 +917,12 @@ final class FakeGimClientTests: XCTestCase {
         let id = try await client.sendText(chatId: direct, body: "Rejected", replyTo: nil)
 
         XCTAssertEqual(timeline.messages.last?.messageId, id)
-        XCTAssertEqual(timeline.messages.last?.sendState, .failed(reason: "rejected (403 not_member)"))
+        XCTAssertEqual(
+            timeline.messages.last?.sendState, .failed(reason: "rejected (403 not_member)", cause: .rejected))
         try await client.startSync()
         await scheduler.runUntilIdle()
-        XCTAssertEqual(timeline.messages.last?.sendState, .failed(reason: "rejected (403 not_member)"))
+        XCTAssertEqual(
+            timeline.messages.last?.sendState, .failed(reason: "rejected (403 not_member)", cause: .rejected))
 
         // Only the next send is rejected; a retry goes through.
         try await client.retrySend(chatId: direct, messageId: id)
@@ -1068,6 +1070,78 @@ final class FakeGimClientTests: XCTestCase {
             try await client.setPeerTyping(chatId: self.direct, userId: "user-luca", active: true)
         }
         try await client.setTyping(chatId: group, active: true)
+    }
+
+    func testSendsFailWithTheirTypedCause() async throws {
+        let client = try await makeDemo(synced: false)
+        let (_, timeline) = try await subscribeTimeline(client, direct)
+
+        await client.simulateSuspension(hubId: "hub-a")
+        _ = try await client.sendText(chatId: direct, body: "Suspended", replyTo: nil)
+        XCTAssertEqual(
+            timeline.messages.last?.sendState, .failed(reason: "user suspended on hub hub-a", cause: .userSuspended))
+        await client.simulateSuspension(hubId: nil)
+
+        await client.simulateNotAdmitted(hubId: "")
+        _ = try await client.sendText(chatId: direct, body: "Not admitted", replyTo: nil)
+        XCTAssertEqual(
+            timeline.messages.last?.sendState, .failed(reason: "user not admitted on hub ", cause: .userNotAdmitted))
+        await client.simulateNotAdmitted(hubId: nil)
+
+        await client.simulateNotAdmittedByPeer(chatId: direct, hubId: "hub-b")
+        _ = try await client.sendText(chatId: direct, body: "Refused by the peer", replyTo: nil)
+        guard case .failed(_, .notAdmittedByPeer)? = timeline.messages.last?.sendState else {
+            return XCTFail("expected notAdmittedByPeer, got \(String(describing: timeline.messages.last?.sendState))")
+        }
+        await client.simulateNotAdmittedByPeer(chatId: direct, hubId: nil)
+
+        let id = try await client.sendText(chatId: direct, body: "Accepted", replyTo: nil)
+        XCTAssertEqual(timeline.messages.last?.messageId, id)
+        XCTAssertEqual(timeline.messages.last?.sendState, .pending)
+    }
+
+    func testPeerRefusalRefusesMemberChangesAndLeaveOfThatChatOnly() async throws {
+        let client = try await makeDemo()
+        await client.simulateNotAdmittedByPeer(chatId: group, hubId: "hub-b")
+        let refused = GimError.NotAdmittedByPeer(hubId: "hub-b", chatId: group)
+
+        await assertThrows(refused) { try await client.addMembers(chatId: self.group, userIds: ["user-luca"]) }
+        await assertThrows(refused) { try await client.leaveChat(chatId: self.group) }
+        let state = try await client.chatState(chatId: group)
+        XCTAssertEqual(state, .active)
+        _ = try await client.createGroupChat(name: "Other", memberUserIds: ["user-luca"])
+    }
+
+    func testRefusedContactsAreSkippedUnlessNobodyCanBeAdded() async throws {
+        let client = try await makeDemo()
+        await client.refuseContacts(["user-luca", "user-nikos"])
+
+        await assertThrows(.ContactNotAdmitted(userIds: ["user-luca"])) {
+            _ = try await client.createDirectChat(userId: "user-luca")
+        }
+        await assertThrows(.ContactNotAdmitted(userIds: ["user-luca", "user-nikos"])) {
+            _ = try await client.createGroupChat(name: "Regatta", memberUserIds: ["user-luca", "user-nikos"])
+        }
+        await assertThrows(.ContactNotAdmitted(userIds: ["user-nikos"])) {
+            _ = try await client.createGroupChat(name: "Regatta", memberUserIds: ["user-missing", "user-nikos"])
+        }
+        let chat = try await client.createGroupChat(name: "Regatta", memberUserIds: ["user-sofia", "user-luca"])
+        var members = try await client.chatMembers(chatId: chat)
+        XCTAssertEqual(members.map(\.userId), [FakeGimClient.demoSelfId, "user-sofia"])
+
+        await assertThrows(.ContactNotAdmitted(userIds: ["user-nikos"])) {
+            try await client.addMembers(chatId: chat, userIds: ["user-nikos"])
+        }
+        await client.addRemoteUser(UserProfile(userId: "user-kai", handle: "kai", displayName: "Kai"))
+        try await client.addMembers(chatId: chat, userIds: ["user-nikos", "user-kai"])
+        members = try await client.chatMembers(chatId: chat)
+        XCTAssertEqual(members.map(\.userId), [FakeGimClient.demoSelfId, "user-sofia", "user-kai"])
+        let (_, timeline) = try await subscribeTimeline(client, chat)
+        let removed = timeline.items.compactMap { item -> String? in
+            guard case .membershipChange(_, .removed, _, let userId, _) = item else { return nil }
+            return userId
+        }
+        XCTAssertEqual(removed, ["user-luca", "user-nikos"], "each refused invitee shows as removed")
     }
 }
 

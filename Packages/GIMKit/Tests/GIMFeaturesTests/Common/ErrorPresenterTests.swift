@@ -45,6 +45,10 @@ final class ErrorPresenterTests: XCTestCase {
             ),
             (.UserSuspended(hubId: "h2"), suspended),
             (.UserSuspended(hubId: ""), suspended),
+            (.UserNotAdmitted(hubId: "h2"), "Your account is not admitted on this hub."),
+            (.UserNotAdmitted(hubId: ""), "Your account is not admitted on this hub."),
+            (.NotAdmittedByPeer(hubId: "h2", chatId: "h2/g1"), "This chat's hub does not accept messages from you."),
+            (.ContactNotAdmitted(userIds: ["u-ana"]), "u-ana does not accept contacts from you."),
         ]
         for (error, message) in cases {
             XCTAssertEqual(ErrorPresenter.message(for: error), message, "\(error)")
@@ -94,11 +98,68 @@ final class ErrorPresenterTests: XCTestCase {
         XCTAssertEqual(other, ErrorPresenter.message(for: GimError.Cancelled))
     }
 
-    func testSuspendedFailureReason() {
-        XCTAssertEqual(ErrorPresenter.suspendedHubId(failureReason: "user suspended on hub hub-b"), "hub-b")
-        XCTAssertEqual(ErrorPresenter.suspendedHubId(failureReason: "user suspended on hub "), "")
-        XCTAssertNil(ErrorPresenter.suspendedHubId(failureReason: "rejected (403 not_member)"))
-        XCTAssertNil(ErrorPresenter.suspendedHubId(failureReason: FakeGimClient.failureReason))
+    func testNotAdmittedNamesTheHubOnlyWhenSeveralHubsAreListed() {
+        let home = hub("hub-a", "https://hub.g.im")
+        let second = hub("hub-b", "https://Hub2.example.eu:8443")
+        XCTAssertEqual(
+            ErrorPresenter.notAdmittedMessage(hubId: "hub-b", hubs: [home, second]),
+            "Your account is not admitted on hub2.example.eu.")
+        let plain = "Your account is not admitted on this hub."
+        XCTAssertEqual(ErrorPresenter.notAdmittedMessage(hubId: "hub-a", hubs: [home]), plain, "a single hub")
+        XCTAssertEqual(ErrorPresenter.notAdmittedMessage(hubId: "", hubs: [home, second]), plain, "no hub id")
+        XCTAssertEqual(ErrorPresenter.notAdmittedMessage(hubId: "hub-x", hubs: [home, second]), plain, "unknown")
+    }
+
+    @MainActor
+    func testNotAdmittedReadsTheClientsHubs() async throws {
+        let scheduler = ManualFakeScheduler()
+        let client = FakeGimClient(
+            scheduler: scheduler, session: Session(userId: "u", deviceId: "d", handle: "", displayName: "U"))
+        _ = try await client.addHub(url: "https://hub2.example.eu")
+        await scheduler.advance(by: FakeGimClient.hubVerifyDelay)
+        let error = GimError.UserNotAdmitted(hubId: FakeGimClient.hubId(forUrl: "https://hub2.example.eu"))
+
+        let named = await ErrorPresenter.message(for: error, client: client)
+
+        XCTAssertEqual(named, "Your account is not admitted on hub2.example.eu.")
+    }
+
+    func testRegistrationRefusalNamesTheRefusingHub() {
+        XCTAssertEqual(
+            ErrorPresenter.registrationMessage(for: GimError.UserNotAdmitted(hubId: "")),
+            "This hub does not admit your account.")
+        XCTAssertEqual(
+            ErrorPresenter.registrationMessage(for: GimError.Network(reason: "x")),
+            ErrorPresenter.message(for: GimError.Network(reason: "x")))
+    }
+
+    func testContactRefusalNamesTheUsers() {
+        let profiles = [
+            UserProfile(userId: "u-ana", handle: "ana", displayName: "Ana Kovač"),
+            UserProfile(userId: "u-lars", handle: "lars", displayName: ""),
+            UserProfile(userId: "u-x", handle: "", displayName: ""),
+        ]
+        XCTAssertEqual(
+            ErrorPresenter.contactNotAdmittedMessage(userIds: ["u-ana"], profiles: profiles),
+            "Ana Kovač does not accept contacts from you.")
+        XCTAssertEqual(
+            ErrorPresenter.contactNotAdmittedMessage(userIds: ["u-ana", "u-lars"], profiles: profiles),
+            "Ana Kovač and @lars do not accept contacts from you.")
+        XCTAssertEqual(
+            ErrorPresenter.contactNotAdmittedMessage(userIds: ["u-ana", "u-lars", "u-x", "u-new"], profiles: profiles),
+            "Ana Kovač, @lars, u-x and u-new do not accept contacts from you.")
+        XCTAssertEqual(
+            ErrorPresenter.contactNotAdmittedMessage(userIds: [], profiles: profiles),
+            "This user does not accept contacts from you.")
+    }
+
+    func testSendFailureExplanations() {
+        XCTAssertEqual(ErrorPresenter.sendFailureMessage(.userSuspended), suspended)
+        XCTAssertEqual(ErrorPresenter.sendFailureMessage(.userNotAdmitted), "Your account is not admitted on this hub.")
+        XCTAssertEqual(
+            ErrorPresenter.sendFailureMessage(.notAdmittedByPeer), "This chat's hub does not accept messages from you.")
+        XCTAssertNil(ErrorPresenter.sendFailureMessage(.rejected))
+        XCTAssertNil(ErrorPresenter.sendFailureMessage(.other))
     }
 
     private let suspended =

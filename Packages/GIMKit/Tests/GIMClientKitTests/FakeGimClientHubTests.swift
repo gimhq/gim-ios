@@ -338,4 +338,51 @@ final class FakeGimClientHubTests: XCTestCase {
         let devices = try await client.devices()
         XCTAssertFalse(devices.isEmpty)
     }
+
+    func testNotAdmittedOnAListedHubRefusesCallsAndSendsAndKeepsTheSession() async throws {
+        let client = try makeClient()
+        try await addVerified(client, secondUrl)
+
+        await client.simulateNotAdmitted(hubId: second)
+
+        await assertThrows(.UserNotAdmitted(hubId: second)) { _ = try await client.devices() }
+        let session = try await client.session()
+        XCTAssertEqual(session, me, "the session is kept")
+        try await client.startSync()
+        let hubs = try await client.hubs()
+        XCTAssertEqual(hubs.map(\.hubId), [home, second])
+
+        await client.simulateNotAdmitted(hubId: nil)
+
+        let devices = try await client.devices()
+        XCTAssertFalse(devices.isEmpty)
+    }
+
+    func testAddingAHubThatDoesNotAdmitTheUserLeavesItUnlisted() async throws {
+        let client = try makeClient()
+        await client.simulateNotAdmitted(hubId: second)
+
+        await assertThrows(.UserNotAdmitted(hubId: second)) { _ = try await client.addHub(url: secondUrl) }
+
+        let hubs = try await client.hubs()
+        XCTAssertEqual(hubs.map(\.hubId), [home])
+        let devices = try await client.devices()
+        XCTAssertFalse(devices.isEmpty, "an unlisted hub does not refuse the session")
+    }
+
+    func testRegistrationOnAHubThatDoesNotAdmitTheUserKeepsNothing() async throws {
+        let client = FakeGimClient(
+            scheduler: scheduler, dataDirectory: try makeTemporaryDirectory(), homeHubUrl: homeUrl)
+        await client.simulateNotAdmitted(hubId: "")
+
+        await assertThrows(.UserNotAdmitted(hubId: "")) { _ = try await client.createIdentity(displayName: "Kai") }
+        let link = try client.startLink(hubs: [homeUrl])
+        await assertThrows(.UserNotAdmitted(hubId: "")) { _ = try await client.waitLink(link: link) }
+        let session = try await client.session()
+        XCTAssertNil(session)
+
+        await client.simulateNotAdmitted(hubId: nil)
+
+        _ = try await client.createIdentity(displayName: "Kai")
+    }
 }

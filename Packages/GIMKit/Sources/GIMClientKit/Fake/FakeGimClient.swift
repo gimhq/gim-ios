@@ -175,6 +175,12 @@ public actor FakeGimClient: GimClientAPI {
     private var nextSendRejection: (status: UInt16, code: String)?
     /// Hub id of `simulateSuspension(hubId:)`; `nil` while the user is not suspended.
     private var suspendedHubId: String?
+    /// Hub id of `simulateNotAdmitted(hubId:)`; `nil` while every hub admits the user.
+    private var notAdmittedHubId: String?
+    /// Hub id of `simulateNotAdmittedByPeer(chatId:hubId:)` per chat.
+    private var peerRefusals: [String: String] = [:]
+    /// Users of `refuseContacts(_:)`.
+    private var refusedContactIds: Set<String> = []
     /// `ChatState` of every chat, for the synchronous `Timeline.chatState()`.
     private let chatStates = Mutex<[String: ChatState]>([:])
     private var fetchMediaFailure: GimError?
@@ -307,10 +313,33 @@ public actor FakeGimClient: GimClientAPI {
 
     /// Simulates an admin of the hub `hubId` (empty: a home hub without a hub identity) suspending the user; `nil`
     /// lifts it. Like gim-core, every call that needs a session then throws `UserSuspended(hubId:)`, while the session,
-    /// the local chats and `hubs()` stay. Own sends are still accepted and end `failed` with gim-core's reason
-    /// (`user suspended on hub <hubId>`), and `startSync` still starts the sync loop.
+    /// the local chats and `hubs()` stay. Own sends are still accepted and end `failed` with cause `userSuspended`, and
+    /// `startSync` still starts the sync loop.
     public func simulateSuspension(hubId: String?) {
         suspendedHubId = hubId
+    }
+
+    /// Simulates the user policy of the hub `hubId` not admitting the user; `nil` lifts it. Without a session,
+    /// `createIdentity`, `restoreFromRecovery` and `waitLink` throw `UserNotAdmitted(hubId:)` and keep nothing when
+    /// `hubId` is empty or the home hub. `addHub` of a URL with that hub id throws it and leaves the hub unlisted. While
+    /// `hubId` is empty or a listed hub, the rest works like `simulateSuspension(hubId:)` with `UserNotAdmitted` and the
+    /// send cause `userNotAdmitted`.
+    public func simulateNotAdmitted(hubId: String?) {
+        notAdmittedHubId = hubId
+    }
+
+    /// Simulates the hub `hubId` owning the chat `chatId` not admitting the user; `nil` lifts it. Own sends there end
+    /// `failed` with cause `notAdmittedByPeer` at once, and `addMembers`, `removeMember` and `leaveChat` of that chat
+    /// throw `NotAdmittedByPeer(hubId:chatId:)` without a change (a leave keeps the chat active).
+    public func simulateNotAdmittedByPeer(chatId: String, hubId: String?) {
+        peerRefusals[chatId] = hubId
+    }
+
+    /// The hubs of `userIds` do not admit the user (replacing an earlier set): `createDirectChat` with one of them
+    /// throws `ContactNotAdmitted`; `createGroupChat` and `addMembers` skip them like unknown users and throw
+    /// `ContactNotAdmitted` with the refused ones only when no invitee could be added.
+    public func refuseContacts(_ userIds: Set<String>) {
+        refusedContactIds = userIds
     }
 
     /// The next `fetchMedia` call throws `error` (for example `.RetryLater`); later calls succeed again.
@@ -459,6 +488,7 @@ public actor FakeGimClient: GimClientAPI {
     public func createIdentity(displayName: String) async throws -> String {
         guard session == nil else { throw GimError.InvalidInput(reason: "This device already has an identity") }
         let displayName = try Self.validDisplayName(displayName)
+        try requireRegistrationAdmitted()
         let userId = makeId("user")
         createdIdentities += 1
         let code = Self.recoveryCode(
@@ -479,6 +509,7 @@ public actor FakeGimClient: GimClientAPI {
             throw GimError.NotFound(reason: "device list of \(userId)")
         }
         guard code == expected else { throw GimError.Crypto(reason: "Wrong recovery code") }
+        try requireRegistrationAdmitted()
         if revokeOthers {
             deviceLists[userId] = deviceLists[userId, default: []].map(Self.revoked)
         }
@@ -498,6 +529,7 @@ public actor FakeGimClient: GimClientAPI {
     /// Signs in as the demo user (`demoSelfId`), whose first device is `device-1`.
     public func waitLink(link: any LinkSession) async throws -> String {
         guard session == nil else { throw GimError.InvalidInput(reason: "This device already has an identity") }
+        try requireRegistrationAdmitted()
         let qrString = link.qrString()
         let started = startedLinks.withLock { links in
             guard links[qrString] == false else { return false }
@@ -641,7 +673,7 @@ public actor FakeGimClient: GimClientAPI {
         guard options.mode != .`extension` else {
             throw GimError.InvalidInput(reason: "no sync loop in extension mode")
         }
-        _ = try requireSession(allowingSuspension: true)
+        _ = try requireSession(allowingAccountRefusal: true)
         syncRunning = true
         reconnect()
     }
@@ -711,6 +743,7 @@ public actor FakeGimClient: GimClientAPI {
         if let existing = chats.values.first(where: { $0.kind == .direct && $0.members.contains(userId) }) {
             return existing.id
         }
+        guard !refusedContactIds.contains(userId) else { throw GimError.ContactNotAdmitted(userIds: [userId]) }
         let chat = StoredChat(
             id: makeId("chat"), kind: .direct, name: "", createdAtMs: nowMs(), members: [session.userId, userId])
         chats[chat.id] = chat
@@ -747,6 +780,7 @@ public actor FakeGimClient: GimClientAPI {
         let session = try requireSession()
         var chat = try existingGroup(chatId, "Members can only be added to groups")
         try requireActive(chat)
+        try requirePeerAdmits(chatId)
         let (added, skipped) = try invitees(userIds, excluding: chat.members)
         chat.members += added
         chats[chatId] = chat
@@ -756,20 +790,23 @@ public actor FakeGimClient: GimClientAPI {
         reportSkipped(skipped, chatId, by: session.userId)
     }
 
-    /// Splits invitees into known users and unknown ones (like gim-core's users without a device, which are
-    /// skipped). `NotFound` if every invitee is unknown.
+    /// Splits invitees into known users and skipped ones: unknown users (like gim-core's users without a device) and
+    /// users of `refuseContacts(_:)`. If every invitee is skipped: `ContactNotAdmitted` with the refused ones, or
+    /// `NotFound` if none was refused.
     private func invitees(_ userIds: [String], excluding members: [String]) throws -> (
         found: [String], skipped: [String]
     ) {
         var found: [String] = []
         var skipped: [String] = []
         for userId in userIds where !members.contains(userId) && !found.contains(userId) && !skipped.contains(userId) {
-            if users[userId] == nil || devicelessUserIds.contains(userId) {
+            if users[userId] == nil || devicelessUserIds.contains(userId) || refusedContactIds.contains(userId) {
                 skipped.append(userId)
             } else {
                 found.append(userId)
             }
         }
+        let refused = skipped.filter { refusedContactIds.contains($0) }
+        if found.isEmpty, !refused.isEmpty { throw GimError.ContactNotAdmitted(userIds: refused) }
         if found.isEmpty, !skipped.isEmpty {
             throw GimError.NotFound(reason: "users \(skipped.joined(separator: ", "))")
         }
@@ -795,6 +832,7 @@ public actor FakeGimClient: GimClientAPI {
         let session = try requireSession()
         var chat = try existingGroup(chatId, "Members can only be removed from groups")
         try requireActive(chat)
+        try requirePeerAdmits(chatId)
         guard userId != session.userId else { throw GimError.InvalidInput(reason: "Use leaveChat to leave a group") }
         guard chat.members.contains(userId), users[userId] != nil else {
             throw GimError.NotFound(reason: "member \(userId)")
@@ -817,6 +855,7 @@ public actor FakeGimClient: GimClientAPI {
         case .leaving:
             return
         case .active:
+            try requirePeerAdmits(chatId)
             chat.state = .leaving
             chats[chatId] = chat
             publishChatList()
@@ -1026,6 +1065,7 @@ public actor FakeGimClient: GimClientAPI {
             throw GimError.InvalidInput(reason: "url: \(url) does not serve a gim hub")
         }
         let hubId = Self.hubId(forUrl: url)
+        if hubId == notAdmittedHubId { throw GimError.UserNotAdmitted(hubId: hubId) }
         if let index = storedHubs.firstIndex(where: { $0.hubId == hubId && $0.state != .removed }) {
             // A listed hub: only records the URL entered here; a hub known from another device is verified then.
             if !storedHubs[index].signedIn, storedHubs[index].state == .unverified {
@@ -1254,7 +1294,7 @@ public actor FakeGimClient: GimClientAPI {
     private func sendOwn(
         _ chatId: String, messageId: String, content: MessageContent, replyTo: String?
     ) throws -> String {
-        let session = try requireSession(allowingSuspension: true)
+        let session = try requireSession(allowingAccountRefusal: true)
         try requireActive(existingChat(chatId))
         let reply = try replyTo.map { try replyPreview(for: $0, in: chatId) }
         let item = MessageItem(
@@ -1265,12 +1305,23 @@ public actor FakeGimClient: GimClientAPI {
         appendEntry(.message(StoredMessage(item: item)), chatId)
         if let suspendedHubId {
             updateMessage(chatId, messageId) {
-                $0.item.sendState = .failed(reason: "user suspended on hub \(suspendedHubId)")
+                $0.item.sendState = .failed(reason: "user suspended on hub \(suspendedHubId)", cause: .userSuspended)
+            }
+        } else if let notAdmittedHubId, isAccountRefused {
+            updateMessage(chatId, messageId) {
+                $0.item.sendState = .failed(
+                    reason: "user not admitted on hub \(notAdmittedHubId)", cause: .userNotAdmitted)
+            }
+        } else if let hubId = peerRefusals[chatId] {
+            updateMessage(chatId, messageId) {
+                $0.item.sendState = .failed(
+                    reason: "not admitted by peer hub \(hubId) for chat \(chatId)", cause: .notAdmittedByPeer)
             }
         } else if let rejection = nextSendRejection {
             nextSendRejection = nil
             updateMessage(chatId, messageId) {
-                $0.item.sendState = .failed(reason: "rejected (\(rejection.status) \(rejection.code))")
+                $0.item.sendState = .failed(
+                    reason: "rejected (\(rejection.status) \(rejection.code))", cause: .rejected)
             }
         } else {
             startDelivery(messageId)
@@ -1286,7 +1337,7 @@ public actor FakeGimClient: GimClientAPI {
         let state: SendState
         if sendFailuresRemaining > 0 {
             sendFailuresRemaining -= 1
-            state = .failed(reason: Self.failureReason)
+            state = .failed(reason: Self.failureReason, cause: .other)
         } else {
             state = .sent
         }
@@ -1359,11 +1410,31 @@ public actor FakeGimClient: GimClientAPI {
 
     // MARK: - State helpers
 
-    /// The session; `UserSuspended` while `simulateSuspension(hubId:)` is on, unless `allowingSuspension`.
-    private func requireSession(allowingSuspension: Bool = false) throws -> Session {
+    /// The session; `UserSuspended` while `simulateSuspension(hubId:)` is on and `UserNotAdmitted` while
+    /// `isAccountRefused`, unless `allowingAccountRefusal`.
+    private func requireSession(allowingAccountRefusal: Bool = false) throws -> Session {
         guard let session else { throw GimError.NotRegistered }
-        if let suspendedHubId, !allowingSuspension { throw GimError.UserSuspended(hubId: suspendedHubId) }
+        guard !allowingAccountRefusal else { return session }
+        if let suspendedHubId { throw GimError.UserSuspended(hubId: suspendedHubId) }
+        if let notAdmittedHubId, isAccountRefused { throw GimError.UserNotAdmitted(hubId: notAdmittedHubId) }
         return session
+    }
+
+    /// Whether the hub of `simulateNotAdmitted(hubId:)` refuses the signed-in user: an empty id or a listed hub.
+    private var isAccountRefused: Bool {
+        guard let notAdmittedHubId else { return false }
+        return notAdmittedHubId.isEmpty || listedHubs().contains { $0.hubId == notAdmittedHubId }
+    }
+
+    /// `UserNotAdmitted` for a registration while the home hub (or an unknown hub) does not admit the user.
+    private func requireRegistrationAdmitted() throws {
+        guard let notAdmittedHubId, notAdmittedHubId.isEmpty || notAdmittedHubId == homeHubId else { return }
+        throw GimError.UserNotAdmitted(hubId: notAdmittedHubId)
+    }
+
+    /// `NotAdmittedByPeer` while `simulateNotAdmittedByPeer(chatId:hubId:)` is on for the chat.
+    private func requirePeerAdmits(_ chatId: String) throws {
+        if let hubId = peerRefusals[chatId] { throw GimError.NotAdmittedByPeer(hubId: hubId, chatId: chatId) }
     }
 
     private func existingUser(_ userId: String) throws -> UserProfile {

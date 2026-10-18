@@ -67,7 +67,7 @@ public final class RestoreViewModel {
         } catch GimError.Crypto {
             errorMessage = Self.wrongCodeMessage
         } catch {
-            errorMessage = ErrorPresenter.message(for: error)
+            errorMessage = ErrorPresenter.registrationMessage(for: error)
         }
     }
 

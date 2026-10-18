@@ -65,7 +65,7 @@ public final class LinkThisDeviceViewModel {
             }
             step = .comparing(sas: sas)
         } catch {
-            step = Task.isCancelled ? .starting : .failed(message: ErrorPresenter.message(for: error))
+            step = Task.isCancelled ? .starting : .failed(message: ErrorPresenter.registrationMessage(for: error))
         }
     }
 

@@ -336,6 +336,38 @@ final class GroupInfoViewModelTests: XCTestCase {
         try DiffApplier.apply(try XCTUnwrap(list), to: &chats)
         return chats.map(\.chatId)
     }
+
+    @MainActor
+    func testAddMemberWhoseHubRefusesNamesThem() async throws {
+        let (client, viewModel) = try await startedGroup()
+        await client.refuseContacts(["user-nikos"])
+
+        viewModel.memberHandle = "nikos"
+        await viewModel.addMember()
+
+        XCTAssertEqual(viewModel.errorMessage, "Nikos Papadopoulos does not accept contacts from you.")
+        XCTAssertEqual(viewModel.memberHandle, "nikos")
+        XCTAssertEqual(viewModel.members?.count, 3)
+    }
+
+    @MainActor
+    func testMemberChangesAndLeaveRefusedByTheChatsHubAreExplained() async throws {
+        let (client, viewModel) = try await startedGroup()
+        await client.simulateNotAdmittedByPeer(chatId: viewModel.chatId, hubId: "hub-owner")
+
+        viewModel.memberHandle = "nikos"
+        await viewModel.addMember()
+
+        XCTAssertEqual(viewModel.errorMessage, "This chat's hub does not accept messages from you.")
+        XCTAssertEqual(viewModel.members?.count, 3)
+
+        await viewModel.leave()
+
+        XCTAssertEqual(viewModel.errorMessage, "This chat's hub does not accept messages from you.")
+        XCTAssertFalse(viewModel.hasLeft)
+        let state = try await client.chatState(chatId: viewModel.chatId)
+        XCTAssertEqual(state, .active, "a refused leave keeps the chat active")
+    }
 }
 
 private enum FakeDemoPeers {

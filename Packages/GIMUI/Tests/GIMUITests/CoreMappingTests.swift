@@ -23,6 +23,35 @@ final class CoreMappingTests: XCTestCase {
         XCTAssertEqual(GIMCore.GimError(GIMClientKit.GimError.UserSuspended(hubId: "")), .UserSuspended(hubId: ""))
     }
 
+    func testUserPolicyErrorsMapBothWays() {
+        let cases: [(GIMCore.GimError, GIMClientKit.GimError)] = [
+            (.UserNotAdmitted(hubId: "hub-a"), .UserNotAdmitted(hubId: "hub-a")),
+            (.UserNotAdmitted(hubId: ""), .UserNotAdmitted(hubId: "")),
+            (
+                .NotAdmittedByPeer(hubId: "hub-b", chatId: "hub-b/g1"),
+                .NotAdmittedByPeer(hubId: "hub-b", chatId: "hub-b/g1")
+            ),
+            (.ContactNotAdmitted(userIds: ["u1", "u2"]), .ContactNotAdmitted(userIds: ["u1", "u2"])),
+        ]
+        for (core, mirror) in cases {
+            XCTAssertEqual(GIMClientKit.GimError(core), mirror)
+            XCTAssertEqual(GIMCore.GimError(mirror), core)
+        }
+    }
+
+    func testFailedSendStateKeepsTheReasonAndCause() {
+        let causes: [(GIMCore.SendFailure, GIMClientKit.SendFailure)] = [
+            (.userSuspended, .userSuspended), (.userNotAdmitted, .userNotAdmitted),
+            (.notAdmittedByPeer, .notAdmittedByPeer), (.rejected, .rejected), (.other, .other),
+        ]
+        for (core, mirror) in causes {
+            XCTAssertEqual(GIMClientKit.SendFailure(core), mirror)
+            XCTAssertEqual(
+                GIMClientKit.SendState(GIMCore.SendState.failed(reason: "refused", cause: core)),
+                .failed(reason: "refused", cause: mirror))
+        }
+    }
+
     func testPushRegistrationMapsEveryField() {
         let mirror = GIMClientKit.PushRegistration(
             provider: "unifiedpush", token: "https://push.example.eu/up/abc", appId: "im.g.apps", sandbox: false,

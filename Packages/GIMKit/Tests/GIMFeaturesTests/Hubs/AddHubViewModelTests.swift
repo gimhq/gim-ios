@@ -81,4 +81,21 @@ final class AddHubViewModelTests: XCTestCase {
             ErrorPresenter.message(for: GimError.HubNotVerified(reason: "")),
             "This hub couldn't prove it is reachable at this address. Check the address and try again.")
     }
+
+    @MainActor
+    func testAHubThatDoesNotAdmitTheUserIsRefusedAndNotListed() async throws {
+        let client = makeClient()
+        await client.simulateNotAdmitted(hubId: FakeGimClient.hubId(forUrl: "https://hub2.example.eu"))
+        let viewModel = AddHubViewModel(client: client)
+        viewModel.url = "https://hub2.example.eu"
+
+        await viewModel.submit()
+
+        XCTAssertEqual(viewModel.errorMessage, "This hub does not admit your account.")
+        XCTAssertNil(viewModel.addedHub)
+        let hubs = try await client.hubs()
+        XCTAssertEqual(hubs.count, 1, "the hub is not listed")
+        let kept = try await client.session()
+        XCTAssertEqual(kept, session)
+    }
 }

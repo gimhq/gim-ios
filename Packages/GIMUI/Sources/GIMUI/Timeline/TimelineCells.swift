@@ -378,15 +378,15 @@ final class StatusTicksView: UIControl {
             second.tintColor = color
             second.isHidden = false
             accessibilityLabel = status == .read ? "Read" : "Delivered"
-        case .failed(let reason):
+        case .failed(_, let cause):
             first.image = UIImage(systemName: "exclamationmark.circle.fill")
             first.tintColor = .systemRed
             isEnabled = true
             accessibilityTraits = .button
             accessibilityLabel = "Not sent"
-            // `TimelineViewModel.retry` explains a suspension instead of resending.
-            let isSuspended = ErrorPresenter.suspendedHubId(failureReason: reason) != nil
-            accessibilityHint = isSuspended ? "Shows why it wasn't sent" : "Sends the message again"
+            // `TimelineViewModel.retry` explains a cause that can't be retried instead of resending.
+            let canRetry = MessageActionsViewModel.canRetry(cause)
+            accessibilityHint = canRetry ? "Sends the message again" : "Shows why it wasn't sent"
         }
         setNeedsLayout()
     }
