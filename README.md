@@ -96,6 +96,10 @@ gim-hub (see *E2E hub*). `IdentitySmokeTests` creates an identity, links a secon
 compares the SAS, revokes it, and restores the identity from the recovery code. `MessagingSmokeTests` covers onboarding,
 group creation with scripted peers, text and images both ways, a reply, a reaction, read ticks and sign-out. The peers
 and the linked device are gim-core clients inside the test runner with their own temporary data directories.
+`AccountPolicySmokeTests` uses the hub's admin API (`TEST_RUNNER_GIM_E2E_ADMIN_URL`, `TEST_RUNNER_GIM_E2E_ADMIN_TOKEN`;
+skipped without them) to suspend the app's user and then to deny it with `GIM_HUB_USER_POLICY=deny`: each time a send
+fails without Retry, its status explains why, and the app stays signed in; after each restore a relaunched app (a new
+gim-core client, without the in-memory 10-minute sign-in block) delivers again.
 
 ```sh
 url=$(scripts/e2e-hub.sh start | tail -1)
@@ -117,7 +121,8 @@ automated the step is skipped with a screenshot attachment. Each test class prin
 
 ```sh
 scripts/mac-gate.sh build-test [--sha <commit>] [--keep]
-scripts/mac-gate.sh e2e --hub-url <url> [--hub-b-url <url>] [--push-mock-url <url>] [--sha <commit>] [--keep]
+scripts/mac-gate.sh e2e --hub-url <url> [--hub-b-url <url>] [--push-mock-url <url>] [--admin-url <url>] \
+  [--admin-token-file <path>] [--sha <commit>] [--keep]
 ```
 
 Runs from station against the shared Mac build host (`GIM_MAC_HOST`, default `a@100.99.1.8`): ships `git archive` of
@@ -127,7 +132,10 @@ the app and runs the GIMKit and GIMUI package tests; `e2e` also runs `GIMUITests
 (`--hub-b-url`: the second federated hub). With `--push-mock-url` (from `scripts/e2e-hub.sh push-url`) a helper on the
 Mac long-polls the push mock for new `mock-ios-sim` deliveries while the tests run and hands each to
 `xcrun simctl push` on the run's simulator, logging seq, delivery id, bundle id and the simctl exit code to
-`push-helper.log`; the tests get the URL as `TEST_RUNNER_GIM_E2E_PUSH_MOCK_URL` (for `/deliveries` and `/stats`). Logs,
+`push-helper.log`; the tests get the URL as `TEST_RUNNER_GIM_E2E_PUSH_MOCK_URL` (for `/deliveries` and `/stats`). `--admin-url` and `--admin-token-file` (from
+`scripts/e2e-hub.sh admin-url a` and `admin-token-file`) become `TEST_RUNNER_GIM_E2E_ADMIN_URL` and
+`TEST_RUNNER_GIM_E2E_ADMIN_TOKEN`: the token is read from the file and sent over ssh's stdin into a 0600 file that the
+gate deletes once read, and it is replaced by `***` in the logs copied back. Logs,
 the `[e2e-summary]` lines and zipped xcresult bundles land in `.tmp/mac/<short sha>/`; the last line is the
 `[mac-gate] mode=… build=… kit=… ui=… e2e=…` summary. The Mac work dir is kept on failure or with `--keep`.
 
@@ -168,4 +176,15 @@ its `/healthz` is OK; `fed-start` also prints `GIM_E2E_PUSH_MOCK_URL`, and the m
 
 ```sh
 scripts/e2e-hub.sh push-url [--run <id>]   # the mock's URL as seen from the Mac
+```
+
+Every hub of a run also serves gim-hub's admin API (the hub's `docs/admin.md`) on its own published port (the first
+free ones from 18200), with one random 64-hex-character admin token per run in the state dir (`admin.token`, mode 0600,
+never printed). The hubs get it as `GIM_HUB_ADMIN_TOKEN` from the environment of `docker run`, so it is on no command
+line, but `docker inspect` shows it. This is a test harness on a private network: the admin port is published on the
+Docker host for the lifetime of the run only (stop removes it), and the token is worthless once the run's hubs are gone.
+
+```sh
+scripts/e2e-hub.sh admin-url [--run <id>] [a|b]    # hub A/B of the federated run, or the standalone hub
+scripts/e2e-hub.sh admin-token-file [--run <id>]   # the token file's path, for mac-gate.sh --admin-token-file
 ```

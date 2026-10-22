@@ -8,6 +8,8 @@
 #   scripts/e2e-hub.sh fed-stop [--run <id>]
 #   scripts/e2e-hub.sh fed-url a|b [--run <id>]
 #   scripts/e2e-hub.sh push-url [--run <id>]
+#   scripts/e2e-hub.sh admin-url [--run <id>] [a|b]
+#   scripts/e2e-hub.sh admin-token-file [--run <id>]
 #
 # The image `ai-agent/gim-hub:<short sha>` is built from `git archive` of the gim-hub repo (GIM_HUB_REPO, default
 # /srv/gimhq/im-client/hub) at the pinned commit (GIM_HUB_SHA or --sha) if it is missing. Every hub publishes its
@@ -31,9 +33,16 @@
 # in the run's state dir (.tmp/e2e-hub-<run>/ or .tmp/e2e-fed-<run>/, push.env); every hub of the run sends its push
 # webhook to it. Start returns once its /healthz is OK. `push-url` prints its URL as seen from the Mac,
 # http://<GIM_E2E_HUB_HOST>:<port> (the federated run's mock if there is one, else the standalone one).
+#
+# Every hub of a run also serves the admin API (gim-hub docs/admin.md) on GIM_HUB_ADMIN_LISTEN=0.0.0.0:8081, published
+# on its own free port (the first free ones from 18200). The run has one random admin token (64 hex characters) in its
+# state dir (admin.token, mode 0600), handed to the hubs as GIM_HUB_ADMIN_TOKEN from the environment of `docker run`,
+# so it is never on a command line and never printed. `admin-url` prints a hub's admin URL as seen from the Mac
+# (a|b: hub A or B of the federated run; without: the standalone hub), `admin-token-file` the path of the token file
+# (the federated run's if there is one, else the standalone one's).
 set -euo pipefail
 
-default_hub_sha=bd8c9ca29f4dc8804eac2f22a9f771319c00070c
+default_hub_sha=0d756b9e1f7f604f3daa39b4286e83a6ef435d54
 
 repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 hub_repo=${GIM_HUB_REPO:-/srv/gimhq/im-client/hub}
@@ -44,12 +53,14 @@ port=
 port_a=
 port_b=
 fed_hub=
+admin_ports=()
 
 usage() {
     {
         echo "usage: $0 start [--sha <hub sha>] [--port <port>] | stop | url [--port <port>]"
         echo "       $0 fed-start [--run <id>] [--sha <hub sha>] [--port-a <port>] [--port-b <port>]"
         echo "       $0 fed-stop [--run <id>] | fed-url a|b [--run <id>] | push-url [--run <id>]"
+        echo "       $0 admin-url [--run <id>] [a|b] | admin-token-file [--run <id>]"
     } >&2
     exit 2
 }
@@ -124,8 +135,8 @@ wait_healthy() {
 start_push_mock() {
     local name=$1 mock_port secret
     shift
-    # Skips the hub ports of the run (fed_start's hub_port), which are bound after the mock.
-    mock_port=$(free_port 18190 "${hub_port[@]:-}" "$port")
+    # Skips the hub and admin ports of the run (fed_start's hub_port), which are bound after the mock.
+    mock_port=$(free_port 18190 "${hub_port[@]:-}" "$port" "${admin_ports[@]}")
     mkdir -p "$state"
     secret=$(od -An -tx1 -N32 /dev/urandom | tr -d ' \n')
     (
@@ -141,11 +152,38 @@ start_push_mock() {
     echo "gim-push-mock $mock_image ready in $name at $(hub_url "$mock_port")"
 }
 
+# Public URL of container port $2 of the running container $1, empty if it is not running.
+published_url() {
+    local p
+    p=$(docker port "$1" "$2/tcp" 2>/dev/null | head -1 | sed 's/.*://')
+    [[ -n $p ]] && hub_url "$p"
+}
+
 # Public URL of the running push mock container $1, empty if it is not running.
 mock_url() {
-    local p
-    p=$(docker port "$1" 8090/tcp 2>/dev/null | head -1 | sed 's/.*://')
-    [[ -n $p ]] && hub_url "$p"
+    published_url "$1" 8090
+}
+
+# Writes a new random admin token to <state dir $state>/admin.token (mode 0600, never printed) and picks $1 free
+# admin ports (from 18200, skipping the ports in the remaining arguments) into admin_ports.
+new_admin() {
+    local count=$1 _
+    shift
+    mkdir -p "$state"
+    (
+        umask 077
+        od -An -tx1 -N32 /dev/urandom | tr -d ' \n' >"$state/admin.token"
+    )
+    admin_ports=()
+    for _ in $(seq 1 "$count"); do
+        admin_ports+=("$(free_port 18200 "$@" "${admin_ports[@]}")")
+    done
+}
+
+# Runs `docker run "$@"` with GIM_HUB_ADMIN_TOKEN from <state dir $state>/admin.token in its environment, which
+# `-e GIM_HUB_ADMIN_TOKEN` (without a value) hands to the container.
+docker_run_with_admin() {
+    GIM_HUB_ADMIN_TOKEN=$(<"$state/admin.token") docker run "$@"
 }
 
 container=ai-agent-gim-ios-hub-$id
@@ -169,16 +207,20 @@ start() {
     stop
     require_free_port "$port"
     build_image
+    new_admin 1 "$port"
     if ! start_push_mock "$mock" --rm "${labels[@]}"; then
         stop
         exit 1
     fi
-    docker run -d --rm \
+    docker_run_with_admin -d --rm \
         "${labels[@]}" \
         --name "$container" \
         --network traefik \
         -p "$port:8080" \
+        -p "${admin_ports[0]}:8081" \
         --env-file "$state/push.env" \
+        -e GIM_HUB_ADMIN_LISTEN=0.0.0.0:8081 \
+        -e GIM_HUB_ADMIN_TOKEN \
         -e RUST_LOG=info \
         -e "GIM_HUB_PUBLIC_URL=$(hub_url "$port")" \
         -e "GIM_HUB_PUSH_WEBHOOK_URL=http://$mock:8090/push" \
@@ -227,7 +269,7 @@ fed_wait_bound() {
 
 fed_start() {
     local prefix dir hub other labels=(--label ai-agent=true --label "ai-agent-run=gim-ios-e2e-$id")
-    local -A hub_id hub_port
+    local -A hub_id hub_port hub_admin_port
     prefix=$(fed_prefix)
     dir=$repo/.tmp/e2e-fed-$id
     state=$dir
@@ -242,6 +284,9 @@ fed_start() {
 
     hub_port[a]=${port_a:-$(free_port 18181 "$port_b")}
     hub_port[b]=${port_b:-$(free_port 18181 "${hub_port[a]}")}
+    new_admin 2 "${hub_port[@]}"
+    hub_admin_port[a]=${admin_ports[0]}
+    hub_admin_port[b]=${admin_ports[1]}
 
     mkdir -p "$dir"
     {
@@ -260,16 +305,19 @@ fed_start() {
         echo "${hub_id[$hub]} /dns4/hub-$hub/tcp/4001"
     done >"$dir/allowlist"
     chmod 0755 "$dir"
-    chmod 0644 "$dir"/*
+    chmod 0644 "$dir/allowlist" "$dir/swarm.key"
 
     start_push_mock "$prefix-push-mock" "${labels[@]}" || exit 1
     docker network connect "$prefix" "$prefix-push-mock"
     for hub in a b; do
-        docker run -d "${labels[@]}" --name "$prefix-$hub" \
+        docker_run_with_admin -d "${labels[@]}" --name "$prefix-$hub" \
             --network "$prefix" --network-alias "hub-$hub" \
             -p "${hub_port[$hub]}:8080" \
+            -p "${hub_admin_port[$hub]}:8081" \
             -v "$prefix-$hub:/data" -v "$dir:/config:ro" \
             --env-file "$dir/push.env" \
+            -e GIM_HUB_ADMIN_LISTEN=0.0.0.0:8081 \
+            -e GIM_HUB_ADMIN_TOKEN \
             -e "GIM_HUB_PUSH_WEBHOOK_URL=http://$prefix-push-mock:8090/push" \
             -e RUST_LOG=info \
             -e "GIM_HUB_PUBLIC_URL=$(hub_url "${hub_port[$hub]}")" \
@@ -296,6 +344,9 @@ fed_start() {
     echo "GIM_E2E_HUB_ID_A=${hub_id[a]}"
     echo "GIM_E2E_HUB_ID_B=${hub_id[b]}"
     echo "GIM_E2E_PUSH_MOCK_URL=$(mock_url "$prefix-push-mock")"
+    echo "GIM_E2E_ADMIN_A=$(published_url "$prefix-a" 8081)"
+    echo "GIM_E2E_ADMIN_B=$(published_url "$prefix-b" 8081)"
+    echo "GIM_E2E_ADMIN_TOKEN_FILE=$dir/admin.token"
 }
 
 fed_url() {
@@ -316,6 +367,29 @@ push_url() {
         exit 1
     fi
     echo "$u"
+}
+
+admin_url() {
+    local u c=$container
+    [[ -n $fed_hub ]] && c=$(fed_prefix)-$fed_hub
+    u=$(published_url "$c" 8081)
+    if [[ -z $u ]]; then
+        echo "error: no admin listener of ${fed_hub:+hub $fed_hub of }run $id is running" >&2
+        exit 1
+    fi
+    echo "$u"
+}
+
+admin_token_file() {
+    local f
+    for f in "$repo/.tmp/e2e-fed-$id/admin.token" "$state/admin.token"; do
+        if [[ -f $f ]]; then
+            echo "$f"
+            return
+        fi
+    done
+    echo "error: no admin token of run $id; start its hubs first" >&2
+    exit 1
 }
 
 [[ $# -ge 1 ]] || usage
@@ -344,12 +418,17 @@ while [[ $# -gt 0 ]]; do
         shift 2
         ;;
     --run)
-        [[ $# -ge 2 && ($cmd == fed-* || $cmd == push-url) ]] || usage
+        [[ $# -ge 2 && ($cmd == fed-* || $cmd == push-url || $cmd == admin-*) ]] || usage
         id=$2
         container=ai-agent-gim-ios-hub-$id
         mock=$container-push-mock
         state=$repo/.tmp/e2e-hub-$id
         shift 2
+        ;;
+    a | b)
+        [[ $cmd == admin-url && -z $fed_hub ]] || usage
+        fed_hub=$1
+        shift
         ;;
     *)
         usage
@@ -365,5 +444,7 @@ fed-start) fed_start ;;
 fed-stop) fed_stop ;;
 fed-url) fed_url ;;
 push-url) push_url ;;
+admin-url) admin_url ;;
+admin-token-file) admin_token_file ;;
 *) usage ;;
 esac
