@@ -2,7 +2,8 @@
 # Builds and tests a commit on the shared macOS build host from station.
 #
 #   scripts/mac-gate.sh build-test [--sha <commit>] [--keep]
-#   scripts/mac-gate.sh e2e --hub-url <url> [--hub-b-url <url>] [--push-mock-url <url>] [--sha <commit>] [--keep]
+#   scripts/mac-gate.sh e2e --hub-url <url> [--hub-b-url <url>] [--push-mock-url <url>] [--admin-url <url>]
+#       [--admin-token-file <path>] [--sha <commit>] [--keep]
 #
 # Ships `git archive <sha>` (default HEAD, which needs a clean tree) to ~/gim-ci/<id>-<short sha>/ on the Mac
 # (GIM_MAC_HOST, default a@100.99.1.8; id = GIM_GATE_ID, default the last component of the branch name). There, under
@@ -12,7 +13,10 @@
 # `e2e-hub.sh fed-start` for HubsSmokeTests, which is skipped without it). With --push-mock-url (`e2e-hub.sh push-url`)
 # a helper on the Mac hands every new mock-ios-sim delivery of that push mock to `xcrun simctl push` on the run's
 # simulator while GIMUITests run (logged to push-helper.log), and the tests get the URL as
-# TEST_RUNNER_GIM_E2E_PUSH_MOCK_URL. The tests allow the app's notification authorization alert (E2ETestCase). Raw
+# TEST_RUNNER_GIM_E2E_PUSH_MOCK_URL. --admin-url and --admin-token-file (`e2e-hub.sh admin-url a` and `admin-token-file`:
+# hub A's admin API and the run's token) are passed as TEST_RUNNER_GIM_E2E_ADMIN_URL and TEST_RUNNER_GIM_E2E_ADMIN_TOKEN
+# for AccountPolicySmokeTests, which is skipped without them; the token goes to the Mac over ssh's stdin into a 0600
+# file that the gate deletes once read, and is replaced by *** in the logs copied back. The tests allow the app's notification authorization alert (E2ETestCase). Raw
 # xcodebuild logs, the xcbeautify output, the `[e2e-summary]` line, the Notification Service Extension's metrics
 # (gim-nse.log from the App Group container, as nse.log), the simulator's notification log of the last 30 min
 # (sim-push.log) and the zipped xcresult bundles are copied to .tmp/mac/<short sha>/. Prints one `[mac-gate] ...`
@@ -22,7 +26,7 @@ set -euo pipefail
 
 usage() {
     echo "usage: $0 build-test|e2e [--sha <commit>] [--hub-url <url>] [--hub-b-url <url>] [--push-mock-url <url>]" \
-        "[--keep]" >&2
+        "[--admin-url <url>] [--admin-token-file <path>] [--keep]" >&2
     exit 2
 }
 
@@ -34,6 +38,8 @@ sha=
 hub_url=
 hub_b_url=
 push_mock_url=
+admin_url=
+admin_token_file=
 keep=
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -57,6 +63,16 @@ while [[ $# -gt 0 ]]; do
         push_mock_url=$2
         shift 2
         ;;
+    --admin-url)
+        [[ $# -ge 2 ]] || usage
+        admin_url=$2
+        shift 2
+        ;;
+    --admin-token-file)
+        [[ $# -ge 2 ]] || usage
+        admin_token_file=$2
+        shift 2
+        ;;
     --keep)
         keep=1
         shift
@@ -68,6 +84,10 @@ while [[ $# -gt 0 ]]; do
 done
 if [[ $mode == e2e && -z $hub_url ]]; then
     echo "error: e2e needs --hub-url" >&2
+    exit 2
+fi
+if [[ -n $admin_url && ! -r $admin_token_file ]] || [[ -z $admin_url && -n $admin_token_file ]]; then
+    echo "error: --admin-url and a readable --admin-token-file go together" >&2
     exit 2
 fi
 
@@ -91,14 +111,16 @@ mac() {
     ssh -o BatchMode=yes -o ServerAliveInterval=30 "$host" "$@"
 }
 
-# Runs on the Mac with /bin/bash (3.2) as `gate.sh <mode> <name> <short sha> [hub url] [hub B url] [push mock url]` from
-# the work dir.
+# Runs on the Mac with /bin/bash (3.2) as `gate.sh <mode> <name> <short sha> [hub url] [hub B url] [push mock url]
+# [admin url]` from the work dir; the admin token, if any, is in .tmp/admin.token.
 # shellcheck disable=SC2016
 remote_script='
 set -uo pipefail
-mode=$1 name=$2 short=$3 hub_url=${4:-} hub_b_url=${5:-} push_mock_url=${6:-}
+mode=$1 name=$2 short=$3 hub_url=${4:-} hub_b_url=${5:-} push_mock_url=${6:-} admin_url=${7:-}
 eval "$(/opt/homebrew/bin/brew shellenv)"
 work=$PWD
+admin_token=$(cat .tmp/admin.token 2>/dev/null)
+rm -f .tmp/admin.token
 out=$work/.tmp/gate
 results=$work/.tmp/results
 derived=$work/.tmp/DerivedData
@@ -234,7 +256,8 @@ if [ "$mode" = e2e ] && [ "$build" = ok ]; then
     fi
     # shellcheck disable=SC2086
     TEST_RUNNER_GIM_E2E_SERVER_URL=$hub_url TEST_RUNNER_GIM_E2E_SERVER_URL_B=$hub_b_url \
-        TEST_RUNNER_GIM_E2E_PUSH_MOCK_URL=$push_mock_url run e2e xcodebuild test -project GIM.xcodeproj -scheme GIM \
+        TEST_RUNNER_GIM_E2E_PUSH_MOCK_URL=$push_mock_url TEST_RUNNER_GIM_E2E_ADMIN_URL=$admin_url \
+        TEST_RUNNER_GIM_E2E_ADMIN_TOKEN=$admin_token run e2e xcodebuild test -project GIM.xcodeproj -scheme GIM \
         -only-testing:GIMUITests -destination "$destination" -derivedDataPath "$derived" \
         -resultBundlePath "$results/GIM-e2e.xcresult" $signing && e2e=ok
     # Whether the Notification Service Extension ran: its own log and the notification pipeline (sim-push.log).
@@ -252,6 +275,14 @@ if [ "$mode" = e2e ] && [ "$build" = ok ]; then
     fi
 fi
 
+# The token is hex, so it is a literal sed pattern.
+if [ -n "$admin_token" ]; then
+    grep -rlF "$admin_token" "$out" | while read -r file; do
+        sed -i "" "s/$admin_token/***/g" "$file" && echo "[mac-gate] masked the admin token in $(basename "$file")"
+    done
+    echo "[mac-gate] xcresult files with the admin token: $(grep -rlF "$admin_token" "$results" | wc -l | tr -d " ")"
+fi
+
 for bundle in "$results"/*.xcresult; do
     [ -d "$bundle" ] && ditto -c -k --keepParent "$bundle" "$out/$(basename "$bundle").zip"
 done
@@ -266,11 +297,14 @@ esac
 echo "[mac-gate] shipping $sha to $host:~/$work"
 git -C "$repo" archive "$sha" | mac "rm -rf ~/$work && mkdir -p ~/$work/.tmp && tar -x -C ~/$work"
 printf '%s' "$remote_script" | mac "cat >~/$work/.tmp/gate.sh"
+if [[ -n $admin_token_file ]]; then
+    mac "umask 077 && cat >~/$work/.tmp/admin.token" <"$admin_token_file"
+fi
 
 status=0
 # shellcheck disable=SC2029
 mac "cd ~/$work && /bin/bash .tmp/gate.sh $mode $name $short $(printf '%q' "$hub_url") $(printf '%q' "$hub_b_url") \
-    $(printf '%q' "$push_mock_url")" </dev/null || status=$?
+    $(printf '%q' "$push_mock_url") $(printf '%q' "$admin_url")" </dev/null || status=$?
 
 rm -rf "$local_out"
 mkdir -p "$local_out"
