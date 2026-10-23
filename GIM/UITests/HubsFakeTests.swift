@@ -46,7 +46,7 @@ final class HubsFakeTests: E2ETestCase {
             try waitForLabel(
                 app.staticTexts["addHub.error"], containing: "Couldn't reach a server at this address",
                 "step c: HubNotVerified shown inline", app)
-            try tap(backButton(app, to: "Hubs"), "step c: back to Hubs", app)
+            try tap(backButton(app, to: "Servers"), "step c: back to Servers", app)
             try addHub(secondUrl, "step c", app)
             try requireHub(second, state: "Connected", signedIn: true, "step c", app)
         }

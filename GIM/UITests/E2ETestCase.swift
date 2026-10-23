@@ -39,10 +39,17 @@ class E2ETestCase: XCTestCase {
             "\(step): onboarding Create account button visible", app)
         // The field is hidden behind the button while a default server exists.
         let useAnotherServer = app.buttons["onboarding.useAnotherServer"]
+        let serverField = app.textFields["onboarding.serverUrl"]
+        // At accessibility text sizes the lazy list has not created the row below the fold yet.
+        for _ in 0..<5 where !useAnotherServer.exists && !serverField.exists {
+            scrollUpFrontmost(app)
+        }
         if useAnotherServer.exists {
             try tap(useAnotherServer, "\(step): Use another server button", app)
         }
-        let serverField = app.textFields["onboarding.serverUrl"]
+        for _ in 0..<5 where !serverField.waitForExistence(timeout: 1) {
+            scrollUpFrontmost(app)
+        }
         try require(
             serverField.waitForExistence(timeout: networkTimeout), "\(step): onboarding server field visible", app)
         try require(

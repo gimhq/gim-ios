@@ -103,15 +103,15 @@ final class IdentitySmokeTests: E2ETestCase {
 
         summary.start("revoke")
         try XCTContext.runActivity(named: "revoke: the app revokes the linked device") { _ in
-            try tap(app.buttons["devices.revoke.\(linkedDeviceId)"], "revoke: Revoke button", app)
+            try tap(app.buttons["devices.revoke.\(linkedDeviceId)"], "revoke: Remove button", app)
             // The confirmation dialog's button has the same title.
             let confirm = app.buttons
-                .matching(NSPredicate(format: "label == 'Revoke' AND NOT (identifier BEGINSWITH 'devices.revoke.')"))
+                .matching(NSPredicate(format: "label == 'Remove' AND NOT (identifier BEGINSWITH 'devices.revoke.')"))
                 .firstMatch
             try tap(confirm, "revoke: confirmation button", app)
             try require(
                 deviceRow(linkedDeviceId, app).staticTexts["Removed"].waitForExistence(timeout: networkTimeout),
-                "revoke: the linked device shows Revoked", app)
+                "revoke: the linked device shows Removed", app)
             // Only logged: whether the hub still answers a revoked device is gim-core's and gim-hub's business.
             let view = try waitForPeer("revoke: linked device lists devices", app) { () async -> String in
                 do {
@@ -165,7 +165,7 @@ final class IdentitySmokeTests: E2ETestCase {
                 "restore: one new device is This device, found \(current) of \(ids)", app)
             for earlier in [appDeviceId, linkedDeviceId] {
                 try require(
-                    deviceRow(earlier, app).staticTexts["Removed"].exists, "restore: \(earlier) shows Revoked", app)
+                    deviceRow(earlier, app).staticTexts["Removed"].exists, "restore: \(earlier) shows Removed", app)
             }
             print("[e2e] restore: restored device \(current[0])")
         }
