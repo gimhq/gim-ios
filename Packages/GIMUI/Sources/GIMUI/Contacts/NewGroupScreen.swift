@@ -35,12 +35,13 @@ public struct NewGroupScreen: View {
                 HStack {
                     TextField(
                         String(localized: "Add by username", table: "Contacts", bundle: .module),
-                        text: $viewModel.memberHandle)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .submitLabel(.done)
-                        .onSubmit(addMember)
-                        .accessibilityIdentifier("newGroup.memberHandle")
+                        text: $viewModel.memberHandle
+                    )
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .submitLabel(.done)
+                    .onSubmit(addMember)
+                    .accessibilityIdentifier("newGroup.memberHandle")
                     if viewModel.isAddingMember {
                         ProgressView()
                     } else {
