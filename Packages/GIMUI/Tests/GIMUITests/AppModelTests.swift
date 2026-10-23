@@ -411,7 +411,7 @@ final class AppModelTests: XCTestCase {
         let devices = DevicesViewModel(client: client)
         await devices.load()
 
-        XCTAssertEqual(devices.errorMessage, "Your account is not admitted on this hub.")
+        XCTAssertEqual(devices.errorMessage, "This server doesn't accept your account.")
         guard case .ready = model.phase else { return XCTFail("expected ready, got \(model.phase)") }
         XCTAssertEqual(model.session, session)
         XCTAssertNil(model.launchError)

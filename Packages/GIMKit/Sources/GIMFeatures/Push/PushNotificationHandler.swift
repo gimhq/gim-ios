@@ -16,7 +16,10 @@ public struct NotificationPresentation: Sendable, Hashable {
 
     /// Shown when the push can't be processed or in time: like gim-core's generic content.
     public static let generic = NotificationPresentation(
-        isDisplayed: true, title: "", body: "New message", threadIdentifier: "", collapseId: nil, kind: .generic)
+        isDisplayed: true, title: "",
+        body: NSLocalizedString(
+            "New message", tableName: "FeaturesPush", bundle: FeaturesLocalization.bundle, value: "New message",
+            comment: ""), threadIdentifier: "", collapseId: nil, kind: .generic)
 
     public init(
         isDisplayed: Bool, title: String, body: String, threadIdentifier: String, collapseId: String?,
@@ -53,8 +56,17 @@ public struct NotificationPresentation: Sendable, Hashable {
         switch (content.kind, content.chatTitle, content.senderDisplayName) {
         case (.invite, let chat, _):
             title = chat ?? ""
-            if let inviter = content.senderDisplayName ?? content.senderUserId { body = "\(inviter) added you" }
-        case (_, let chat?, let sender?) where sender != chat: title = "\(sender) in \(chat)"
+            if let inviter = content.senderDisplayName ?? content.senderUserId {
+                let format = NSLocalizedString(
+                    "%@ added you", tableName: "FeaturesPush", bundle: FeaturesLocalization.bundle,
+                    value: "%@ added you", comment: "")
+                body = String(format: format, inviter)
+            }
+        case (_, let chat?, let sender?) where sender != chat:
+            let format = NSLocalizedString(
+                "%@ in %@", tableName: "FeaturesPush", bundle: FeaturesLocalization.bundle, value: "%@ in %@",
+                comment: "")
+            title = String(format: format, sender, chat)
         case (_, let chat?, _): title = chat
         case (_, nil, let sender?): title = sender
         case (_, nil, nil): title = ""
