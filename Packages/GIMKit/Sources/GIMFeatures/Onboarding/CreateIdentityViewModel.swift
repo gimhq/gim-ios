@@ -15,13 +15,14 @@ public final class CreateIdentityViewModel {
     public private(set) var showsAllErrors = false
 
     private let context: OnboardingContext
-    private let onCreated: @MainActor (any GimClientAPI, String?) -> Void
+    private let onCreated: @MainActor (any GimClientAPI, String, String?) -> Void
 
-    /// - Parameter onCreated: receives the client and the recovery code of the call that succeeded. A failed
-    ///   `createIdentity` keeps nothing, so a retry creates a new user with a new code on the same client.
+    /// - Parameter onCreated: receives the client, the new user ID and the recovery code of the call that
+    ///   succeeded. A failed `createIdentity` keeps nothing, so a retry creates a new user with a new code on the
+    ///   same client.
     public init(
         context: OnboardingContext,
-        onCreated: @escaping @MainActor (_ client: any GimClientAPI, _ recoveryCode: String?) -> Void
+        onCreated: @escaping @MainActor (_ client: any GimClientAPI, _ userId: String, _ recoveryCode: String?) -> Void
     ) {
         self.context = context
         self.onCreated = onCreated
@@ -45,7 +46,8 @@ public final class CreateIdentityViewModel {
             let client = try await context.client()
             let recoveryCode = try await client.createIdentity(
                 displayName: OnboardingValidation.normalizedDisplayName(displayName))
-            onCreated(client, recoveryCode)
+            guard let session = try await client.session() else { throw GimError.NotRegistered }
+            onCreated(client, session.userId, recoveryCode)
         } catch {
             errorMessage = ErrorPresenter.registrationMessage(for: error)
         }

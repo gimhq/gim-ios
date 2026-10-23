@@ -69,7 +69,7 @@ final class ClaimHandleViewModelTests: XCTestCase {
 
         await viewModel.claim()
 
-        XCTAssertEqual(viewModel.errorMessage, "This handle is taken.")
+        XCTAssertEqual(viewModel.errorMessage, ClaimHandleViewModel.takenMessage)
         XCTAssertEqual(finishes.count, 0)
 
         viewModel.handle = "sofia_m"

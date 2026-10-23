@@ -6,7 +6,7 @@ import XCTest
 final class CreateIdentityViewModelTests: XCTestCase {
     @MainActor
     private final class Created {
-        var results: [(client: any GimClientAPI, recoveryCode: String?)] = []
+        var results: [(client: any GimClientAPI, userId: String, recoveryCode: String?)] = []
     }
 
     @MainActor
@@ -17,7 +17,7 @@ final class CreateIdentityViewModelTests: XCTestCase {
         let context = OnboardingContext(
             config: ClientConfig(serverUrl: "https://gim.example.eu"), client: client, discardClient: {},
             onRegistered: { _ in })
-        let viewModel = CreateIdentityViewModel(context: context) { created.results.append(($0, $1)) }
+        let viewModel = CreateIdentityViewModel(context: context) { created.results.append(($0, $1, $2)) }
         return (viewModel, created)
     }
 
@@ -61,6 +61,7 @@ final class CreateIdentityViewModelTests: XCTestCase {
         XCTAssertEqual(code.count, 39 + 9, "39 symbols in ten groups")
         let session = try await client.session()
         XCTAssertEqual(session?.displayName, "Sofia Marin")
+        XCTAssertEqual(result.userId, session?.userId, "the user ID of the new session")
         XCTAssertNil(viewModel.errorMessage)
         XCTAssertFalse(viewModel.isSubmitting)
     }
@@ -91,6 +92,18 @@ final class CreateIdentityViewModelTests: XCTestCase {
         XCTAssertEqual(session?.displayName, "Sofia")
         XCTAssertEqual(clientRequests, 2, "the cached client is reused through the context")
         XCTAssertNil(viewModel.errorMessage)
+    }
+
+    @MainActor
+    func testMissingSessionAfterCreatingShowsTheErrorAndDoesNotContinue() async {
+        let (viewModel, created) = makeViewModel { SessionlessIdentityClient() }
+        viewModel.displayName = "Sofia"
+
+        await viewModel.submit()
+
+        XCTAssertTrue(created.results.isEmpty)
+        XCTAssertEqual(viewModel.errorMessage, ErrorPresenter.registrationMessage(for: GimError.NotRegistered))
+        XCTAssertFalse(viewModel.isSubmitting)
     }
 
     @MainActor
@@ -136,4 +149,79 @@ final class CreateIdentityViewModelTests: XCTestCase {
         XCTAssertNil(session, "nothing is kept")
         XCTAssertFalse(viewModel.isSubmitting)
     }
+}
+
+/// Client whose `createIdentity` returns a code but whose `session()` stays `nil`.
+private final class SessionlessIdentityClient: GimClientAPI {
+    func session() async throws -> Session? { nil }
+    func userId() -> String? { nil }
+    func localStateReset() -> Bool { false }
+    func createIdentity(displayName: String) async throws -> String {
+        "7BQ2-K9MX-4TVA-0HZR-PC63-W8NE-1SJD-5GFY-QK2M-V7R"
+    }
+    func restoreFromRecovery(userId: String, recoveryCode: String, revokeOthers: Bool) async throws {}
+    func startLink(hubs: [String]) throws -> any LinkSession { throw GimError.NotImplemented }
+    func waitLink(link: any LinkSession) async throws -> String { throw GimError.NotImplemented }
+    func confirmLink(accepted: Bool) async throws {}
+    func approveLink(qrString: String) async throws -> any PendingApproval { throw GimError.NotRegistered }
+    func confirmApproval(approval: any PendingApproval, accepted: Bool) async throws {}
+    func devices() async throws -> [DeviceInfo] { throw GimError.NotRegistered }
+    func userDevices(userId: String) async throws -> [DeviceInfo] { throw GimError.NotRegistered }
+    func revokeDevice(deviceId: String) async throws {}
+    func setDisplayName(name: String) async throws {}
+    func claimHandle(handle: String) async throws {}
+    func releaseHandle() async throws {}
+    func signOut() async throws {}
+    func startSync() async throws {}
+    func stopSync() async throws {}
+    func setNetworkReachable(reachable: Bool) {}
+    func setLocalTimeZone(zone: (any LocalTimeZone)?) {}
+    func findUser(handle: String) async throws -> UserProfile? { nil }
+    func createDirectChat(userId: String) async throws -> String { throw GimError.NotRegistered }
+    func createGroupChat(name: String, memberUserIds: [String]) async throws -> String {
+        throw GimError.NotRegistered
+    }
+    func chatMembers(chatId: String) async throws -> [UserProfile] { throw GimError.NotRegistered }
+    func addMembers(chatId: String, userIds: [String]) async throws {}
+    func removeMember(chatId: String, userId: String) async throws {}
+    func leaveChat(chatId: String) async throws {}
+    func chatState(chatId: String) async throws -> ChatState { .active }
+    func setGroupInfo(chatId: String, name: String?, avatarFilePath: String?) async throws {}
+    func sendText(chatId: String, body: String, replyTo: String?) async throws -> String {
+        throw GimError.NotRegistered
+    }
+    func sendMedia(
+        chatId: String, filePath: String, mime: String, caption: String?, replyTo: String?
+    ) async throws -> String {
+        throw GimError.NotRegistered
+    }
+    func editMessage(chatId: String, messageId: String, newBody: String) async throws {}
+    func deleteMessage(chatId: String, messageId: String) async throws {}
+    func react(chatId: String, messageId: String, emoji: String) async throws {}
+    func unreact(chatId: String, messageId: String, emoji: String) async throws {}
+    func retrySend(chatId: String, messageId: String) async throws {}
+    func cancelSend(chatId: String, messageId: String) async throws {}
+    func markRead(chatId: String, upToMessageId: String) async throws {}
+    func setTyping(chatId: String, active: Bool) async throws {}
+    func stopTyping(chatId: String) async throws {}
+    func fetchMedia(chatId: String, messageId: String, destPath: String) async throws -> String {
+        throw GimError.NotFound(reason: "media")
+    }
+    func fetchThumbnail(chatId: String, messageId: String, destPath: String) async throws -> String? { nil }
+    func chatList(listener: any ChatListListener) async throws -> TaskHandle { throw GimError.NotRegistered }
+    func timeline(chatId: String) async throws -> any Timeline { throw GimError.NotRegistered }
+    func connectionState(listener: any ConnectionStateListener) async throws -> TaskHandle {
+        throw GimError.NotRegistered
+    }
+    func typing(chatId: String, listener: any TypingListener) async throws -> TaskHandle {
+        throw GimError.NotRegistered
+    }
+    func hubs() async throws -> [HubInfo] { throw GimError.NotRegistered }
+    func addHub(url: String) async throws -> HubInfo { throw GimError.NotRegistered }
+    func removeHub(hubId: String, confirmOwnedGroups: Bool) async throws { throw GimError.NotRegistered }
+    func setPrimaryHub(hubId: String) async throws { throw GimError.NotRegistered }
+    func hubList(listener: any HubListListener) async throws -> TaskHandle { throw GimError.NotRegistered }
+    func registerPush(registration: PushRegistration) async throws { throw GimError.NotRegistered }
+    func unregisterPush() async throws { throw GimError.NotRegistered }
+    func processPush(payload: String) async throws -> NotificationContent { throw GimError.NotRegistered }
 }
