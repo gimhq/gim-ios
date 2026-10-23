@@ -8,6 +8,8 @@ public struct NewChatScreen: View {
     private let onOpen: (String) -> Void
 
     @State private var viewModel: NewChatViewModel
+    @State private var isScanning = false
+    @State private var scanError: String?
     @Environment(\.dismiss) private var dismiss
 
     /// - Parameter onOpen: called with the direct or group chat that was created.
@@ -30,6 +32,17 @@ public struct NewChatScreen: View {
                     }
                 }
                 .accessibilityIdentifier("newChat.newGroup")
+                Button {
+                    scanError = nil
+                    isScanning = true
+                } label: {
+                    Label {
+                        Text("Scan QR code", tableName: "Contacts", bundle: .module)
+                    } icon: {
+                        Image(systemName: "qrcode.viewfinder")
+                    }
+                }
+                .accessibilityIdentifier("newChat.scan")
             }
             Section {
                 result
@@ -47,9 +60,28 @@ public struct NewChatScreen: View {
         .autocorrectionDisabled()
         .navigationTitle(Text("New chat", tableName: "Contacts", bundle: .module))
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $isScanning) {
+            ScanAccountIDScreen(error: $scanError, isWorking: viewModel.isStarting, onScanned: startChat(scanned:))
+        }
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button(String(localized: "Cancel", table: "Common", bundle: .module)) { dismiss() }
+            }
+        }
+    }
+
+    private func startChat(scanned text: String) {
+        guard !viewModel.isStarting else { return }
+        scanError = nil
+        Task {
+            switch await viewModel.startChat(scanned: text) {
+            case .started(let chatId):
+                isScanning = false
+                onOpen(chatId)
+            case .noUserId:
+                scanError = String(localized: "This code is not a gim Account ID.", table: "Contacts", bundle: .module)
+            case .failed(let message):
+                scanError = message
             }
         }
     }
