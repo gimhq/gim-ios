@@ -149,7 +149,10 @@ public final class GroupInfoViewModel {
         guard !handle.isEmpty else { return }
         await updateMembers {
             guard let user = try await self.client.findUser(handle: handle) else {
-                self.errorMessage = "No one uses the handle @\(handle)."
+                let format = NSLocalizedString(
+                    "No one has the username @%@.", tableName: "FeaturesContacts",
+                    bundle: FeaturesLocalization.bundle, value: "No one has the username @%@.", comment: "")
+                self.errorMessage = String(format: format, handle)
                 return false
             }
             do {

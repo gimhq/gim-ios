@@ -90,7 +90,7 @@ extension E2ETestCase {
         try tap(leave, "\(step): Leave Group button", app)
         // The confirmation dialog's button has the same title.
         let confirm = app.buttons
-            .matching(NSPredicate(format: "label == 'Leave Group' AND identifier != 'groupInfo.leave'"))
+            .matching(NSPredicate(format: "label == 'Leave group' AND identifier != 'groupInfo.leave'"))
             .firstMatch
         try tap(confirm, "\(step): Leave Group confirmation", app)
         let closed = XCTNSPredicateExpectation(
