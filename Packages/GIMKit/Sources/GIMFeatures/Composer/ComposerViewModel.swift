@@ -71,9 +71,15 @@ public final class ComposerViewModel {
 
     /// The banner shown instead of the input; `nil` while the chat is active (or its state is not known yet).
     public var readOnlyText: String? {
+        readOnlyKind?.text
+    }
+
+    /// What the banner shown instead of the input says; `nil` while the chat is active (or its state is not known
+    /// yet).
+    public var readOnlyKind: ComposerReadOnlyKind? {
         switch chatState {
-        case .leaving: "Leaving…"
-        case .left: "You can no longer send messages in this chat."
+        case .leaving: .leaving
+        case .left: .left
         case .active, nil: nil
         }
     }
@@ -208,17 +214,22 @@ public final class ComposerViewModel {
 
     /// One-line summary of a message for the reply and edit bars.
     public nonisolated static func previewText(for message: MessageItem) -> String {
+        previewKind(for: message).text
+    }
+
+    /// What the one-line summary of a message for the reply and edit bars says.
+    public nonisolated static func previewKind(for message: MessageItem) -> MessagePreviewKind {
         switch message.content {
         case .text(let body):
-            return body
+            return .content(body)
         case .image(_, _, _, let caption):
-            return nonEmpty(caption) ?? "Photo"
+            return nonEmpty(caption).map(MessagePreviewKind.content) ?? .photo
         case .file(_, let fileName, let caption):
-            return nonEmpty(caption) ?? nonEmpty(fileName) ?? "File"
+            return (nonEmpty(caption) ?? nonEmpty(fileName)).map(MessagePreviewKind.content) ?? .file
         case .deleted:
-            return "This message was deleted"
+            return .deleted
         case .unsupported:
-            return "Unsupported message"
+            return .unsupported
         }
     }
 
@@ -263,6 +274,63 @@ public final class ComposerViewModel {
         typingTask = Task {
             await previous?.value
             try? await client.setTyping(chatId: chatId, active: active)
+        }
+    }
+}
+
+/// What the banner shown instead of the composer input says.
+public enum ComposerReadOnlyKind: Sendable, Hashable {
+    /// The user's leave is pending.
+    case leaving
+    /// The user left or was removed.
+    case left
+
+    /// The English text, localized through the FeaturesChat table.
+    public var text: String {
+        switch self {
+        case .leaving:
+            NSLocalizedString(
+                "Leaving…", tableName: "FeaturesChat", bundle: FeaturesLocalization.bundle, value: "Leaving…",
+                comment: "")
+        case .left:
+            NSLocalizedString(
+                "You can no longer send messages in this chat.", tableName: "FeaturesChat",
+                bundle: FeaturesLocalization.bundle, value: "You can no longer send messages in this chat.",
+                comment: "")
+        }
+    }
+}
+
+/// What the one-line summary of a message for the reply and edit bars says.
+public enum MessagePreviewKind: Sendable, Hashable {
+    /// The text, caption or file name, shown as is.
+    case content(String)
+    /// An image without a caption.
+    case photo
+    /// A file without a caption or name.
+    case file
+    case deleted
+    /// Content this version can't show.
+    case unsupported
+
+    /// The English text, localized through the FeaturesChat table.
+    public var text: String {
+        switch self {
+        case .content(let content): content
+        case .photo:
+            NSLocalizedString(
+                "Photo", tableName: "FeaturesChat", bundle: FeaturesLocalization.bundle, value: "Photo", comment: "")
+        case .file:
+            NSLocalizedString(
+                "File", tableName: "FeaturesChat", bundle: FeaturesLocalization.bundle, value: "File", comment: "")
+        case .deleted:
+            NSLocalizedString(
+                "This message was deleted", tableName: "FeaturesChat", bundle: FeaturesLocalization.bundle,
+                value: "This message was deleted", comment: "")
+        case .unsupported:
+            NSLocalizedString(
+                "Unsupported message", tableName: "FeaturesChat", bundle: FeaturesLocalization.bundle,
+                value: "Unsupported message", comment: "")
         }
     }
 }
