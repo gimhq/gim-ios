@@ -56,16 +56,24 @@ class E2ETestCase: XCTestCase {
             serverField.value as? String == serverUrl,
             "\(step): server field pre-filled with \(serverUrl), found \(String(describing: serverField.value))", app)
         // At accessibility text sizes the focused field's keyboard and the scrolled list cover the Create account
-        // button: Return dismisses the keyboard, then the list scrolls back to the button.
+        // button: Return dismisses the keyboard, then the list scrolls back to the button. `isHittable` is not enough:
+        // a button scrolled under the navigation bar is still "hittable" in the status bar strip, where a tap scrolls
+        // the list to the top instead.
         let create = app.buttons["onboarding.create"]
-        guard !(create.exists && create.isHittable) else { return }
+        let createVisible = { () -> Bool in
+            guard create.exists else { return false }
+            let keyboard = app.keyboards.firstMatch
+            let bottom = keyboard.exists ? keyboard.frame.minY : app.windows.firstMatch.frame.maxY
+            return create.frame.minY >= app.navigationBars.firstMatch.frame.maxY && create.frame.maxY <= bottom
+        }
+        guard !createVisible() else { return }
         if app.keyboards.firstMatch.exists {
             serverField.typeText("\n")
         }
-        for _ in 0..<5 where !(create.exists && create.isHittable) {
+        for _ in 0..<5 where !createVisible() {
             scrollDownFrontmost(app)
         }
-        try require(create.exists && create.isHittable, "\(step): Create account button hittable", app)
+        try require(createVisible(), "\(step): Create account button fully visible", app)
     }
 
     /// Creates an account from onboarding (display name, recovery key, its last 4 characters, username) and waits
