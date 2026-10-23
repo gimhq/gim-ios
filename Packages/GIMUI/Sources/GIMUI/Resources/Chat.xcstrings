@@ -51,6 +51,16 @@
         }
       }
     },
+    "Choose a photo or a file to send" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose a photo or a file to send"
+          }
+        }
+      }
+    },
     "Couldn't load chats" : {
       "localizations" : {
         "en" : {
@@ -341,6 +351,26 @@
         }
       }
     },
+    "Shows members and settings" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shows members and settings"
+          }
+        }
+      }
+    },
+    "Shows the newest messages" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shows the newest messages"
+          }
+        }
+      }
+    },
     "Shows the original message" : {
       "localizations" : {
         "en" : {
@@ -361,12 +391,52 @@
         }
       }
     },
+    "Start a chat" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start a chat"
+          }
+        }
+      }
+    },
     "Start a chat. Search for a friend's username." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Start a chat. Search for a friend's username."
+          }
+        }
+      }
+    },
+    "Stops editing" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stops editing"
+          }
+        }
+      }
+    },
+    "Stops replying" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stops replying"
+          }
+        }
+      }
+    },
+    "Touch and hold for options" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Touch and hold for options"
           }
         }
       }

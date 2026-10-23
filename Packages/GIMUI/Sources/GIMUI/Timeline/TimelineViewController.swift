@@ -282,6 +282,7 @@ public final class TimelineViewController: UIViewController, UICollectionViewDel
         jumpButton.configuration = configuration
         jumpButton.accessibilityLabel = String(
             localized: "Scroll to the latest message", table: "Chat", bundle: .module)
+        jumpButton.accessibilityHint = String(localized: "Shows the newest messages", table: "Chat", bundle: .module)
         jumpButton.accessibilityIdentifier = "timeline.jumpToLatest"
         jumpButton.layer.shadowColor = UIColor.black.cgColor
         jumpButton.layer.shadowOpacity = 0.15
@@ -293,7 +294,7 @@ public final class TimelineViewController: UIViewController, UICollectionViewDel
         badgeLabel.font = .preferredFont(forTextStyle: .caption2)
         badgeLabel.adjustsFontForContentSizeCategory = true
         badgeLabel.textColor = .white
-        badgeLabel.backgroundColor = .systemBlue
+        badgeLabel.backgroundColor = ChatColors.UI.unreadBadge
         badgeLabel.textAlignment = .center
         badgeLabel.layer.cornerRadius = 9
         badgeLabel.clipsToBounds = true
@@ -307,8 +308,8 @@ public final class TimelineViewController: UIViewController, UICollectionViewDel
         NSLayoutConstraint.activate([
             jumpButton.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -12),
             jumpButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -12),
-            jumpButton.widthAnchor.constraint(equalToConstant: 40),
-            jumpButton.heightAnchor.constraint(equalToConstant: 40),
+            jumpButton.widthAnchor.constraint(equalToConstant: 44),
+            jumpButton.heightAnchor.constraint(equalToConstant: 44),
             badgeLabel.centerXAnchor.constraint(equalTo: jumpButton.trailingAnchor, constant: -6),
             badgeLabel.centerYAnchor.constraint(equalTo: jumpButton.topAnchor, constant: 2),
             badgeLabel.heightAnchor.constraint(equalToConstant: 18),
@@ -334,10 +335,12 @@ public final class TimelineViewController: UIViewController, UICollectionViewDel
         let pillCell = UICollectionView.CellRegistration<PillCell, String> { [weak self] cell, _, id in
             guard let self, let item = displayedById[id], let fonts, let pill = layoutsById[id]?.pill else { return }
             switch item.kind {
-            case .dateSeparator(let text), .membership(let text):
-                cell.configure(text: text, isTyping: false, frame: pill, fonts: fonts)
+            case .dateSeparator(let text):
+                cell.configure(text: text, style: .date, frame: pill, fonts: fonts)
+            case .membership(let text):
+                cell.configure(text: text, style: .membership, frame: pill, fonts: fonts)
             case .typing(let text):
-                cell.configure(text: text, isTyping: true, frame: pill, fonts: fonts)
+                cell.configure(text: text, style: .typing, frame: pill, fonts: fonts)
             case .message:
                 break
             }
@@ -359,6 +362,13 @@ public final class TimelineViewController: UIViewController, UICollectionViewDel
             cell.onReplyTap = { [weak self] in self?.scrollToMessage(reply.messageId) }
         } else {
             cell.onReplyTap = nil
+        }
+        // Same reach as the default menu's Reply, for VoiceOver.
+        if case .placeholder = row.body {
+            cell.onReply = nil
+        } else {
+            let message = row.message
+            cell.onReply = { [weak self] in self?.onReply?(message) }
         }
         cell.onRetry = { [weak self] in
             guard let viewModel = self?.viewModel else { return }
@@ -465,24 +475,32 @@ public final class TimelineViewController: UIViewController, UICollectionViewDel
         _ collectionView: UICollectionView, contextMenuConfiguration configuration: UIContextMenuConfiguration,
         highlightPreviewForItemAt indexPath: IndexPath
     ) -> UITargetedPreview? {
-        guard let cell = collectionView.cellForItem(at: indexPath) as? MessageCell else { return nil }
+        guard let cell = collectionView.cellForItem(at: indexPath) as? MessageCell,
+            let id = dataSource?.itemIdentifier(for: indexPath), let row = displayedById[id]?.messageRow
+        else { return nil }
         let parameters = UIPreviewParameters()
         parameters.backgroundColor = .clear
-        parameters.visiblePath = UIBezierPath(
-            roundedRect: cell.bubbleView.bounds, cornerRadius: TimelineMetrics.bubbleCornerRadius)
+        parameters.visiblePath = MessageCell.bubblePath(
+            size: cell.bubbleView.bounds.size, isOwn: row.isOwn, isFirstInRun: row.isFirstInRun, hasTail: row.hasTail)
         return UITargetedPreview(view: cell.bubbleView, parameters: parameters)
     }
 
     private func menu(for message: MessageItem) -> UIMenu? {
         if let contextMenuProvider { return contextMenuProvider(message) }
         var actions: [UIMenuElement] = [
-            UIAction(title: "Reply", image: UIImage(systemName: "arrowshape.turn.up.left")) { [weak self] _ in
+            UIAction(
+                title: String(localized: "Reply", table: "Chat", bundle: .module),
+                image: UIImage(systemName: "arrowshape.turn.up.left")
+            ) { [weak self] _ in
                 self?.onReply?(message)
             }
         ]
         if case .text(let body) = message.content {
             actions.append(
-                UIAction(title: "Copy", image: UIImage(systemName: "doc.on.doc")) { _ in
+                UIAction(
+                    title: String(localized: "Copy", table: "Common", bundle: .module),
+                    image: UIImage(systemName: "doc.on.doc")
+                ) { _ in
                     UIPasteboard.general.string = body
                 })
         }
@@ -490,7 +508,10 @@ public final class TimelineViewController: UIViewController, UICollectionViewDel
             let viewModel = viewModel
             let messageId = message.messageId
             actions.append(
-                UIAction(title: "Retry", image: UIImage(systemName: "arrow.clockwise")) { _ in
+                UIAction(
+                    title: String(localized: "Try again", table: "Common", bundle: .module),
+                    image: UIImage(systemName: "arrow.clockwise")
+                ) { _ in
                     Task { await viewModel.retry(messageId: messageId) }
                 })
         }

@@ -228,18 +228,18 @@ final class AppModelTests: XCTestCase {
         AppModel(factory: factory, defaults: defaults, bundledServerUrl: bundledServerUrl) { hooks }
     }
 
-    /// Runs the create flow: display name, recovery code confirmation and handle `alex`.
+    /// Runs the create flow: display name, recovery kit ending check and handle `alex`.
     @MainActor
     private func register(_ onboarding: OnboardingViewModel) async throws {
         onboarding.choose(.createIdentity)
         let create = try XCTUnwrap(onboarding.createIdentity)
         create.displayName = "Alex"
         await create.submit()
-        guard case .recoveryCode(let recovery) = onboarding.stage else {
-            return XCTFail("expected the recovery code, got \(String(describing: onboarding.stage))")
+        guard case .recoveryKit(let recovery) = onboarding.stage else {
+            return XCTFail("expected the recovery kit, got \(String(describing: onboarding.stage))")
         }
-        recovery.continueToConfirmation()
-        recovery.confirmationInput = recovery.groups[recovery.confirmationGroupIndex]
+        recovery.continueToCheck()
+        recovery.endingInput = RecoveryKit.ending(of: recovery.groupedCode)
         recovery.confirm()
         guard case .claimHandle(let claim) = onboarding.stage else {
             return XCTFail("expected the handle step, got \(String(describing: onboarding.stage))")

@@ -103,15 +103,15 @@ final class IdentitySmokeTests: E2ETestCase {
 
         summary.start("revoke")
         try XCTContext.runActivity(named: "revoke: the app revokes the linked device") { _ in
-            try tap(app.buttons["devices.revoke.\(linkedDeviceId)"], "revoke: Revoke button", app)
+            try tap(app.buttons["devices.revoke.\(linkedDeviceId)"], "revoke: Remove button", app)
             // The confirmation dialog's button has the same title.
             let confirm = app.buttons
-                .matching(NSPredicate(format: "label == 'Revoke' AND NOT (identifier BEGINSWITH 'devices.revoke.')"))
+                .matching(NSPredicate(format: "label == 'Remove' AND NOT (identifier BEGINSWITH 'devices.revoke.')"))
                 .firstMatch
             try tap(confirm, "revoke: confirmation button", app)
             try require(
                 deviceRow(linkedDeviceId, app).staticTexts["Removed"].waitForExistence(timeout: networkTimeout),
-                "revoke: the linked device shows Revoked", app)
+                "revoke: the linked device shows Removed", app)
             // Only logged: whether the hub still answers a revoked device is gim-core's and gim-hub's business.
             let view = try waitForPeer("revoke: linked device lists devices", app) { () async -> String in
                 do {
@@ -129,22 +129,29 @@ final class IdentitySmokeTests: E2ETestCase {
         try XCTContext.runActivity(named: "restore: sign out and restore from the recovery code") { _ in
             try tap(backButton(app, to: "Settings"), "restore: back to Settings", app)
             try signOut(app)
-            try tap(app.buttons["onboarding.restore"], "restore: Restore from Recovery Code button", app)
-            try type(userId, into: app.textFields["restore.userId"], "restore: user id field", app)
-            // The recovery code field grows vertically, so it may be a text view.
-            let codeField = app.descendants(matching: .any)
-                .matching(NSPredicate(format: "identifier == 'restore.code' AND elementType IN %@", textInputTypes))
+            try tap(app.buttons["onboarding.restore"], "restore: Restore account button", app)
+            // The kit field is multi-line, so it may be a text view.
+            let kitField = app.descendants(matching: .any)
+                .matching(NSPredicate(format: "identifier == 'restore.kit' AND elementType IN %@", textInputTypes))
                 .firstMatch
-            try type(recoveryCode, into: codeField, "restore: recovery code field", app)
+            try type(
+                "Account ID: \(userId)\nRecovery key: \(recoveryCode)\n", into: kitField, "restore: kit field", app)
+            let parsedUserId = app.descendants(matching: .any)["restore.userId"]
+            try require(
+                parsedUserId.waitForExistence(timeout: networkTimeout) && parsedUserId.value as? String == userId,
+                "restore: Account ID parsed from the kit, found \(String(describing: parsedUserId.value))", app)
+            try require(
+                app.descendants(matching: .any)["restore.code"].exists, "restore: recovery key parsed from the kit",
+                app)
             let revokeOthers = app.switches["restore.revokeOthers"]
             try require(
                 revokeOthers.waitForExistence(timeout: networkTimeout) && revokeOthers.value as? String == "1",
                 "restore: Sign out my other devices is on, found \(String(describing: revokeOthers.value))", app)
             try tap(app.buttons["restore.submit"], "restore: Restore button", app)
-            let restored = app.alerts["Identity Restored"]
+            let restored = app.alerts["Account restored"]
             try require(
                 restored.waitForExistence(timeout: networkTimeout),
-                "restore: Identity Restored alert (errors: \(onboardingErrors(app)))", app)
+                "restore: Account restored alert (errors: \(onboardingErrors(app)))", app)
             try tap(restored.buttons["Continue"], "restore: Continue button", app)
             try tap(app.buttons["chatList.settings"], "restore: Settings button", app)
             let restoredUserId = try shownUserId(app.buttons["settings.userId"], "restore: Settings user id", app)
@@ -158,7 +165,7 @@ final class IdentitySmokeTests: E2ETestCase {
                 "restore: one new device is This device, found \(current) of \(ids)", app)
             for earlier in [appDeviceId, linkedDeviceId] {
                 try require(
-                    deviceRow(earlier, app).staticTexts["Removed"].exists, "restore: \(earlier) shows Revoked", app)
+                    deviceRow(earlier, app).staticTexts["Removed"].exists, "restore: \(earlier) shows Removed", app)
             }
             print("[e2e] restore: restored device \(current[0])")
         }

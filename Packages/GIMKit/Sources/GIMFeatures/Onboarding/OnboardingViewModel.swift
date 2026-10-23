@@ -2,6 +2,12 @@ import Foundation
 import GIMClientKit
 import Observation
 
+/// A message of the `FeaturesOnboarding` table; `key` is the English text.
+func onboardingText(_ key: String) -> String {
+    NSLocalizedString(
+        key, tableName: "FeaturesOnboarding", bundle: FeaturesLocalization.bundle, value: key, comment: "")
+}
+
 /// Pure validation and normalisation rules for the registration form.
 public enum OnboardingValidation {
     public static let displayNameMaxLength = 64
@@ -21,15 +27,68 @@ public enum OnboardingValidation {
         raw.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// Why a server URL is not accepted; `text` gives the localized message.
+    public enum ServerUrlError: Sendable, Hashable {
+        case empty
+        /// Not an http(s) URL with a host.
+        case notAFullAddress
+
+        /// The localized message.
+        public var text: String {
+            switch self {
+            case .empty: onboardingText("Enter the server address.")
+            case .notAFullAddress: onboardingText("Enter a full address, like https://example.com")
+            }
+        }
+    }
+
+    /// Why a handle is not accepted; `text` gives the localized message.
+    public enum HandleError: Sendable, Hashable {
+        case empty
+        /// Not 3 to 32 characters long.
+        case length
+        /// Contains a character other than `a-z`, `0-9`, `_` and `.`.
+        case characters
+
+        /// The localized message.
+        public var text: String {
+            switch self {
+            case .empty: onboardingText("Choose a username.")
+            case .length: onboardingText("Usernames are 3 to 32 characters long.")
+            case .characters: onboardingText("Use only letters, digits, underscores and dots.")
+            }
+        }
+    }
+
+    /// Why a display name is not accepted; `text` gives the localized message.
+    public enum DisplayNameError: Sendable, Hashable {
+        case empty
+        /// Longer than `displayNameMaxLength`.
+        case tooLong
+
+        /// The localized message.
+        public var text: String {
+            switch self {
+            case .empty: onboardingText("Enter your name.")
+            case .tooLong: onboardingText("Your name can be 1 to 64 characters long.")
+            }
+        }
+    }
+
     /// Returns an error message, or `nil` when the normalised URL is an http(s) URL with a host.
     public static func serverUrlError(_ raw: String) -> String? {
+        serverUrlErrorKind(raw)?.text
+    }
+
+    /// The kind behind `serverUrlError(_:)`.
+    public static func serverUrlErrorKind(_ raw: String) -> ServerUrlError? {
         let url = normalizedServerUrl(raw)
-        if url.isEmpty { return "Enter the server address." }
+        if url.isEmpty { return .empty }
         guard let components = URLComponents(string: url),
             let scheme = components.scheme?.lowercased(), scheme == "http" || scheme == "https",
             let host = components.host, !host.isEmpty
         else {
-            return "Enter a full address starting with http:// or https://."
+            return .notAFullAddress
         }
         return nil
     }
@@ -48,23 +107,29 @@ public enum OnboardingValidation {
 
     /// Returns an error message, or `nil` when the normalised handle matches `^[a-z0-9_.]{3,32}$`.
     public static func handleError(_ raw: String) -> String? {
+        handleErrorKind(raw)?.text
+    }
+
+    /// The kind behind `handleError(_:)`.
+    public static func handleErrorKind(_ raw: String) -> HandleError? {
         let handle = normalizedHandle(raw)
-        if handle.isEmpty { return "Choose a handle." }
-        guard (3...32).contains(handle.count) else { return "Handles are 3 to 32 characters long." }
+        if handle.isEmpty { return .empty }
+        guard (3...32).contains(handle.count) else { return .length }
         let allowed = Set("abcdefghijklmnopqrstuvwxyz0123456789_.")
-        guard handle.allSatisfy(allowed.contains) else {
-            return "Use only letters, digits, underscores and dots."
-        }
+        guard handle.allSatisfy(allowed.contains) else { return .characters }
         return nil
     }
 
     /// Returns an error message, or `nil` when the trimmed name is 1 to 64 characters long.
     public static func displayNameError(_ raw: String) -> String? {
+        displayNameErrorKind(raw)?.text
+    }
+
+    /// The kind behind `displayNameError(_:)`.
+    public static func displayNameErrorKind(_ raw: String) -> DisplayNameError? {
         let name = normalizedDisplayName(raw)
-        if name.isEmpty { return "Enter your name." }
-        guard name.count <= displayNameMaxLength else {
-            return "Names can be at most \(displayNameMaxLength) characters long."
-        }
+        if name.isEmpty { return .empty }
+        guard name.count <= displayNameMaxLength else { return .tooLong }
         return nil
     }
 }
@@ -117,12 +182,12 @@ public struct OnboardingContext {
 /// The steps after `createIdentity` succeeded; there is no way back to the start screen from here.
 @MainActor
 public enum IdentityStage {
-    case recoveryCode(RecoveryCodeViewModel)
+    case recoveryKit(RecoveryKitViewModel)
     case claimHandle(ClaimHandleViewModel)
 }
 
 /// Drives onboarding: the server address, the choice between creating, linking and restoring an identity, and the
-/// create flow (display name, recovery code, optional handle). Creates the client for the typed server URL (the URL
+/// create flow (display name, recovery kit, optional handle). Creates the client for the typed server URL (the URL
 /// is part of `ClientConfig`) and reports the signed-in client.
 @MainActor
 @Observable
@@ -140,11 +205,12 @@ public final class OnboardingViewModel {
     public private(set) var stage: IdentityStage?
     /// Set by the first `choose(_:)` so an empty server field also shows its message.
     public private(set) var showsAllErrors = false
+    /// Whether the server field is shown; hidden while the initial server URL is valid until revealed.
+    public private(set) var showsServerField: Bool
 
     private let factory: any GimClientFactory
     private let hooks: any PlatformHooks
     private let onRegistered: @MainActor (Registration) -> Void
-    private let chooseGroup: @MainActor (Int) -> Int
     @ObservationIgnored private var client: (any GimClientAPI)?
     @ObservationIgnored private var clientConfig: ClientConfig?
 
@@ -152,22 +218,20 @@ public final class OnboardingViewModel {
     ///   - serverUrl: initial value of the server field.
     ///   - client: a client without a session already created for `serverUrl`; reused while the URL is unchanged.
     ///   - localStateReset: whether `client` discarded the local database when it was opened.
-    ///   - chooseGroup: picks the recovery code group to re-enter, given the number of groups.
     public init(
         factory: any GimClientFactory,
         hooks: any PlatformHooks,
         serverUrl: String = "",
         client: (any GimClientAPI)? = nil,
         localStateReset: Bool = false,
-        chooseGroup: @escaping @MainActor (Int) -> Int = { Int.random(in: 0..<$0) },
         onRegistered: @escaping @MainActor (Registration) -> Void
     ) {
         self.factory = factory
         self.hooks = hooks
         self.serverUrl = serverUrl
-        self.chooseGroup = chooseGroup
         self.onRegistered = onRegistered
         showsLocalStateResetNotice = localStateReset
+        showsServerField = OnboardingValidation.serverUrlError(serverUrl) != nil
         if let client {
             self.client = client
             clientConfig = ClientConfig(serverUrl: OnboardingValidation.normalizedServerUrl(serverUrl))
@@ -176,7 +240,12 @@ public final class OnboardingViewModel {
 
     /// Inline message for the server URL field; `nil` while the field is untouched.
     public var serverUrlError: String? {
-        let error = OnboardingValidation.serverUrlError(serverUrl)
+        serverUrlErrorKind?.text
+    }
+
+    /// The kind behind `serverUrlError`.
+    public var serverUrlErrorKind: OnboardingValidation.ServerUrlError? {
+        let error = OnboardingValidation.serverUrlErrorKind(serverUrl)
         return showsAllErrors || !serverUrl.isEmpty ? error : nil
     }
 
@@ -184,10 +253,17 @@ public final class OnboardingViewModel {
         showsLocalStateResetNotice = false
     }
 
-    /// Opens `route` for the typed server; does nothing while the server URL is invalid.
+    public func revealServerField() {
+        showsServerField = true
+    }
+
+    /// Opens `route` for the typed server; while the server URL is invalid it only reveals the server field.
     public func choose(_ route: OnboardingRoute) {
         showsAllErrors = true
-        guard OnboardingValidation.serverUrlError(serverUrl) == nil else { return }
+        guard OnboardingValidation.serverUrlError(serverUrl) == nil else {
+            showsServerField = true
+            return
+        }
         let config = ClientConfig(serverUrl: OnboardingValidation.normalizedServerUrl(serverUrl))
         let context = OnboardingContext(
             config: config,
@@ -203,13 +279,15 @@ public final class OnboardingViewModel {
         self.context = context
         createIdentity =
             route == .createIdentity
-            ? CreateIdentityViewModel(context: context) { [weak self] client, recoveryCode in
-                self?.identityCreated(client: client, context: context, recoveryCode: recoveryCode)
+            ? CreateIdentityViewModel(context: context) { [weak self] client, userId, recoveryCode in
+                self?.identityCreated(client: client, context: context, userId: userId, recoveryCode: recoveryCode)
             } : nil
         path = [route]
     }
 
-    private func identityCreated(client: any GimClientAPI, context: OnboardingContext, recoveryCode: String?) {
+    private func identityCreated(
+        client: any GimClientAPI, context: OnboardingContext, userId: String, recoveryCode: String?
+    ) {
         let claimHandle = ClaimHandleViewModel(client: client) {
             guard let session = try await client.session() else { throw GimError.NotRegistered }
             context.onRegistered(Registration(client: client, config: context.config, session: session))
@@ -218,8 +296,8 @@ public final class OnboardingViewModel {
             stage = .claimHandle(claimHandle)
             return
         }
-        stage = .recoveryCode(
-            RecoveryCodeViewModel(code: recoveryCode, chooseGroup: chooseGroup) { [weak self] in
+        stage = .recoveryKit(
+            RecoveryKitViewModel(userId: userId, code: recoveryCode) { [weak self] in
                 self?.stage = .claimHandle(claimHandle)
             })
     }
