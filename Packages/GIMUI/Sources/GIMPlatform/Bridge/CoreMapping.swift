@@ -215,7 +215,21 @@ extension GIMClientKit.ChatSummary {
 
 extension GIMClientKit.MessagePreview {
     init(_ core: GIMCore.MessagePreview) {
-        self.init(senderName: core.senderName, text: core.text, sentAtMs: core.sentAtMs, isOwn: core.isOwn)
+        self.init(
+            senderName: core.senderName, text: core.text, sentAtMs: core.sentAtMs, isOwn: core.isOwn,
+            sendState: core.sendState.map { GIMClientKit.SendState($0) })
+    }
+}
+
+extension GIMCore.RecoveryKitLabels {
+    init(_ mirror: GIMClientKit.RecoveryKitLabels) {
+        self.init(title: mirror.title, accountId: mirror.accountId, recoveryKey: mirror.recoveryKey, note: mirror.note)
+    }
+}
+
+extension GIMClientKit.ParsedRecoveryKit {
+    init(_ core: GIMCore.ParsedRecoveryKit) {
+        self.init(userId: core.userId, recoveryCode: core.recoveryCode)
     }
 }
 

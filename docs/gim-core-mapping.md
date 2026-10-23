@@ -28,11 +28,13 @@ Generated records are `Equatable, Hashable` plus `extension …: Sendable`; the 
 | `HubInfo` | `HubInfo` | `hubId`, `url: String?`, `state: HubState`, `priority: UInt8`, `isPrimary`, `isHome`, `signedIn` |
 | `UserProfile` | `UserProfile` | `userId`, `handle`, `displayName` |
 | `ChatSummary` | `ChatSummary` | `chatId`, `kind`, `name`, `avatar: MediaRef?`, `lastMessage: MessagePreview?`, `unreadCount: UInt32`, `updatedAtMs: UInt64`, `memberCount: UInt32`, `state: ChatState` |
-| `MessagePreview` | `MessagePreview` | `senderName`, `text`, `sentAtMs: UInt64`, `isOwn` |
+| `MessagePreview` | `MessagePreview` | `senderName`, `text`, `sentAtMs: UInt64`, `isOwn`, `sendState: SendState?` (own messages only; the mirror init defaults it to `nil`) |
 | `MessageItem` | `MessageItem` | `messageId`, `chatId`, `sender: UserProfile`, `isOwn`, `sentAtMs: UInt64`, `content`, `replyTo: ReplyPreview?`, `reactions: [ReactionGroup]`, `edited`, `sendState: SendState?` |
 | `MediaRef` | `MediaRef` | `chatId`, `messageId`, `mime`, `size: UInt64`, `hasThumbnail` |
 | `ReplyPreview` | `ReplyPreview` | `messageId`, `senderName`, `text` |
 | `ReactionGroup` | `ReactionGroup` | `emoji`, `count: UInt32`, `own` |
+| `RecoveryKitLabels` | `RecoveryKitLabels` | `title`, `accountId`, `recoveryKey`, `note` |
+| `ParsedRecoveryKit` | `ParsedRecoveryKit` | `userId: String?`, `recoveryCode: String?` (39 symbols, no separators) |
 
 ## Enums
 
@@ -82,6 +84,7 @@ generated code writes the bare protocol name, which is the same type.
 | `protocol PendingApproval` | `open class PendingApproval: PendingApprovalProtocol` | Intentional: protocol instead of class. `deviceId() -> String`, `sas() -> String`. `RealGimClient.confirmApproval` only accepts the `RealPendingApproval` it created. |
 | `final class TaskHandle` | `open class TaskHandle: TaskHandleProtocol` | Intentional: concrete class with `init(onCancel:)`. `cancel()`, `isFinished() -> Bool`; releasing the last reference cancels, like the Rust `Drop`. No `TaskHandleProtocol` mirror. |
 | `createClient(config:hooks:) async throws -> any GimClientAPI` | `createClient(config:hooks:) async throws -> GimClient` | Mirror validates the URL like gim-core (`InvalidInput(reason: "server_url: …")`) and returns a demo `FakeGimClient` without a session that seeds the demo chats on `createIdentity`. |
+| `protocol RecoveryKitFunctions` | free functions `formatRecoveryKit(userId:recoveryCode:labels:)`, `parseRecoveryKit(text:)`, `recoveryKeyEnding(recoveryCode:)`, `matchesRecoveryKeyEnding(recoveryCode:typed:)` | Intentional: same names and labels as methods of a protocol, so Linux tests and previews can swap the implementation. See "Recovery kit". |
 | — | `coreVersion()`, `ciphersuiteName()` | Not mirrored; nothing uses them yet. |
 | — | `LocalTimeZoneImpl` | Generated wrapper for a Rust-implemented zone; gim-core never hands one to the app. |
 | — | `*Impl` classes, `NoHandle`, `uniffi*` | Generated plumbing, not mirrored. |
@@ -156,6 +159,19 @@ a `TimelineItem.membershipChange` arrives. When a query fails before any list ha
 Renaming a group goes `GroupInfoViewModel.saveName()` → `GimClientAPI.setGroupInfo(name:)` →
 `RealGimClient` → `GIMCore.GimClient.setGroupInfo`.
 
+## Recovery kit
+
+`RecoveryKitFunctions` (GIMClientKit) has two implementations:
+
+- `FakeRecoveryKitFunctions` (GIMClientKit, `Fake/`): a pure-Swift copy of gim-client-sdk
+  `crates/gim-sdk/src/recovery_kit.rs` for Linux tests and previews. GIMClientKit cannot import GIMFeatures, so it
+  keeps its own copy. Like the Rust code it counts Unicode scalars, not grapheme clusters.
+- `CoreRecoveryKitFunctions` (GIMPlatform, `Bridge/CoreRecoveryKit.swift`): calls the generated free functions and
+  maps `RecoveryKitLabels` / `ParsedRecoveryKit` in `CoreMapping`.
+
+`CoreMappingTests.testFakeRecoveryKitFunctionsMatchGimCore` runs the same vectors through both, so drift between the
+copy and gim-core fails the macOS tests.
+
 ## Changes since `c1b7503`
 
 `16a5efa` (gim-client-sdk, vendored with `scripts/sync-gim-core.sh 40023818869`; the vendored `Package.swift` adds
@@ -167,7 +183,8 @@ yet mirrored: `ClientConfig` gained `appServerUrl: String? = nil` (the bridge pa
 `setTypingIndicators`, `setChatMuted`, `setChatPinned`, `setChatArchived`, `reportUser`, `rotateRecoveryCode`,
 `deleteAccount`, `ownProfile`, `setAvatar`, `removeAvatar`, `fetchUserAvatar`, `fetchChatAvatar`; new functions
 `mutedForever`, `formatRecoveryKit`, `parseRecoveryKit`, `recoveryKeyEnding`, `matchesRecoveryKeyEnding`. No enum
-case and no callback interface changed. The core → mirror mappings ignore the new fields for now.
+case and no callback interface changed. The core → mirror mappings ignore the new fields for now, except
+`MessagePreview.sendState` and the recovery-kit records and functions, which are now mirrored.
 
 ## Changes since `fa6f7e9`
 
