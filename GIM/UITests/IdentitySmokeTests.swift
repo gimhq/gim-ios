@@ -110,7 +110,7 @@ final class IdentitySmokeTests: E2ETestCase {
                 .firstMatch
             try tap(confirm, "revoke: confirmation button", app)
             try require(
-                deviceRow(linkedDeviceId, app).staticTexts["Revoked"].waitForExistence(timeout: networkTimeout),
+                deviceRow(linkedDeviceId, app).staticTexts["Removed"].waitForExistence(timeout: networkTimeout),
                 "revoke: the linked device shows Revoked", app)
             // Only logged: whether the hub still answers a revoked device is gim-core's and gim-hub's business.
             let view = try waitForPeer("revoke: linked device lists devices", app) { () async -> String in
@@ -158,7 +158,7 @@ final class IdentitySmokeTests: E2ETestCase {
                 "restore: one new device is This device, found \(current) of \(ids)", app)
             for earlier in [appDeviceId, linkedDeviceId] {
                 try require(
-                    deviceRow(earlier, app).staticTexts["Revoked"].exists, "restore: \(earlier) shows Revoked", app)
+                    deviceRow(earlier, app).staticTexts["Removed"].exists, "restore: \(earlier) shows Revoked", app)
             }
             print("[e2e] restore: restored device \(current[0])")
         }
@@ -169,11 +169,12 @@ final class IdentitySmokeTests: E2ETestCase {
         [XCUIElement.ElementType.textField, .textView].map { NSNumber(value: $0.rawValue) } as NSArray
     }
 
-    /// The user id on a "User ID" row (Settings or Devices), whose label reads "User ID, <id>".
+    /// The user id on a "User ID" (Settings) or "Account ID" (Devices) row, whose label reads "<title>, <id>".
     @MainActor
     private func shownUserId(_ row: XCUIElement, _ check: String, _ app: XCUIApplication) throws -> String {
         try require(row.waitForExistence(timeout: networkTimeout), "\(check) visible", app)
-        let parts = row.label.components(separatedBy: ", ").filter { !$0.isEmpty && $0 != "User ID" }
+        let parts = row.label.components(separatedBy: ", ")
+            .filter { !$0.isEmpty && $0 != "User ID" && $0 != "Account ID" }
         try require(
             parts.count == 1 && !parts[0].contains(" "), "\(check): one user id in the label \"\(row.label)\"", app)
         return parts[0]
