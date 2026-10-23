@@ -17,6 +17,65 @@ final class CoreMappingTests: XCTestCase {
             .extension)
     }
 
+    func testClientConfigKeepsTheMetaServerUrl() {
+        XCTAssertEqual(
+            GIMCore.ClientConfig(
+                GIMClientKit.ClientConfig(serverUrl: "https://gim.example.eu", metaServerUrl: "https://meta.example.eu")
+            ),
+            GIMCore.ClientConfig(
+                serverUrl: "https://gim.example.eu", mode: nil, appServerUrl: "https://meta.example.eu"))
+    }
+
+    func testChatSummaryMapsTheAccountSafetyFields() {
+        let peer = GIMCore.UserProfile(
+            userId: "user-sofia", handle: "sofia", displayName: "Sofia Marin", hasAvatar: true)
+        let core = GIMCore.ChatSummary(
+            chatId: "chat-sofia", kind: .direct, name: "Sofia Marin", avatar: nil, lastMessage: nil, unreadCount: 2,
+            updatedAtMs: 1_790_000_000_000, memberCount: 2, state: .active, peer: peer,
+            mutedUntilMs: GIMCore.mutedForever(), pinned: true, archived: true, blocked: true)
+        XCTAssertEqual(
+            GIMClientKit.ChatSummary(core),
+            GIMClientKit.ChatSummary(
+                chatId: "chat-sofia", kind: .direct, name: "Sofia Marin", avatar: nil, lastMessage: nil, unreadCount: 2,
+                updatedAtMs: 1_790_000_000_000, memberCount: 2, state: .active,
+                peer: GIMClientKit.UserProfile(
+                    userId: "user-sofia", handle: "sofia", displayName: "Sofia Marin", hasAvatar: true),
+                mutedUntilMs: GIMClientKit.mutedForever(), pinned: true, archived: true, blocked: true))
+        let group = GIMCore.ChatSummary(
+            chatId: "chat-crew", kind: .group, name: "Aegean Crew", avatar: nil, lastMessage: nil, unreadCount: 0,
+            updatedAtMs: 1_790_000_000_000, memberCount: 4, state: .active, peer: nil, mutedUntilMs: 0, pinned: false,
+            archived: false, blocked: false)
+        let mapped = GIMClientKit.ChatSummary(group)
+        XCTAssertNil(mapped.peer)
+        XCTAssertEqual(mapped.mutedUntilMs, 0)
+        XCTAssertFalse(mapped.pinned || mapped.archived || mapped.blocked)
+    }
+
+    func testMutedForeverMatchesGimCore() {
+        XCTAssertEqual(GIMClientKit.mutedForever(), GIMCore.mutedForever())
+    }
+
+    func testReportReasonMapsEveryCase() {
+        let reasons: [(GIMClientKit.ReportReason, GIMCore.ReportReason)] = [
+            (.spam, .spam), (.harassment, .harassment), (.inappropriate, .inappropriate), (.scam, .scam),
+            (.other, .other),
+        ]
+        for (mirror, core) in reasons {
+            XCTAssertEqual(GIMCore.ReportReason(mirror), core)
+        }
+    }
+
+    func testPrivacySettingsAndRecoveryRotationMapEveryField() {
+        XCTAssertEqual(
+            GIMClientKit.PrivacySettings(
+                GIMCore.PrivacySettings(readReceipts: false, typingIndicators: true, blockedUserIds: ["u1", "u2"])),
+            GIMClientKit.PrivacySettings(readReceipts: false, typingIndicators: true, blockedUserIds: ["u1", "u2"]))
+        XCTAssertEqual(
+            GIMClientKit.RecoveryRotation(
+                GIMCore.RecoveryRotation(recoveryCode: "7BQ2-K9MX", unsyncedHubIds: ["hub-b"])),
+            GIMClientKit.RecoveryRotation(recoveryCode: "7BQ2-K9MX", unsyncedHubIds: ["hub-b"]))
+    }
+
     func testUserSuspendedMapsBothWays() {
         XCTAssertEqual(
             GIMClientKit.GimError(GIMCore.GimError.UserSuspended(hubId: "hub-a")), .UserSuspended(hubId: "hub-a"))

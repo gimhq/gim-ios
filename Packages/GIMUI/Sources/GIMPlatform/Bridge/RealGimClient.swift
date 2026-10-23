@@ -276,6 +276,75 @@ public final class RealGimClient: GimClientAPI {
     public func processPush(payload: String) async throws -> GIMClientKit.NotificationContent {
         try await bridged { try await GIMClientKit.NotificationContent(core.processPush(payload: payload)) }
     }
+
+    public func ownProfile() async throws -> GIMClientKit.UserProfile? {
+        try await bridged { try await core.ownProfile().map { GIMClientKit.UserProfile($0) } }
+    }
+
+    public func setAvatar(filePath: String, mime: String) async throws {
+        try await bridged { try await core.setAvatar(filePath: filePath, mime: mime) }
+    }
+
+    public func removeAvatar() async throws {
+        try await bridged { try await core.removeAvatar() }
+    }
+
+    public func fetchUserAvatar(userId: String, destPath: String) async throws -> String {
+        try await bridged { try await core.fetchUserAvatar(userId: userId, destPath: destPath) }
+    }
+
+    public func fetchChatAvatar(chatId: String, destPath: String) async throws -> String {
+        try await bridged { try await core.fetchChatAvatar(chatId: chatId, destPath: destPath) }
+    }
+
+    public func privacy() async throws -> GIMClientKit.PrivacySettings {
+        try await bridged { try await GIMClientKit.PrivacySettings(core.privacy()) }
+    }
+
+    public func setReadReceipts(enabled: Bool) async throws {
+        try await bridged { try await core.setReadReceipts(enabled: enabled) }
+    }
+
+    public func setTypingIndicators(enabled: Bool) async throws {
+        try await bridged { try await core.setTypingIndicators(enabled: enabled) }
+    }
+
+    public func blockUser(userId: String) async throws {
+        try await bridged { try await core.blockUser(userId: userId) }
+    }
+
+    public func unblockUser(userId: String) async throws {
+        try await bridged { try await core.unblockUser(userId: userId) }
+    }
+
+    public func setChatMuted(chatId: String, mutedUntilMs: UInt64) async throws {
+        try await bridged { try await core.setChatMuted(chatId: chatId, mutedUntilMs: mutedUntilMs) }
+    }
+
+    public func setChatPinned(chatId: String, pinned: Bool) async throws {
+        try await bridged { try await core.setChatPinned(chatId: chatId, pinned: pinned) }
+    }
+
+    public func setChatArchived(chatId: String, archived: Bool) async throws {
+        try await bridged { try await core.setChatArchived(chatId: chatId, archived: archived) }
+    }
+
+    public func reportUser(
+        userId: String, reason: GIMClientKit.ReportReason, note: String?, messageIds: [String]
+    ) async throws -> String {
+        try await bridged {
+            try await core.reportUser(
+                userId: userId, reason: GIMCore.ReportReason(reason), note: note, messageIds: messageIds)
+        }
+    }
+
+    public func rotateRecoveryCode() async throws -> GIMClientKit.RecoveryRotation {
+        try await bridged { try await GIMClientKit.RecoveryRotation(core.rotateRecoveryCode()) }
+    }
+
+    public func deleteAccount() async throws -> [String] {
+        try await bridged { try await core.deleteAccount() }
+    }
 }
 
 /// Adapts gim-core's generated `Timeline` object to the mirror `Timeline` protocol.

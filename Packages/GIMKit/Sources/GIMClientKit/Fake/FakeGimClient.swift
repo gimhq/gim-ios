@@ -3,8 +3,8 @@ import Synchronization
 
 /// In-memory `GimClientAPI` for previews, demo mode and tests.
 ///
-/// Emits the same diff semantics as gim-core (eyeball-im `VectorDiff`): the chat list is ordered by `updatedAtMs`
-/// descending, ties by chat id; each timeline is ordered oldest first, exposes a window of the newest items that
+/// Emits the same diff semantics as gim-core (eyeball-im `VectorDiff`): the chat list has pinned chats first, then
+/// is ordered by `updatedAtMs` descending, ties by chat id; each timeline is ordered oldest first, exposes a window of the newest items that
 /// `paginateBackwards` grows at the front, and has a `dateSeparator` before the first item of each local calendar
 /// day (in the zone set with `setLocalTimeZone`, UTC until then). Sync only runs between `startSync()` and `stopSync()`; own messages wait in the outbox until
 /// the client is connected. Delayed behaviour (connecting, send state progression, peer typing and replies) runs
@@ -31,6 +31,14 @@ import Synchronization
 /// `startSync` and `signOut` throw `InvalidInput` and `registerPush`/`unregisterPush` do nothing. A sign-out deletes
 /// the local store of its data directory for every client created before it: their `processPush` then throws
 /// `Storage("the local store was deleted by sign-out")`.
+///
+/// Account safety (gim-core docs/API.md, "Privacy and chat settings"): blocking drops the blocked user's messages and
+/// typing, refuses chats with them (`InvalidInput`) and marks their direct chat `blocked`; sends to it still work, as
+/// in gim-core. With read receipts off own messages stop at `delivered`; with typing indicators off peer typing is not
+/// shown. Mute, pin and archive only change the row (pinned chats first). Avatars are files stored like media; a user
+/// added with `hasAvatar` but no file gets a placeholder PNG. `reportUser` records the report in `reports` (no meta
+/// server is needed here). `rotateRecoveryCode` replaces the code `restoreFromRecovery` accepts, and `deleteAccount`
+/// wipes the device like `signOut` and forgets the account (its DeviceList, recovery code and profile).
 public actor FakeGimClient: GimClientAPI {
     struct Reaction: Sendable {
         var emoji: String
@@ -81,6 +89,9 @@ public actor FakeGimClient: GimClientAPI {
         var unreadCount: UInt32 = 0
         var typing: [String] = []
         var state: ChatState = .active
+        var mutedUntilMs: UInt64 = 0
+        var pinned = false
+        var archived = false
     }
 
     struct StoredHub: Sendable {
@@ -98,6 +109,23 @@ public actor FakeGimClient: GimClientAPI {
     struct StoredMedia: Sendable {
         var path: String
         var thumbnailPath: String?
+    }
+
+    /// A report sent with `reportUser`.
+    public struct Report: Sendable, Hashable {
+        public var reportId: String
+        public var userId: String
+        public var reason: ReportReason
+        public var note: String?
+        public var messageIds: [String]
+
+        public init(reportId: String, userId: String, reason: ReportReason, note: String?, messageIds: [String]) {
+            self.reportId = reportId
+            self.userId = userId
+            self.reason = reason
+            self.note = note
+            self.messageIds = messageIds
+        }
     }
 
     struct Seed: Sendable {
@@ -153,12 +181,18 @@ public actor FakeGimClient: GimClientAPI {
     private var deviceLists: [String: [DeviceInfo]] = [:]
     private var recoveryCodes: [String: String] = [:]
     private var createdIdentities = 0
+    private var rotatedRecoveryCodes = 0
     /// Links started by `startLink`, by QR string, and whether `waitLink` consumed them.
     private let startedLinks = Mutex<[String: Bool]>([:])
     private var awaitingLinkConfirmation = false
     /// Devices approved with `approveLink` and not yet confirmed.
     private var pendingApprovals: Set<String> = []
     private var users: [String: UserProfile] = [:]
+    /// Stored profile photos by user id; users with `hasAvatar` and no entry get a placeholder.
+    private var userAvatars: [String: String] = [:]
+    private var privacySettings = PrivacySettings(readReceipts: true, typingIndicators: true, blockedUserIds: [])
+    /// Reports sent with `reportUser`, oldest first.
+    public private(set) var reports: [Report] = []
     private var chats: [String: StoredChat] = [:]
     private var media: [String: StoredMedia] = [:]
     private var publishedChatList: [ChatSummary] = []
@@ -259,7 +293,7 @@ public actor FakeGimClient: GimClientAPI {
         users = Dictionary(seed.users.map { ($0.userId, $0) }, uniquingKeysWith: { _, last in last })
         chats = Dictionary(uniqueKeysWithValues: seed.chats.map { ($0.id, $0) })
         media = seed.media
-        publishedChatList = Self.sortedSummaries(chats: chats, users: users, session: seed.session)
+        publishedChatList = Self.sortedSummaries(chats: chats, users: users, session: seed.session, blocked: [])
         let states = chats.mapValues(\.state)
         chatStates.withLock { $0 = states }
         publishedTimelines = chats.mapValues { Self.timelineItems(of: $0, zone: nil) }
@@ -436,6 +470,7 @@ public actor FakeGimClient: GimClientAPI {
         guard chat.members.contains(userId), userId != session?.userId else {
             throw GimError.NotFound(reason: "member \(userId)")
         }
+        guard privacySettings.typingIndicators, !privacySettings.blockedUserIds.contains(userId) else { return }
         chat.typing.removeAll { $0 == userId }
         if active { chat.typing.append(userId) }
         chats[chatId] = chat
@@ -462,6 +497,11 @@ public actor FakeGimClient: GimClientAPI {
         guard options.mode != .`extension` else {
             throw GimError.InvalidInput(reason: "an app extension cannot sign out")
         }
+        wipeLocal()
+    }
+
+    /// Deletes the session and every local state, like gim-core's sign-out.
+    private func wipeLocal() {
         session = nil
         awaitingLinkConfirmation = false
         pendingApprovals = []
@@ -480,6 +520,7 @@ public actor FakeGimClient: GimClientAPI {
         storedHubs = [Self.homeHub(url: options.homeHubUrl)]
         publishHubList()
         pushRegistration = nil
+        privacySettings = PrivacySettings(readReceipts: true, typingIndicators: true, blockedUserIds: [])
         Self.signOuts.withLock { $0[options.dataDirectory, default: 0] += 1 }
     }
 
@@ -655,7 +696,8 @@ public actor FakeGimClient: GimClientAPI {
     private func updateProfile(_ session: Session) {
         self.session = session
         users[session.userId] = UserProfile(
-            userId: session.userId, handle: session.handle, displayName: session.displayName)
+            userId: session.userId, handle: session.handle, displayName: session.displayName,
+            hasAvatar: users[session.userId]?.hasAvatar ?? false)
         publishChatList()
     }
 
@@ -736,6 +778,7 @@ public actor FakeGimClient: GimClientAPI {
         guard userId != session.userId else {
             throw GimError.InvalidInput(reason: "You can't start a chat with yourself")
         }
+        try refuseBlocked([userId])
         _ = try existingUser(userId)
         guard !devicelessUserIds.contains(userId) else {
             throw GimError.NotFound(reason: "user \(userId) has no device")
@@ -756,6 +799,7 @@ public actor FakeGimClient: GimClientAPI {
         let session = try requireSession()
         let name = name.trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else { throw GimError.InvalidInput(reason: "Group name is required") }
+        try refuseBlocked(memberUserIds)
         let (found, skipped) = try invitees(memberUserIds, excluding: [session.userId])
         let chat = StoredChat(
             id: makeId("chat"), kind: .group, name: name, createdAtMs: nowMs(), members: [session.userId] + found)
@@ -781,6 +825,7 @@ public actor FakeGimClient: GimClientAPI {
         var chat = try existingGroup(chatId, "Members can only be added to groups")
         try requireActive(chat)
         try requirePeerAdmits(chatId)
+        try refuseBlocked(userIds)
         let (added, skipped) = try invitees(userIds, excluding: chat.members)
         chat.members += added
         chats[chatId] = chat
@@ -1017,6 +1062,7 @@ public actor FakeGimClient: GimClientAPI {
         publishChatList()
     }
 
+    /// Sends nothing (the fake never does); with typing indicators off gim-core sends nothing either.
     public func setTyping(chatId: String, active: Bool) async throws {
         _ = try requireSession()
         _ = try existingChat(chatId)
@@ -1233,6 +1279,145 @@ public actor FakeGimClient: GimClientAPI {
             messageId: nil, collapseId: nil, kind: .generic, shouldDisplay: true, timestamp: timestamp)
     }
 
+    // MARK: - Profile photo
+
+    public func ownProfile() async throws -> UserProfile? {
+        users[try requireSession().userId]
+    }
+
+    public func setAvatar(filePath: String, mime: String) async throws {
+        let session = try requireSession()
+        userAvatars[session.userId] = try storeFile(filePath, as: makeId("avatar")).path
+        setHasAvatar(true, session.userId)
+    }
+
+    public func removeAvatar() async throws {
+        let session = try requireSession()
+        userAvatars[session.userId] = nil
+        setHasAvatar(false, session.userId)
+    }
+
+    public func fetchUserAvatar(userId: String, destPath: String) async throws -> String {
+        _ = try requireSession()
+        guard try existingUser(userId).hasAvatar else { throw GimError.NotFound(reason: "avatar of \(userId)") }
+        if let path = userAvatars[userId] { return try copyFile(path, to: destPath) }
+        return try writeFile(DemoImage.png(width: 8, height: 8), to: destPath)
+    }
+
+    public func fetchChatAvatar(chatId: String, destPath: String) async throws -> String {
+        _ = try requireSession()
+        guard let avatar = try existingChat(chatId).avatar else {
+            throw GimError.NotFound(reason: "avatar of chat \(chatId)")
+        }
+        if let stored = media[Self.mediaKey(chatId: chatId, messageId: avatar.messageId)] {
+            return try copyFile(stored.path, to: destPath)
+        }
+        return try writeFile(DemoImage.png(width: 8, height: 8), to: destPath)
+    }
+
+    private func setHasAvatar(_ hasAvatar: Bool, _ userId: String) {
+        users[userId]?.hasAvatar = hasAvatar
+        publishChatList()
+    }
+
+    // MARK: - Privacy and chat settings
+
+    /// The defaults until changed; settings are local, so `signOut` resets them.
+    public func privacy() async throws -> PrivacySettings {
+        privacySettings
+    }
+
+    public func setReadReceipts(enabled: Bool) async throws {
+        _ = try requireSession()
+        privacySettings.readReceipts = enabled
+    }
+
+    public func setTypingIndicators(enabled: Bool) async throws {
+        _ = try requireSession()
+        privacySettings.typingIndicators = enabled
+    }
+
+    public func blockUser(userId: String) async throws {
+        let session = try requireSession()
+        guard userId != session.userId else { throw GimError.InvalidInput(reason: "cannot block yourself") }
+        guard !privacySettings.blockedUserIds.contains(userId) else { return }
+        privacySettings.blockedUserIds = (privacySettings.blockedUserIds + [userId]).sorted()
+        publishChatList()
+    }
+
+    public func unblockUser(userId: String) async throws {
+        _ = try requireSession()
+        privacySettings.blockedUserIds.removeAll { $0 == userId }
+        publishChatList()
+    }
+
+    public func setChatMuted(chatId: String, mutedUntilMs: UInt64) async throws {
+        try updateChatSettings(chatId) { $0.mutedUntilMs = mutedUntilMs }
+    }
+
+    public func setChatPinned(chatId: String, pinned: Bool) async throws {
+        try updateChatSettings(chatId) { $0.pinned = pinned }
+    }
+
+    public func setChatArchived(chatId: String, archived: Bool) async throws {
+        try updateChatSettings(chatId) { $0.archived = archived }
+    }
+
+    private func updateChatSettings(_ chatId: String, _ change: (inout StoredChat) -> Void) throws {
+        _ = try requireSession()
+        var chat = try existingChat(chatId)
+        change(&chat)
+        chats[chatId] = chat
+        publishChatList()
+    }
+
+    // MARK: - Meta server
+
+    /// Validates like gim-core and records the report in `reports`; unlike gim-core it needs no meta server.
+    public func reportUser(
+        userId: String, reason: ReportReason, note: String?, messageIds: [String]
+    ) async throws -> String {
+        let session = try requireSession()
+        guard userId != session.userId else { throw GimError.InvalidInput(reason: "cannot report yourself") }
+        guard messageIds.count <= 50 else { throw GimError.InvalidInput(reason: "at most 50 messages") }
+        guard (note?.count ?? 0) <= 1000 else { throw GimError.InvalidInput(reason: "note: at most 1000 characters") }
+        _ = try existingUser(userId)
+        for messageId in messageIds where locateMessage(messageId) == nil {
+            throw GimError.NotFound(reason: "message \(messageId)")
+        }
+        let reportId = makeId("report")
+        reports.append(
+            Report(reportId: reportId, userId: userId, reason: reason, note: note, messageIds: messageIds))
+        return reportId
+    }
+
+    // MARK: - Recovery and account deletion
+
+    /// Every hub takes the new backup: `unsyncedHubIds` is empty.
+    public func rotateRecoveryCode() async throws -> RecoveryRotation {
+        let session = try requireSession()
+        rotatedRecoveryCodes += 1
+        let code = Self.recoveryCode(
+            bytes: (0..<24).map { UInt8(truncatingIfNeeded: rotatedRecoveryCodes &* 53 &+ $0 &* 7 &+ 1) })
+        recoveryCodes[session.userId] = Self.normalizedRecoveryCode(code)
+        return RecoveryRotation(recoveryCode: code, unsyncedHubIds: [])
+    }
+
+    /// Forgets the account (DeviceList, recovery code, profile) and wipes the device like `signOut`. Every hub is
+    /// reached: returns `[]`.
+    public func deleteAccount() async throws -> [String] {
+        guard options.mode != .`extension` else {
+            throw GimError.InvalidInput(reason: "an app extension cannot delete the account")
+        }
+        let session = try requireSession()
+        deviceLists[session.userId] = nil
+        recoveryCodes[session.userId] = nil
+        users[session.userId] = nil
+        userAvatars[session.userId] = nil
+        wipeLocal()
+        return []
+    }
+
     // MARK: - Listeners
 
     public func chatList(listener: any ChatListListener) async throws -> TaskHandle {
@@ -1356,6 +1541,8 @@ public actor FakeGimClient: GimClientAPI {
             }
             scheduleAutoReply(chatId)
         case .delivered:
+            // With read receipts off the others' receipts are not shown: the message stays delivered.
+            guard privacySettings.readReceipts else { break }
             options.scheduler.schedule(after: .milliseconds(1500)) { [weak self] in
                 await self?.advance(messageId, to: .read)
             }
@@ -1388,6 +1575,8 @@ public actor FakeGimClient: GimClientAPI {
         guard sender != session.userId, chat.members.contains(sender), let profile = users[sender] else {
             throw GimError.NotFound(reason: "member \(sender)")
         }
+        // gim-core drops what a blocked user sends.
+        guard !privacySettings.blockedUserIds.contains(sender) else { return makeId("msg") }
         chat.unreadCount += 1
         chats[chatId] = chat
         let item = MessageItem(
@@ -1435,6 +1624,13 @@ public actor FakeGimClient: GimClientAPI {
     /// `NotAdmittedByPeer` while `simulateNotAdmittedByPeer(chatId:hubId:)` is on for the chat.
     private func requirePeerAdmits(_ chatId: String) throws {
         if let hubId = peerRefusals[chatId] { throw GimError.NotAdmittedByPeer(hubId: hubId, chatId: chatId) }
+    }
+
+    /// gim-core's refusal to create a chat with or add a blocked user.
+    private func refuseBlocked(_ userIds: [String]) throws {
+        if let userId = userIds.first(where: privacySettings.blockedUserIds.contains) {
+            throw GimError.InvalidInput(reason: "\(userId) is blocked; unblock them first")
+        }
     }
 
     private func existingUser(_ userId: String) throws -> UserProfile {
@@ -1523,6 +1719,18 @@ public actor FakeGimClient: GimClientAPI {
         }
     }
 
+    private func writeFile(_ data: Data, to destPath: String) throws -> String {
+        do {
+            let destination = URL(fileURLWithPath: destPath)
+            try FileManager.default.createDirectory(
+                at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try data.write(to: destination)
+            return destPath
+        } catch {
+            throw GimError.Storage(reason: "Could not write media: \(error)")
+        }
+    }
+
     private func appendEntry(_ entry: Entry, _ chatId: String) {
         guard var chat = chats[chatId] else { return }
         chat.entries.append(entry)
@@ -1559,7 +1767,8 @@ public actor FakeGimClient: GimClientAPI {
     private func publishChatList() {
         let states = chats.mapValues(\.state)
         chatStates.withLock { $0 = states }
-        let newList = Self.sortedSummaries(chats: chats, users: users, session: session)
+        let newList = Self.sortedSummaries(
+            chats: chats, users: users, session: session, blocked: Set(privacySettings.blockedUserIds))
         let diffs = Self.chatListDiffs(from: publishedChatList, to: newList)
         publishedChatList = newList
         guard !diffs.isEmpty else { return }
@@ -1757,24 +1966,30 @@ public actor FakeGimClient: GimClientAPI {
         return diffs
     }
 
+    /// Pinned chats first, then the most recently updated, ties by chat id.
     static func sortedSummaries(
-        chats: [String: StoredChat], users: [String: UserProfile], session: Session?
+        chats: [String: StoredChat], users: [String: UserProfile], session: Session?, blocked: Set<String>
     ) -> [ChatSummary] {
         chats.values
-            .map { summary(of: $0, users: users, session: session) }
+            .map { summary(of: $0, users: users, session: session, blocked: blocked) }
             .sorted { lhs, rhs in
-                lhs.updatedAtMs != rhs.updatedAtMs ? lhs.updatedAtMs > rhs.updatedAtMs : lhs.chatId < rhs.chatId
+                if lhs.pinned != rhs.pinned { return lhs.pinned }
+                return lhs.updatedAtMs != rhs.updatedAtMs
+                    ? lhs.updatedAtMs > rhs.updatedAtMs : lhs.chatId < rhs.chatId
             }
     }
 
-    static func summary(of chat: StoredChat, users: [String: UserProfile], session: Session?) -> ChatSummary {
+    static func summary(
+        of chat: StoredChat, users: [String: UserProfile], session: Session?, blocked: Set<String>
+    ) -> ChatSummary {
         let last = chat.entries.last { $0.message != nil }?.message?.item
         let name: String
+        let peerId = chat.kind == .direct ? chat.members.first(where: { $0 != session?.userId }) : nil
+        let peer = peerId.flatMap { users[$0] }
         switch chat.kind {
         case .group:
             name = chat.name
         case .direct:
-            let peer = chat.members.first { $0 != session?.userId }.flatMap { users[$0] }
             name = peer?.displayName ?? chat.name
         }
         return ChatSummary(
@@ -1785,7 +2000,8 @@ public actor FakeGimClient: GimClientAPI {
                     isOwn: $0.isOwn, sendState: $0.isOwn ? $0.sendState : nil)
             },
             unreadCount: chat.unreadCount, updatedAtMs: chat.entries.last?.atMs ?? chat.createdAtMs,
-            memberCount: UInt32(chat.members.count), state: chat.state)
+            memberCount: UInt32(chat.members.count), state: chat.state, peer: peer, mutedUntilMs: chat.mutedUntilMs,
+            pinned: chat.pinned, archived: chat.archived, blocked: peerId.map(blocked.contains) ?? false)
     }
 
     static func previewText(_ content: MessageContent) -> String {

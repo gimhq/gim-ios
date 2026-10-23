@@ -272,6 +272,64 @@ public protocol GimClientAPI: AnyObject, Sendable {
     /// within about 15 s. Content that cannot be processed comes back `generic` (`New message`, displayed).
     /// `InvalidInput` only if `payload` is not a JSON object.
     func processPush(payload: String) async throws -> NotificationContent
+
+    // Profile photo (gim-core docs/API.md, "GimClient").
+
+    /// The signed-in user's own profile; `nil` before it is stored.
+    func ownProfile() async throws -> UserProfile?
+    /// Sets the signed-in user's profile photo from an image file (crop and scale it first: every chat member
+    /// downloads it); synced and announced like `setDisplayName`.
+    func setAvatar(filePath: String, mime: String) async throws
+    /// Removes the signed-in user's profile photo.
+    func removeAvatar() async throws
+    /// Downloads and decrypts the profile photo of `userId` (the own user included) to `destPath` and returns the
+    /// path; `NotFound` if they have none (`UserProfile.hasAvatar`).
+    func fetchUserAvatar(userId: String, destPath: String) async throws -> String
+    /// Downloads and decrypts the avatar of a group chat to `destPath` and returns the path; `NotFound` if it has
+    /// none.
+    func fetchChatAvatar(chatId: String, destPath: String) async throws -> String
+
+    // Privacy and chat settings (gim-core docs/API.md, "Privacy and chat settings"): stored on the user's devices
+    // and synced to the own other devices; hubs never see them.
+
+    /// The privacy settings.
+    func privacy() async throws -> PrivacySettings
+    /// Turns sending (and showing) read receipts on or off.
+    func setReadReceipts(enabled: Bool) async throws
+    /// Turns sending (and showing) typing indicators on or off.
+    func setTypingIndicators(enabled: Bool) async throws
+    /// Blocks a user: their messages and invites are dropped and no chat can be created with them or add them
+    /// (`InvalidInput`). Existing chats stay; a direct chat shows `blocked`. `InvalidInput` for the signed-in user.
+    func blockUser(userId: String) async throws
+    /// Lets new messages of the user through; the dropped ones do not come back.
+    func unblockUser(userId: String) async throws
+    /// Mutes a chat's notifications until `mutedUntilMs` (Unix milliseconds; `mutedForever()` for good, 0 to unmute).
+    /// `NotFound` for an unknown chat.
+    func setChatMuted(chatId: String, mutedUntilMs: UInt64) async throws
+    /// Pinned chats come first in the chat list. `NotFound` for an unknown chat.
+    func setChatPinned(chatId: String, pinned: Bool) async throws
+    /// Only sets `ChatSummary.archived`: show archived chats apart. A new message does not unarchive a chat.
+    /// `NotFound` for an unknown chat.
+    func setChatArchived(chatId: String, archived: Bool) async throws
+
+    // Meta server (gim-core docs/API.md, "App server"; renamed the meta server, gim-meta). Not deployed yet.
+
+    /// Reports a user to the meta server's moderators with the messages `messageIds` (at most 50, from the local
+    /// history) in plaintext, and an optional `note` (at most 1000 characters). Returns the report id. Does not block:
+    /// call `blockUser` too if wanted. `InvalidInput` without a meta server (`ClientConfig.metaServerUrl`).
+    func reportUser(userId: String, reason: ReportReason, note: String?, messageIds: [String]) async throws -> String
+
+    // Recovery and account deletion (gim-core docs/API.md, "Identity and devices", "Account deletion").
+
+    /// Replaces the recovery code with a new one, for a user who lost it: the previous code stops working on every
+    /// hub that takes the new backup (the home hub always does, or the call fails without any change). Returns the
+    /// new code, which is not stored and must be shown to the user once.
+    func rotateRecoveryCode() async throws -> RecoveryRotation
+    /// Deletes the account for good: the meta server's data, every chat (the user leaves), the account on every hub,
+    /// then everything on this device as `signOut` does. Returns the ids of the user's other hubs that could not be
+    /// reached (their records expire on their own). On an error nothing local is deleted and it can be called again.
+    /// Irreversible: confirm with the user first.
+    func deleteAccount() async throws -> [String]
 }
 
 /// Creates the client. Opens (or creates) local state under `hooks.dataDir()`; does not touch the network.
@@ -283,6 +341,11 @@ public func createClient(config: ClientConfig, hooks: any PlatformHooks) async t
     return FakeGimClient.demo(
         dataDirectory: hooks.dataDir(), registered: false, networkReachable: hooks.isNetworkReachable(),
         homeHubUrl: config.serverUrl, mode: config.mode)
+}
+
+/// `ChatSummary.mutedUntilMs` of a chat muted until it is unmuted (`setChatMuted`).
+public func mutedForever() -> UInt64 {
+    UInt64.max
 }
 
 /// Same rules as gim-core: an `http` or `https` URL with a host. `what` prefixes the `InvalidInput` reason.
