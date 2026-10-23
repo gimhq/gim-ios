@@ -46,7 +46,7 @@ final class AccessibilityFakeTests: E2ETestCase {
 
         summary.start("b")
         try XCTContext.runActivity(named: "step b: composer at accessibility XXXL") { _ in
-            try tap(chatRow(groupName, in: app), "step b: \(groupName) row", app)
+            try revealAndTap(chatRow(groupName, in: app), "step b: \(groupName) row", app)
             let text = app.textViews["composer.text"]
             let send = app.buttons["composer.send"]
             let attach = app.buttons["composer.attach"]
@@ -80,7 +80,7 @@ final class AccessibilityFakeTests: E2ETestCase {
             app.launchArguments = ["-GIMUseFakeCore", "YES"]
             try launchToOnboarding(app, "step c")
             try createIdentity(displayName: "Alex \(suffix)", handle: "alex_\(suffix)", "step c", app)
-            try tap(chatRow(groupName, in: app), "step c: \(groupName) row", app)
+            try revealAndTap(chatRow(groupName, in: app), "step c: \(groupName) row", app)
             let text = app.textViews["composer.text"]
             try require(text.waitForExistence(timeout: networkTimeout), "step c: composer text view visible", app)
             let attach = app.buttons["composer.attach"].frame

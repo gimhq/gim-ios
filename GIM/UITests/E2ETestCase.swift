@@ -81,9 +81,10 @@ class E2ETestCase: XCTestCase {
     @MainActor
     @discardableResult
     func createIdentity(displayName: String, handle: String, _ step: String, _ app: XCUIApplication) throws -> String {
-        try tap(app.buttons["onboarding.create"], "\(step): Create account button", app)
+        try revealAndTap(app.buttons["onboarding.create"], "\(step): Create account button", app)
         // Return submits the form, like the Create button that the keyboard may cover.
-        try type("\(displayName)\n", into: app.textFields["identity.displayName"], "\(step): display name", app)
+        try revealAndType(
+            "\(displayName)\n", into: app.textFields["identity.displayName"], "\(step): display name", app)
         let code = app.descendants(matching: .any)["recovery.code"]
         try require(
             code.waitForExistence(timeout: networkTimeout),
@@ -91,15 +92,15 @@ class E2ETestCase: XCTestCase {
         let recoveryCode = code.label
         let userId = app.descendants(matching: .any)["recovery.userId"].value as? String ?? ""
         try require(userId.hasPrefix("u"), "\(step): account ID shown, found \(userId)", app)
-        try tap(app.buttons["recovery.continue"], "\(step): I saved it button", app)
+        try revealAndTap(app.buttons["recovery.continue"], "\(step): I saved it button", app)
         let endingField = app.textFields["recovery.ending"]
         try require(
             endingField.waitForExistence(timeout: networkTimeout), "\(step): last 4 characters field visible", app)
         let ending = String(recoveryCode.replacingOccurrences(of: "-", with: "").suffix(4))
-        try type(ending, into: endingField, "\(step): last 4 characters field", app)
-        try tap(app.buttons["recovery.confirm"], "\(step): Confirm button", app)
-        try type(handle, into: app.textFields["handle.field"], "\(step): handle field", app)
-        try tap(app.buttons["handle.claim"], "\(step): Save username button", app)
+        try revealAndType(ending, into: endingField, "\(step): last 4 characters field", app)
+        try revealAndTap(app.buttons["recovery.confirm"], "\(step): Confirm button", app)
+        try revealAndType(handle, into: app.textFields["handle.field"], "\(step): handle field", app)
+        try revealAndTap(app.buttons["handle.claim"], "\(step): Save username button", app)
         let signedIn = app.buttons["chatList.newChat"].waitForExistence(timeout: networkTimeout)
         try require(
             signedIn,
@@ -305,6 +306,60 @@ class E2ETestCase: XCTestCase {
     func scrollDownFrontmost(_ app: XCUIApplication) {
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35))
             .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.75)))
+    }
+
+    /// `tap` after scrolling `element` fully into view: at accessibility text sizes a lazy list has not created the
+    /// rows below the fold, and a row under the navigation bar or the keyboard takes no taps (`isHittable` may still
+    /// say yes). The keyboard stays up, since Return submits some forms; the swipes stay above it instead.
+    @MainActor
+    func revealAndTap(_ element: XCUIElement, _ check: @autoclosure () -> String, _ app: XCUIApplication) throws {
+        reveal(element, app)
+        try tap(element, check(), app)
+    }
+
+    /// `type` after scrolling `element` fully into view, like `revealAndTap`.
+    @MainActor
+    func revealAndType(
+        _ text: String, into element: XCUIElement, _ check: @autoclosure () -> String, _ app: XCUIApplication
+    ) throws {
+        reveal(element, app)
+        try type(text, into: element, check(), app)
+    }
+
+    /// Waits briefly for `element`, then swipes the visible area (between the navigation bar and the keyboard or the
+    /// window's bottom) at most 6 times: up while `element` is missing or below that area, down while it is above.
+    @MainActor
+    private func reveal(_ element: XCUIElement, _ app: XCUIApplication) {
+        _ = element.waitForExistence(timeout: 5)
+        for _ in 0..<6 {
+            let area = visibleArea(app)
+            let swipeUp: Bool
+            if !element.exists || element.frame.maxY > area.maxY {
+                swipeUp = true
+            } else if element.frame.minY < area.minY {
+                swipeUp = false
+            } else {
+                return
+            }
+            let x = app.windows.firstMatch.frame.midX
+            let lower = CGPoint(x: x, y: area.minY + area.height * 0.8)
+            let upper = CGPoint(x: x, y: area.minY + area.height * 0.2)
+            let (from, to) = swipeUp ? (lower, upper) : (upper, lower)
+            let origin = app.coordinate(withNormalizedOffset: .zero)
+            origin.withOffset(CGVector(dx: from.x, dy: from.y))
+                .press(forDuration: 0.05, thenDragTo: origin.withOffset(CGVector(dx: to.x, dy: to.y)))
+        }
+    }
+
+    /// The part of the window where content takes taps: below the navigation bar, above the keyboard.
+    @MainActor
+    private func visibleArea(_ app: XCUIApplication) -> CGRect {
+        let window = app.windows.firstMatch.frame
+        let navigationBar = app.navigationBars.firstMatch
+        let keyboard = app.keyboards.firstMatch
+        let top = navigationBar.exists ? navigationBar.frame.maxY : window.minY
+        let bottom = keyboard.exists ? keyboard.frame.minY : window.maxY
+        return CGRect(x: window.minX, y: top, width: window.width, height: max(bottom - top, 0))
     }
 
     @MainActor
