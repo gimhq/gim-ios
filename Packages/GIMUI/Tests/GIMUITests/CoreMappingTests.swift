@@ -8,7 +8,7 @@ final class CoreMappingTests: XCTestCase {
     func testClientConfigKeepsTheMode() {
         XCTAssertEqual(
             GIMCore.ClientConfig(GIMClientKit.ClientConfig(serverUrl: "https://gim.example.eu")),
-            GIMCore.ClientConfig(serverUrl: "https://gim.example.eu", mode: nil))
+            GIMCore.ClientConfig(serverUrl: "https://gim.example.eu", mode: nil, appServerUrl: nil))
         XCTAssertEqual(
             GIMCore.ClientConfig(GIMClientKit.ClientConfig(serverUrl: "https://gim.example.eu", mode: .app)).mode,
             .app)
