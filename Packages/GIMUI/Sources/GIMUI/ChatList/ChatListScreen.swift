@@ -5,6 +5,7 @@ import SwiftUI
 /// The signed-in home screen: every chat, newest activity first, served by gim-core from its local database.
 public struct ChatListScreen: View {
     private let client: any GimClientAPI
+    private let session: Session?
     private let onOpen: (String) -> Void
     private let onOpenSettings: (() -> Void)?
 
@@ -14,10 +15,11 @@ public struct ChatListScreen: View {
     /// - Parameters:
     ///   - onOpenSettings: shows a settings button in the toolbar when set.
     public init(
-        client: any GimClientAPI, onOpen: @escaping (String) -> Void,
+        client: any GimClientAPI, session: Session? = nil, onOpen: @escaping (String) -> Void,
         onOpenSettings: (() -> Void)? = nil
     ) {
         self.client = client
+        self.session = session
         self.onOpen = onOpen
         self.onOpenSettings = onOpenSettings
         _viewModel = State(initialValue: ChatListViewModel(client: client))
@@ -44,8 +46,14 @@ public struct ChatListScreen: View {
             if let onOpenSettings {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(action: onOpenSettings) {
-                        Label(String(localized: "Settings", table: "Chat", bundle: .module), systemImage: "gearshape")
+                        if let session {
+                            AvatarView(id: session.userId, name: session.displayName, avatarPath: nil, size: 30)
+                        } else {
+                            Label(
+                                String(localized: "Settings", table: "Chat", bundle: .module), systemImage: "gearshape")
+                        }
                     }
+                    .accessibilityLabel(String(localized: "Settings", table: "Chat", bundle: .module))
                     .accessibilityIdentifier("chatList.settings")
                 }
             }

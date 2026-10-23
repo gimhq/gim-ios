@@ -23,6 +23,9 @@ targets:
     sources:
       - GIM/Sources
       - GIM/Resources
+      # `AboutInfo` reads the bundled gim-core version for Settings.
+      - path: GIM_CORE_VERSION
+        buildPhase: resources
     dependencies:
       - package: GIMUI
         product: GIMUI
