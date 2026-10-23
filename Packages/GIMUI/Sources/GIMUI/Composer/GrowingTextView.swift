@@ -16,7 +16,7 @@ struct GrowingTextView: UIViewRepresentable {
         textView.isScrollEnabled = false
         textView.delegate = context.coordinator
         textView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        textView.accessibilityLabel = "Message"
+        textView.accessibilityLabel = String(localized: "Message", table: "Chat", bundle: .module)
         textView.accessibilityIdentifier = "composer.text"
         return textView
     }
