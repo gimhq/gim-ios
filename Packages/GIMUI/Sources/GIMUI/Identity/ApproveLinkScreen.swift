@@ -63,8 +63,9 @@ struct ApproveLinkScreen: View {
                 default:
                     Text(
                         "GIM can't use the camera. Allow camera access in Settings or paste the link code below.",
-                        tableName: "Devices", bundle: .module)
-                        .foregroundStyle(.secondary)
+                        tableName: "Devices", bundle: .module
+                    )
+                    .foregroundStyle(.secondary)
                     Button(String(localized: "Open Settings", table: "Devices", bundle: .module)) {
                         if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
                     }
@@ -84,12 +85,12 @@ struct ApproveLinkScreen: View {
             TextField(text: $viewModel.linkCode) {
                 Text("Paste link code", tableName: "Devices", bundle: .module)
             }
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .focused($focusesCode)
-                .accessibilityIdentifier("approve.paste")
-                .submitLabel(.go)
-                .onSubmit(submit)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .focused($focusesCode)
+            .accessibilityIdentifier("approve.paste")
+            .submitLabel(.go)
+            .onSubmit(submit)
             Button(action: submit) {
                 HStack {
                     Spacer()
@@ -110,7 +111,8 @@ struct ApproveLinkScreen: View {
                 Text(error).foregroundStyle(.red)
             } else {
                 Text(
-                    "On your new device, tap Copy link code, then paste it here.", tableName: "Devices", bundle: .module)
+                    "On your new device, tap Copy link code, then paste it here.", tableName: "Devices", bundle: .module
+                )
             }
         }
     }

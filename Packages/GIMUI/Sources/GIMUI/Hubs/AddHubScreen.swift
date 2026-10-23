@@ -17,14 +17,14 @@ struct AddHubScreen: View {
                 TextField(text: $viewModel.url) {
                     Text("https://hub.example.eu", tableName: "Hubs", bundle: .module)
                 }
-                    .textContentType(.URL)
-                    .keyboardType(.URL)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .focused($focusesUrl)
-                    .accessibilityIdentifier("addHub.url")
-                    .submitLabel(.done)
-                    .onSubmit(submit)
+                .textContentType(.URL)
+                .keyboardType(.URL)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .focused($focusesUrl)
+                .accessibilityIdentifier("addHub.url")
+                .submitLabel(.done)
+                .onSubmit(submit)
                 ValidationMessage(text: viewModel.urlError)
             } header: {
                 Text("Server address", tableName: "Hubs", bundle: .module)

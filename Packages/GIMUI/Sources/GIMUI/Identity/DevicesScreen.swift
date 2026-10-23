@@ -93,7 +93,8 @@ struct DevicesScreen: View {
                 if device.createdAtMs > 0 {
                     Text(
                         "Added \(Date(epochMilliseconds: device.createdAtMs).formatted(date: .abbreviated, time: .omitted))",
-                        tableName: "Devices", bundle: .module)
+                        tableName: "Devices", bundle: .module
+                    )
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 }

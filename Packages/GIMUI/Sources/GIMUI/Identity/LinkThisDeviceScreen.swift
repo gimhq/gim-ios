@@ -62,8 +62,9 @@ struct LinkThisDeviceScreen: View {
         VStack(spacing: 24) {
             Text(
                 "On your other device, open Settings, choose Link a new device and scan this code.",
-                tableName: "Devices", bundle: .module)
-                .multilineTextAlignment(.center)
+                tableName: "Devices", bundle: .module
+            )
+            .multilineTextAlignment(.center)
             QRCodeView(text: qrString)
                 .frame(width: 240, height: 240)
                 .padding(12)
@@ -75,7 +76,8 @@ struct LinkThisDeviceScreen: View {
                 Label(String(localized: "Copy link code", table: "Devices", bundle: .module), systemImage: "doc.on.doc")
             }
             .accessibilityHint(
-                Text("Copies the code to paste on your other device", tableName: "Devices", bundle: .module))
+                Text("Copies the code to paste on your other device", tableName: "Devices", bundle: .module)
+            )
             .accessibilityIdentifier("link.copy")
             HStack(spacing: 8) {
                 ProgressView()

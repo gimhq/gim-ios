@@ -110,7 +110,7 @@ struct HubsScreen: View {
                     Label(
                         String(localized: "Signed in", table: "Hubs", bundle: .module), systemImage: "checkmark.circle"
                     )
-                        .accessibilityIdentifier("hubs.signedIn.\(key)")
+                    .accessibilityIdentifier("hubs.signedIn.\(key)")
                 }
             }
             .font(.footnote)
