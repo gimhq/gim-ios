@@ -24,6 +24,22 @@ class E2ETestCase: XCTestCase {
         app.launchArguments += ["-GIMDefaultServerURL", serverUrl]
         app.launch()
         try signOutIfNeeded(app)
+        try expectOnboarding(app, step)
+    }
+
+    /// Requires the welcome screen and checks that the server field, revealed with "Use another server", is
+    /// pre-filled with `serverUrl`, which proves that the launch argument reached the app. The other smoke tests may
+    /// reuse it after a sign-out.
+    @MainActor
+    func expectOnboarding(_ app: XCUIApplication, _ step: String) throws {
+        try require(
+            app.buttons["onboarding.create"].waitForExistence(timeout: networkTimeout),
+            "\(step): onboarding Create account button visible", app)
+        // The field is hidden behind the button while a default server exists.
+        let useAnotherServer = app.buttons["onboarding.useAnotherServer"]
+        if useAnotherServer.exists {
+            try tap(useAnotherServer, "\(step): Use another server button", app)
+        }
         let serverField = app.textFields["onboarding.serverUrl"]
         try require(
             serverField.waitForExistence(timeout: networkTimeout), "\(step): onboarding server field visible", app)
@@ -32,34 +48,30 @@ class E2ETestCase: XCTestCase {
             "\(step): server field pre-filled with \(serverUrl), found \(String(describing: serverField.value))", app)
     }
 
-    /// Creates an identity from onboarding (display name, recovery code, the requested recovery group, handle) and
-    /// waits for the chat list. Returns the recovery code as shown, groups separated by `-`.
+    /// Creates an account from onboarding (display name, recovery key, its last 4 characters, username) and waits
+    /// for the chat list. Returns the recovery code as shown, groups separated by `-`.
     @MainActor
     @discardableResult
     func createIdentity(displayName: String, handle: String, _ step: String, _ app: XCUIApplication) throws -> String {
-        try tap(app.buttons["onboarding.create"], "\(step): Create New Identity button", app)
-        // Return submits the form, like the Create Identity button that the keyboard may cover.
+        try tap(app.buttons["onboarding.create"], "\(step): Create account button", app)
+        // Return submits the form, like the Create button that the keyboard may cover.
         try type("\(displayName)\n", into: app.textFields["identity.displayName"], "\(step): display name", app)
         let code = app.descendants(matching: .any)["recovery.code"]
         try require(
             code.waitForExistence(timeout: networkTimeout),
             "\(step): recovery code shown (onboarding errors: \(onboardingErrors(app)))", app)
         let recoveryCode = code.label
-        let groups = recoveryCode.split(separator: "-").map(String.init)
-        try tap(app.buttons["recovery.continue"], "\(step): I Wrote It Down button", app)
-        // The field's placeholder names the requested group: "Group 3".
-        let groupField = app.textFields["recovery.confirmField"]
-        try require(groupField.waitForExistence(timeout: networkTimeout), "\(step): group field visible", app)
-        let groupNumber = (groupField.placeholderValue ?? "").split(separator: " ").last.flatMap { Int($0) }
-        guard let groupNumber, groups.indices.contains(groupNumber - 1) else {
-            try require(
-                false, "\(step): group \(String(describing: groupNumber)) of \(groups.count) recovery groups", app)
-            fatalError("unreachable")
-        }
-        try type(groups[groupNumber - 1], into: groupField, "\(step): group field", app)
+        let userId = app.descendants(matching: .any)["recovery.userId"].value as? String ?? ""
+        try require(userId.hasPrefix("u"), "\(step): account ID shown, found \(userId)", app)
+        try tap(app.buttons["recovery.continue"], "\(step): I saved it button", app)
+        let endingField = app.textFields["recovery.ending"]
+        try require(
+            endingField.waitForExistence(timeout: networkTimeout), "\(step): last 4 characters field visible", app)
+        let ending = String(recoveryCode.replacingOccurrences(of: "-", with: "").suffix(4))
+        try type(ending, into: endingField, "\(step): last 4 characters field", app)
         try tap(app.buttons["recovery.confirm"], "\(step): Confirm button", app)
         try type(handle, into: app.textFields["handle.field"], "\(step): handle field", app)
-        try tap(app.buttons["handle.claim"], "\(step): Claim Handle button", app)
+        try tap(app.buttons["handle.claim"], "\(step): Save username button", app)
         let signedIn = app.buttons["chatList.newChat"].waitForExistence(timeout: networkTimeout)
         try require(
             signedIn,
