@@ -361,6 +361,16 @@
         }
       }
     },
+    "Shows the newest messages" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shows the newest messages"
+          }
+        }
+      }
+    },
     "Shows the original message" : {
       "localizations" : {
         "en" : {
@@ -417,6 +427,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Stops replying"
+          }
+        }
+      }
+    },
+    "Touch and hold for options" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Touch and hold for options"
           }
         }
       }
