@@ -325,3 +325,8 @@ public struct CoreGimClientFactory: GimClientFactory {
         try await createClient(config: config, hooks: hooks)
     }
 }
+/// `ChatSummary.mutedUntilMs` of a chat muted until it is unmuted (`setChatMuted`).
+public func mutedForever() -> UInt64 {
+    UInt64.max
+}
+

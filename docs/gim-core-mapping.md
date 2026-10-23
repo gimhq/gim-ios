@@ -15,19 +15,24 @@
 ## Records
 
 All records are structs with every field public and a memberwise `init` without default values, in field order,
-except `ClientConfig.mode`, which defaults to `nil` like the generated init.
+except `ClientConfig.mode` and `ClientConfig.metaServerUrl`, which default to `nil` like the generated init. Fields
+added after `c1b7503` (`MessagePreview.sendState`, `UserProfile.hasAvatar`, the account safety fields of
+`ChatSummary`) have mirror init defaults (`nil`, `false`, `0`) so existing call sites keep compiling; the generated
+inits have none.
 Generated records are `Equatable, Hashable` plus `extension …: Sendable`; the mirror declares `Sendable, Hashable`.
 
 | Mirror | GIMCore | Fields |
 |---|---|---|
-| `ClientConfig` | `ClientConfig` | `serverUrl`, `mode: ClientMode?` (`nil` is `app`) |
+| `ClientConfig` | `ClientConfig` | `serverUrl`, `mode: ClientMode?` (`nil` is `app`), `metaServerUrl: String?` (the gim meta server, gim-meta; `nil` until it is deployed, so `reportUser` fails and settings are not backed up) |
 | `PushRegistration` | `PushRegistration` | `provider`, `token`, `appId: String?`, `sandbox: Bool?`, `p256dh: String?`, `auth: String?` |
 | `NotificationContent` | `NotificationContent` | `chatId: String?`, `chatTitle: String?`, `senderUserId: String?`, `senderDisplayName: String?`, `body`, `messageId: String?`, `collapseId: String?`, `kind: NotificationKind`, `shouldDisplay`, `timestamp: UInt64` |
 | `Session` | `Session` | `userId`, `deviceId`, `handle` (empty until `claimHandle`), `displayName` |
 | `DeviceInfo` | `DeviceInfo` | `deviceId`, `createdAtMs: UInt64` (0 for revoked devices), `isCurrent`, `revoked` |
 | `HubInfo` | `HubInfo` | `hubId`, `url: String?`, `state: HubState`, `priority: UInt8`, `isPrimary`, `isHome`, `signedIn` |
-| `UserProfile` | `UserProfile` | `userId`, `handle`, `displayName` |
-| `ChatSummary` | `ChatSummary` | `chatId`, `kind`, `name`, `avatar: MediaRef?`, `lastMessage: MessagePreview?`, `unreadCount: UInt32`, `updatedAtMs: UInt64`, `memberCount: UInt32`, `state: ChatState` |
+| `UserProfile` | `UserProfile` | `userId`, `handle`, `displayName`, `hasAvatar` (get the photo with `fetchUserAvatar`) |
+| `ChatSummary` | `ChatSummary` | `chatId`, `kind`, `name`, `avatar: MediaRef?`, `lastMessage: MessagePreview?`, `unreadCount: UInt32`, `updatedAtMs: UInt64`, `memberCount: UInt32`, `state: ChatState`, `peer: UserProfile?` (direct chats: the other user), `mutedUntilMs: UInt64` (0: not muted, `mutedForever()`: until unmuted), `pinned`, `archived`, `blocked` (direct chat with a blocked user) |
+| `PrivacySettings` | `PrivacySettings` | `readReceipts`, `typingIndicators`, `blockedUserIds: [String]` |
+| `RecoveryRotation` | `RecoveryRotation` | `recoveryCode`, `unsyncedHubIds: [String]` |
 | `MessagePreview` | `MessagePreview` | `senderName`, `text`, `sentAtMs: UInt64`, `isOwn`, `sendState: SendState?` (own messages only; the mirror init defaults it to `nil`) |
 | `MessageItem` | `MessageItem` | `messageId`, `chatId`, `sender: UserProfile`, `isOwn`, `sentAtMs: UInt64`, `content`, `replyTo: ReplyPreview?`, `reactions: [ReactionGroup]`, `edited`, `sendState: SendState?` |
 | `MediaRef` | `MediaRef` | `chatId`, `messageId`, `mime`, `size: UInt64`, `hasThumbnail` |
@@ -50,6 +55,7 @@ Generated records are `Equatable, Hashable` plus `extension …: Sendable`; the 
 | `MessageContent` | `MessageContent` | `text(body:)`, `image(media:width:height:caption:)`, `file(media:fileName:caption:)`, `deleted`, `unsupported` |
 | `SendState` | `SendState` | `pending`, `sent`, `delivered`, `read`, `failed(reason:cause: SendFailure)` |
 | `SendFailure` | `SendFailure` | `userSuspended`, `userNotAdmitted`, `notAdmittedByPeer`, `rejected`, `other` |
+| `ReportReason` | `ReportReason` | `spam`, `harassment`, `inappropriate`, `scam`, `other` (mirror → core only) |
 | `ConnectionState` | `ConnectionState` | `offline`, `connecting`, `connected`, `syncing` |
 | `ChatListDiff` | `ChatListDiff` | `append(values:)`, `clear`, `pushFront(value:)`, `pushBack(value:)`, `popFront`, `popBack`, `insert(index:value:)`, `set(index:value:)`, `remove(index:)`, `truncate(length:)`, `reset(values:)` |
 | `TimelineDiff` | `TimelineDiff` | same cases as `ChatListDiff`, with `TimelineItem` values |
@@ -85,6 +91,7 @@ generated code writes the bare protocol name, which is the same type.
 | `final class TaskHandle` | `open class TaskHandle: TaskHandleProtocol` | Intentional: concrete class with `init(onCancel:)`. `cancel()`, `isFinished() -> Bool`; releasing the last reference cancels, like the Rust `Drop`. No `TaskHandleProtocol` mirror. |
 | `createClient(config:hooks:) async throws -> any GimClientAPI` | `createClient(config:hooks:) async throws -> GimClient` | Mirror validates the URL like gim-core (`InvalidInput(reason: "server_url: …")`) and returns a demo `FakeGimClient` without a session that seeds the demo chats on `createIdentity`. |
 | `protocol RecoveryKitFunctions` | free functions `formatRecoveryKit(userId:recoveryCode:labels:)`, `parseRecoveryKit(text:)`, `recoveryKeyEnding(recoveryCode:)`, `matchesRecoveryKeyEnding(recoveryCode:typed:)` | Intentional: same names and labels as methods of a protocol, so Linux tests and previews can swap the implementation. See "Recovery kit". |
+| `mutedForever() -> UInt64` | `mutedForever() -> UInt64` | Same name and value (`UInt64.max`, gim-sdk `MUTED_FOREVER`); `CoreMappingTests.testMutedForeverMatchesGimCore` checks it. |
 | — | `coreVersion()`, `ciphersuiteName()` | Not mirrored; nothing uses them yet. |
 | — | `LocalTimeZoneImpl` | Generated wrapper for a Rust-implemented zone; gim-core never hands one to the app. |
 | — | `*Impl` classes, `NoHandle`, `uniffi*` | Generated plumbing, not mirrored. |
