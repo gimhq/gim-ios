@@ -1782,7 +1782,7 @@ public actor FakeGimClient: GimClientAPI {
             lastMessage: last.map {
                 MessagePreview(
                     senderName: $0.sender.displayName, text: previewText($0.content), sentAtMs: $0.sentAtMs,
-                    isOwn: $0.isOwn)
+                    isOwn: $0.isOwn, sendState: $0.isOwn ? $0.sendState : nil)
             },
             unreadCount: chat.unreadCount, updatedAtMs: chat.entries.last?.atMs ?? chat.createdAtMs,
             memberCount: UInt32(chat.members.count), state: chat.state)

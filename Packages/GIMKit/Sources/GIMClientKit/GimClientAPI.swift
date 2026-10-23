@@ -298,6 +298,20 @@ func validateServerUrl(_ value: String, what: String = "server_url") throws {
     }
 }
 
+/// gim-core's recovery-kit free functions (`formatRecoveryKit`, `parseRecoveryKit`, `recoveryKeyEnding`,
+/// `matchesRecoveryKeyEnding`), behind a protocol so Linux tests and previews can use a pure-Swift copy.
+public protocol RecoveryKitFunctions: Sendable {
+    /// The kit text: title, `"<accountId>: <user id>"`, `"<recoveryKey>: <code grouped by four>"`, a blank line and
+    /// the note.
+    func formatRecoveryKit(userId: String, recoveryCode: String, labels: RecoveryKitLabels) -> String
+    /// Finds the user id and the recovery code in pasted text, whatever the labels' language.
+    func parseRecoveryKit(text: String) -> ParsedRecoveryKit
+    /// The last four symbols of the recovery code.
+    func recoveryKeyEnding(recoveryCode: String) -> String
+    /// `typed` is the code's last four symbols (case, `-` and spaces ignored).
+    func matchesRecoveryKeyEnding(recoveryCode: String, typed: String) -> Bool
+}
+
 /// App-level factory, the single swap point between `createClient` and test or preview clients.
 public protocol GimClientFactory: Sendable {
     func make(config: ClientConfig, hooks: any PlatformHooks) async throws -> any GimClientAPI
