@@ -26,15 +26,68 @@ public enum OnboardingValidation {
         raw.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// Why a server URL is not accepted; `text` gives the localized message.
+    public enum ServerUrlError: Sendable, Hashable {
+        case empty
+        /// Not an http(s) URL with a host.
+        case notAFullAddress
+
+        /// The localized message.
+        public var text: String {
+            switch self {
+            case .empty: onboardingText("Enter the server address.")
+            case .notAFullAddress: onboardingText("Enter a full address, like https://example.com")
+            }
+        }
+    }
+
+    /// Why a handle is not accepted; `text` gives the localized message.
+    public enum HandleError: Sendable, Hashable {
+        case empty
+        /// Not 3 to 32 characters long.
+        case length
+        /// Contains a character other than `a-z`, `0-9`, `_` and `.`.
+        case characters
+
+        /// The localized message.
+        public var text: String {
+            switch self {
+            case .empty: onboardingText("Choose a username.")
+            case .length: onboardingText("Usernames are 3 to 32 characters long.")
+            case .characters: onboardingText("Use only letters, digits, underscores and dots.")
+            }
+        }
+    }
+
+    /// Why a display name is not accepted; `text` gives the localized message.
+    public enum DisplayNameError: Sendable, Hashable {
+        case empty
+        /// Longer than `displayNameMaxLength`.
+        case tooLong
+
+        /// The localized message.
+        public var text: String {
+            switch self {
+            case .empty: onboardingText("Enter your name.")
+            case .tooLong: onboardingText("Your name can be 1 to 64 characters long.")
+            }
+        }
+    }
+
     /// Returns an error message, or `nil` when the normalised URL is an http(s) URL with a host.
     public static func serverUrlError(_ raw: String) -> String? {
+        serverUrlErrorKind(raw)?.text
+    }
+
+    /// The kind behind `serverUrlError(_:)`.
+    public static func serverUrlErrorKind(_ raw: String) -> ServerUrlError? {
         let url = normalizedServerUrl(raw)
-        if url.isEmpty { return onboardingText("Enter the server address.") }
+        if url.isEmpty { return .empty }
         guard let components = URLComponents(string: url),
             let scheme = components.scheme?.lowercased(), scheme == "http" || scheme == "https",
             let host = components.host, !host.isEmpty
         else {
-            return onboardingText("Enter a full address, like https://example.com")
+            return .notAFullAddress
         }
         return nil
     }
@@ -53,23 +106,29 @@ public enum OnboardingValidation {
 
     /// Returns an error message, or `nil` when the normalised handle matches `^[a-z0-9_.]{3,32}$`.
     public static func handleError(_ raw: String) -> String? {
+        handleErrorKind(raw)?.text
+    }
+
+    /// The kind behind `handleError(_:)`.
+    public static func handleErrorKind(_ raw: String) -> HandleError? {
         let handle = normalizedHandle(raw)
-        if handle.isEmpty { return onboardingText("Choose a username.") }
-        guard (3...32).contains(handle.count) else { return onboardingText("Usernames are 3 to 32 characters long.") }
+        if handle.isEmpty { return .empty }
+        guard (3...32).contains(handle.count) else { return .length }
         let allowed = Set("abcdefghijklmnopqrstuvwxyz0123456789_.")
-        guard handle.allSatisfy(allowed.contains) else {
-            return onboardingText("Use only letters, digits, underscores and dots.")
-        }
+        guard handle.allSatisfy(allowed.contains) else { return .characters }
         return nil
     }
 
     /// Returns an error message, or `nil` when the trimmed name is 1 to 64 characters long.
     public static func displayNameError(_ raw: String) -> String? {
+        displayNameErrorKind(raw)?.text
+    }
+
+    /// The kind behind `displayNameError(_:)`.
+    public static func displayNameErrorKind(_ raw: String) -> DisplayNameError? {
         let name = normalizedDisplayName(raw)
-        if name.isEmpty { return onboardingText("Enter your name.") }
-        guard name.count <= displayNameMaxLength else {
-            return onboardingText("Your name can be 1 to 64 characters long.")
-        }
+        if name.isEmpty { return .empty }
+        guard name.count <= displayNameMaxLength else { return .tooLong }
         return nil
     }
 }
@@ -180,7 +239,12 @@ public final class OnboardingViewModel {
 
     /// Inline message for the server URL field; `nil` while the field is untouched.
     public var serverUrlError: String? {
-        let error = OnboardingValidation.serverUrlError(serverUrl)
+        serverUrlErrorKind?.text
+    }
+
+    /// The kind behind `serverUrlError`.
+    public var serverUrlErrorKind: OnboardingValidation.ServerUrlError? {
+        let error = OnboardingValidation.serverUrlErrorKind(serverUrl)
         return showsAllErrors || !serverUrl.isEmpty ? error : nil
     }
 
