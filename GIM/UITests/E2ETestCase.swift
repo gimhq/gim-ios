@@ -286,10 +286,10 @@ class E2ETestCase: XCTestCase {
         for _ in 0..<5 where !(signOut.waitForExistence(timeout: 1) && signOut.isHittable) {
             scrollUpFrontmost(app)
         }
-        try tap(signOut, "sign-out: Sign Out button", app)
+        try tap(signOut, "sign-out: Sign out button", app)
         // The confirmation dialog's button has the same title.
         let confirm = app.buttons
-            .matching(NSPredicate(format: "label == 'Sign Out' AND identifier != 'settings.signOut'"))
+            .matching(NSPredicate(format: "label == 'Sign out' AND identifier != 'settings.signOut'"))
             .firstMatch
         try tap(confirm, "sign-out: confirmation button", app)
     }
