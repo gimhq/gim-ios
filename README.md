@@ -20,7 +20,8 @@ Contacts, Hubs, Devices, Explainer, Onboarding, Settings. GIMFeatures texts live
 `Packages/GIMKit/Sources/GIMFeatures/Resources/Features*.xcstrings`. Keys are the English source text with an explicit
 `en` value (`"Try again"`; format arguments as `%@` / `%lld`), except Explainer, keyed by the Android resource names.
 Code reads them with `String(localized: "Try again", table: "Common", bundle: .module)` or
-`Text("Chats", tableName: "Chat", bundle: .module)`, also for accessibility labels and UIKit. The app declares en,
+`Text("Chats", tableName: "Chat", bundle: .module)`, also for accessibility labels and UIKit; GIMFeatures, which also
+builds on Linux, uses `NSLocalizedString(_:tableName:bundle:value:comment:)`. The app declares en,
 zh-Hans, zh-Hant and es in `project.yml`; the usage descriptions are in `GIM/Resources/InfoPlist.xcstrings`. The words
 to use are in `docs/glossary.md`. Translations are a later step.
 

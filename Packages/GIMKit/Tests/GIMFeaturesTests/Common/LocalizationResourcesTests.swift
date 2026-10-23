@@ -1,14 +1,19 @@
+import Foundation
 import GIMFeatures
 import XCTest
 
 final class LocalizationResourcesTests: XCTestCase {
-    // On Linux the catalog is not compiled, so the lookup falls back to the key, which is the English text.
+    // `String(localized:table:bundle:)` does not exist in swift-corelibs-foundation, so GIMFeatures texts go through
+    // `NSLocalizedString`. On Linux the catalog is not compiled and the lookup falls back to the key, which is the
+    // English text.
     func testFeaturesCommonKeyLoadsTheEnglishText() {
         XCTAssertEqual(
-            String(
-                localized: "Something went wrong. Please try again.",
-                table: "FeaturesCommon",
-                bundle: FeaturesLocalization.bundle
+            NSLocalizedString(
+                "Something went wrong. Please try again.",
+                tableName: "FeaturesCommon",
+                bundle: FeaturesLocalization.bundle,
+                value: "",
+                comment: ""
             ),
             "Something went wrong. Please try again."
         )
