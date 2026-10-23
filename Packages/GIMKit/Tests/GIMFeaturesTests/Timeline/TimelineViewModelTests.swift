@@ -157,11 +157,11 @@ final class TimelineViewModelTests: XCTestCase {
                 { client, _ in await client.simulateSuspension(hubId: hubId) }
             ),
             (
-                .userNotAdmitted, "Your account is not admitted on this hub.",
+                .userNotAdmitted, "This server doesn't accept your account.",
                 { client, _ in await client.simulateNotAdmitted(hubId: hubId) }
             ),
             (
-                .notAdmittedByPeer, "This chat's hub does not accept messages from you.",
+                .notAdmittedByPeer, "This chat's server doesn't accept messages from you.",
                 { client, chatId in await client.simulateNotAdmittedByPeer(chatId: chatId, hubId: hubId) }
             ),
         ]

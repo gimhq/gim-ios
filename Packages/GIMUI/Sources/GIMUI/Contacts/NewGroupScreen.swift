@@ -15,8 +15,8 @@ public struct NewGroupScreen: View {
 
     public var body: some View {
         Form {
-            Section("Name") {
-                TextField("Group name", text: $viewModel.name)
+            Section(String(localized: "Name", table: "Contacts", bundle: .module)) {
+                TextField(String(localized: "Group name", table: "Contacts", bundle: .module), text: $viewModel.name)
                     .submitLabel(.next)
                     .accessibilityIdentifier("newGroup.name")
             }
@@ -33,22 +33,25 @@ public struct NewGroupScreen: View {
                     }
                 }
                 HStack {
-                    TextField("Add by handle", text: $viewModel.memberHandle)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .submitLabel(.done)
-                        .onSubmit(addMember)
-                        .accessibilityIdentifier("newGroup.memberHandle")
+                    TextField(
+                        String(localized: "Add by username", table: "Contacts", bundle: .module),
+                        text: $viewModel.memberHandle
+                    )
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .submitLabel(.done)
+                    .onSubmit(addMember)
+                    .accessibilityIdentifier("newGroup.memberHandle")
                     if viewModel.isAddingMember {
                         ProgressView()
                     } else {
-                        Button("Add", action: addMember)
+                        Button(String(localized: "Add", table: "Common", bundle: .module), action: addMember)
                             .disabled(viewModel.memberHandle.trimmingCharacters(in: .whitespaces).isEmpty)
                             .accessibilityIdentifier("newGroup.addMember")
                     }
                 }
             } header: {
-                Text("Members")
+                Text("Members", tableName: "Contacts", bundle: .module)
             } footer: {
                 if let error = viewModel.memberError {
                     Text(error).foregroundStyle(.red)
@@ -64,14 +67,14 @@ public struct NewGroupScreen: View {
             }
         }
         .disabled(viewModel.isCreating)
-        .navigationTitle("New Group")
+        .navigationTitle(Text("New group", tableName: "Contacts", bundle: .module))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 if viewModel.isCreating {
                     ProgressView()
                 } else {
-                    Button("Create") {
+                    Button(String(localized: "Create", table: "Contacts", bundle: .module)) {
                         Task {
                             if let chatId = await viewModel.create() { onCreated(chatId) }
                         }
@@ -104,7 +107,7 @@ private struct MemberChip: View {
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.borderless)
-            .accessibilityLabel("Remove \(name)")
+            .accessibilityLabel(Text("Remove \(name)", tableName: "Contacts", bundle: .module))
         }
         .padding(.leading, 4)
         .padding(.trailing, 8)
