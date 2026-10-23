@@ -14,7 +14,7 @@ public final class ClaimHandleViewModel {
     /// Set by the first claim attempt so an empty field also shows its message.
     public private(set) var showsAllErrors = false
 
-    static let takenMessage = "This handle is taken."
+    public static let takenMessage = onboardingText("Someone already has this username. Try another one.")
 
     private let client: any GimClientAPI
     private let onFinished: @MainActor () async throws -> Void

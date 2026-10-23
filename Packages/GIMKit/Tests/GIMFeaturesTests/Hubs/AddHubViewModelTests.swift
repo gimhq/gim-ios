@@ -17,7 +17,7 @@ final class AddHubViewModelTests: XCTestCase {
         XCTAssertNil(viewModel.urlError)
         XCTAssertFalse(viewModel.canSubmit)
         viewModel.url = "hub2.example.eu"
-        XCTAssertEqual(viewModel.urlError, "Enter a full address starting with http:// or https://.")
+        XCTAssertEqual(viewModel.urlError, OnboardingValidation.serverUrlError("hub2.example.eu"))
         XCTAssertFalse(viewModel.canSubmit)
         viewModel.url = "ftp://hub2.example.eu"
         XCTAssertNotNil(viewModel.urlError)
