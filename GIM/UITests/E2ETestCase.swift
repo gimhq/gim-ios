@@ -55,6 +55,17 @@ class E2ETestCase: XCTestCase {
         try require(
             serverField.value as? String == serverUrl,
             "\(step): server field pre-filled with \(serverUrl), found \(String(describing: serverField.value))", app)
+        // At accessibility text sizes the focused field's keyboard and the scrolled list cover the Create account
+        // button: Return dismisses the keyboard, then the list scrolls back to the button.
+        let create = app.buttons["onboarding.create"]
+        guard !(create.exists && create.isHittable) else { return }
+        if app.keyboards.firstMatch.exists {
+            serverField.typeText("\n")
+        }
+        for _ in 0..<5 where !(create.exists && create.isHittable) {
+            scrollDownFrontmost(app)
+        }
+        try require(create.exists && create.isHittable, "\(step): Create account button hittable", app)
     }
 
     /// Creates an account from onboarding (display name, recovery key, its last 4 characters, username) and waits
@@ -279,6 +290,13 @@ class E2ETestCase: XCTestCase {
     func scrollUpFrontmost(_ app: XCUIApplication) {
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.75))
             .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35)))
+    }
+
+    /// Scrolls the frontmost screen by one swipe down, back towards its top.
+    @MainActor
+    func scrollDownFrontmost(_ app: XCUIApplication) {
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35))
+            .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.75)))
     }
 
     @MainActor
