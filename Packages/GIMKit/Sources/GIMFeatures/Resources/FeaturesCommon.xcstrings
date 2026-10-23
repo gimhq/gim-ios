@@ -1,0 +1,296 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "%@ doesn't accept messages from you." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ doesn't accept messages from you."
+          }
+        }
+      }
+    },
+    "%@ doesn't accept your account." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ doesn't accept your account."
+          }
+        }
+      }
+    },
+    "%@ don't accept messages from you." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ don't accept messages from you."
+          }
+        }
+      }
+    },
+    "Another server isn't answering. Try again in %lld s." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Another server isn't answering. Try again in %lld s."
+          }
+        }
+      }
+    },
+    "Can't reach the server. Check your internet and try again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can't reach the server. Check your internet and try again."
+          }
+        }
+      }
+    },
+    "Check what you typed and try again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check what you typed and try again."
+          }
+        }
+      }
+    },
+    "Couldn't find that. It may have been removed." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't find that. It may have been removed."
+          }
+        }
+      }
+    },
+    "Couldn't reach a server at this address. Check the address and try again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't reach a server at this address. Check the address and try again."
+          }
+        }
+      }
+    },
+    "Couldn't save on this device. Free up some space and try again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't save on this device. Free up some space and try again."
+          }
+        }
+      }
+    },
+    "Couldn't unlock this message." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't unlock this message."
+          }
+        }
+      }
+    },
+    "Messages sent through this server are still on their way. Try again later." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Messages sent through this server are still on their way. Try again later."
+          }
+        }
+      }
+    },
+    "Something went wrong. Try again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Something went wrong. Try again."
+          }
+        }
+      }
+    },
+    "That was cancelled." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "That was cancelled."
+          }
+        }
+      }
+    },
+    "The server couldn't do that right now. Try again later." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The server couldn't do that right now. Try again later."
+          }
+        }
+      }
+    },
+    "The server is busy. Try again in %lld s." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The server is busy. Try again in %lld s."
+          }
+        }
+      }
+    },
+    "This chat's server doesn't accept messages from you." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This chat's server doesn't accept messages from you."
+          }
+        }
+      }
+    },
+    "This device isn't signed in. Sign in again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This device isn't signed in. Sign in again."
+          }
+        }
+      }
+    },
+    "This is your only server. Add another server before you remove it." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This is your only server. Add another server before you remove it."
+          }
+        }
+      }
+    },
+    "This isn't available yet." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This isn't available yet."
+          }
+        }
+      }
+    },
+    "This person doesn't accept messages from you." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This person doesn't accept messages from you."
+          }
+        }
+      }
+    },
+    "This server doesn't accept your account." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This server doesn't accept your account."
+          }
+        }
+      }
+    },
+    "This server hosts %lld groups you own." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This server hosts %lld groups you own."
+          }
+        }
+      }
+    },
+    "This server hosts 1 group you own." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This server hosts 1 group you own."
+          }
+        }
+      }
+    },
+    "You're leaving this chat." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You're leaving this chat."
+          }
+        }
+      }
+    },
+    "You're no longer in this chat." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You're no longer in this chat."
+          }
+        }
+      }
+    },
+    "Your account is suspended on %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your account is suspended on %@."
+          }
+        }
+      }
+    },
+    "Your account is suspended." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your account is suspended."
+          }
+        }
+      }
+    },
+    "Your chats on this device stay readable. Contact the server's operator to get access back." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your chats on this device stay readable. Contact the server's operator to get access back."
+          }
+        }
+      }
+    },
+    "Your main server can't be removed. Make another server the main one first." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your main server can't be removed. Make another server the main one first."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

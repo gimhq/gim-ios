@@ -86,7 +86,7 @@ final class GroupInfoViewModelTests: XCTestCase {
         viewModel.memberHandle = "nobody"
         await viewModel.addMember()
 
-        XCTAssertEqual(viewModel.errorMessage, "No one uses the handle @nobody.")
+        XCTAssertEqual(viewModel.errorMessage, "No one has the username @nobody.")
         XCTAssertEqual(viewModel.memberHandle, "nobody")
         XCTAssertEqual(viewModel.members?.count, 3)
     }
@@ -236,7 +236,7 @@ final class GroupInfoViewModelTests: XCTestCase {
         // Adding still works; the count follows the chat list.
         viewModel.memberHandle = "kai"
         await viewModel.addMember()
-        XCTAssertEqual(viewModel.errorMessage, "No one uses the handle @kai.")
+        XCTAssertEqual(viewModel.errorMessage, "No one has the username @kai.")
 
         await client.failChatMembers(with: nil)
         await viewModel.load()
@@ -324,7 +324,7 @@ final class GroupInfoViewModelTests: XCTestCase {
         viewModel.memberHandle = "kai"
         await viewModel.addMember()
 
-        XCTAssertEqual(viewModel.errorMessage, "None of these users could be found")
+        XCTAssertEqual(viewModel.errorMessage, "Couldn't find anyone with these usernames.")
         XCTAssertEqual(viewModel.memberHandle, "kai")
         XCTAssertEqual(viewModel.members?.count, 3)
     }
@@ -345,7 +345,7 @@ final class GroupInfoViewModelTests: XCTestCase {
         viewModel.memberHandle = "nikos"
         await viewModel.addMember()
 
-        XCTAssertEqual(viewModel.errorMessage, "Nikos Papadopoulos does not accept contacts from you.")
+        XCTAssertEqual(viewModel.errorMessage, "Nikos Papadopoulos doesn't accept messages from you.")
         XCTAssertEqual(viewModel.memberHandle, "nikos")
         XCTAssertEqual(viewModel.members?.count, 3)
     }
@@ -358,12 +358,12 @@ final class GroupInfoViewModelTests: XCTestCase {
         viewModel.memberHandle = "nikos"
         await viewModel.addMember()
 
-        XCTAssertEqual(viewModel.errorMessage, "This chat's hub does not accept messages from you.")
+        XCTAssertEqual(viewModel.errorMessage, "This chat's server doesn't accept messages from you.")
         XCTAssertEqual(viewModel.members?.count, 3)
 
         await viewModel.leave()
 
-        XCTAssertEqual(viewModel.errorMessage, "This chat's hub does not accept messages from you.")
+        XCTAssertEqual(viewModel.errorMessage, "This chat's server doesn't accept messages from you.")
         XCTAssertFalse(viewModel.hasLeft)
         let state = try await client.chatState(chatId: viewModel.chatId)
         XCTAssertEqual(state, .active, "a refused leave keeps the chat active")
