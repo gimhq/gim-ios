@@ -74,8 +74,11 @@ public struct ChatScreen<Composer: View>: View {
                         GroupInfoScreen(client: client, chatId: viewModel.chatId)
                     } label: {
                         Image(systemName: "info.circle")
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
                     }
                     .accessibilityLabel(Text("Group info", tableName: "Chat", bundle: .module))
+                    .accessibilityHint(Text("Shows members and settings", tableName: "Chat", bundle: .module))
                 }
             }
         }

@@ -45,7 +45,7 @@ public struct AvatarView: View {
 }
 
 enum AvatarStyle {
-    static let palette: [Color] = [.red, .orange, .yellow, .green, .mint, .teal, .cyan, .blue, .indigo, .purple, .pink]
+    static let palette: [Color] = (0..<ChatColors.avatarCount).map(ChatColors.avatar)
 
     /// Up to two initials from the first and last words; "?" for an empty name.
     static func initials(for name: String) -> String {
@@ -62,6 +62,11 @@ enum AvatarStyle {
             hash = hash &* 0x0000_0100_0000_01b3
         }
         return Int(hash % UInt64(palette.count))
+    }
+
+    /// The palette color for `id` as a `UIColor`, for the UIKit cells.
+    static func uiColor(for id: String) -> UIColor {
+        ChatColors.UI.avatar(colorIndex(for: id))
     }
 }
 

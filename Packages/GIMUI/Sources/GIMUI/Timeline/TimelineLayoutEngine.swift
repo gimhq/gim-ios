@@ -33,7 +33,7 @@ struct TimelineFonts: @unchecked Sendable {
         footer = font(.caption2)
         reaction = font(.footnote)
         fileName = font(.subheadline, .medium)
-        separator = font(.footnote, .medium)
+        separator = font(.footnote, .semibold)
         sizeCategory = traits.preferredContentSizeCategory.rawValue
     }
 }

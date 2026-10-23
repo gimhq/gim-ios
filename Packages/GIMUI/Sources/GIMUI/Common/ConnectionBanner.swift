@@ -32,13 +32,20 @@ public struct ConnectionBanner: View {
     }
 
     private func banner(@ViewBuilder _ content: () -> some View) -> some View {
-        HStack(spacing: 8, content: content)
-            .font(.footnote.weight(.medium))
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 6)
-            .background(.bar)
-            .accessibilityElement(children: .combine)
+        VStack(spacing: 0) {
+            HStack(spacing: 8, content: content)
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(.secondary)
+                .lineLimit(nil)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity, minHeight: 28)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 4)
+            Divider()
+        }
+        .background(.bar)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.updatesFrequently)
     }
 }
 

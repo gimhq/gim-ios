@@ -40,6 +40,7 @@ public struct ConversationScreen: View {
             Button(String(localized: "Delete", table: "Common", bundle: .module), role: .destructive) {
                 Task { await actions.delete(message) }
             }
+            Button(String(localized: "Cancel", table: "Common", bundle: .module), role: .cancel) {}
         }
         .alert(
             Text("Something went wrong", tableName: "Common", bundle: .module),
