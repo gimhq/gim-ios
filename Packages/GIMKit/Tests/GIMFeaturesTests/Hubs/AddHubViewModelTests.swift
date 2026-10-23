@@ -11,7 +11,7 @@ final class AddHubViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testTheUrlFollowsTheServerUrlRule() {
+    func testTheUrlFollowsTheServerUrlRule() async {
         let viewModel = AddHubViewModel(client: makeClient())
 
         XCTAssertNil(viewModel.urlError)
