@@ -13,15 +13,17 @@ class E2ETestCase: XCTestCase {
     let serverUrl = ProcessInfo.processInfo.environment["GIM_E2E_SERVER_URL"] ?? "http://127.0.0.1:8080"
     /// For every step that waits on the hub or the other client.
     let networkTimeout: TimeInterval = 30
+    /// UI tests match visible English labels, so the app runs in English whatever the host simulator's language is.
+    static let localeArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
     /// Shows the notification authorization alert, the notifications and the home screen.
     @MainActor
     var springboard: XCUIApplication { XCUIApplication(bundleIdentifier: "com.apple.springboard") }
 
-    /// Launches the app with `serverUrl` as the default server and signs out a leftover session, so onboarding is
-    /// in front.
+    /// Launches the app in English with `serverUrl` as the default server and signs out a leftover session, so
+    /// onboarding is in front. Every UI test launches through here, after setting its own launch arguments.
     @MainActor
     func launchToOnboarding(_ app: XCUIApplication, _ step: String) throws {
-        app.launchArguments += ["-GIMDefaultServerURL", serverUrl]
+        app.launchArguments += ["-GIMDefaultServerURL", serverUrl] + Self.localeArguments
         app.launch()
         try signOutIfNeeded(app)
         try expectOnboarding(app, step)
