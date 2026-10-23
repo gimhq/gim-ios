@@ -10,7 +10,7 @@ struct ClaimHandleScreen: View {
     var body: some View {
         Form {
             Section {
-                TextField("Handle", text: $viewModel.handle)
+                TextField(String(localized: "Username", table: "Onboarding", bundle: .module), text: $viewModel.handle)
                     .textContentType(.username)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
@@ -20,7 +20,9 @@ struct ClaimHandleScreen: View {
                     .onSubmit(claim)
                 ValidationMessage(text: viewModel.handleError)
             } footer: {
-                Text("People can start a chat with you by your handle. 3 to 32 letters, digits, underscores or dots.")
+                Text(
+                    "Friends can find you with it. It's optional. You can add one later. 3 to 32 characters: a–z, 0–9, _ and .",
+                    tableName: "Onboarding", bundle: .module)
             }
 
             Section {
@@ -30,7 +32,7 @@ struct ClaimHandleScreen: View {
                         if viewModel.isSubmitting {
                             ProgressView()
                         } else {
-                            Text("Claim Handle").bold()
+                            Text("Save username", tableName: "Onboarding", bundle: .module).bold()
                         }
                         Spacer()
                     }
@@ -45,14 +47,16 @@ struct ClaimHandleScreen: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .disabled(viewModel.isSubmitting)
-        .navigationTitle("Choose a Handle")
+        .navigationTitle(Text("Choose a username", tableName: "Onboarding", bundle: .module))
         .navigationBarBackButtonHidden(allowsSkip)
         .toolbar {
             if allowsSkip {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Skip") {
+                    Button {
                         focusesHandle = false
                         Task { await viewModel.skip() }
+                    } label: {
+                        Text("Skip for now", tableName: "Onboarding", bundle: .module)
                     }
                     .disabled(viewModel.isSubmitting)
                     .accessibilityIdentifier("handle.skip")

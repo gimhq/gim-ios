@@ -1,5 +1,456 @@
 {
   "sourceLanguage" : "en",
-  "strings" : {},
+  "strings" : {
+    "Account ID" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Account ID"
+          }
+        }
+      }
+    },
+    "Account ID and recovery key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Account ID and recovery key"
+          }
+        }
+      }
+    },
+    "Account IDs start with u. Recovery keys have 39 characters; dashes and spaces are fine." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Account IDs start with u. Recovery keys have 39 characters; dashes and spaces are fine."
+          }
+        }
+      }
+    },
+    "Account restored" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Account restored"
+          }
+        }
+      }
+    },
+    "Already using gim on another device? Link this one. Lost all your devices? Restore with your recovery kit." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Already using gim on another device? Link this one. Lost all your devices? Restore with your recovery kit."
+          }
+        }
+      }
+    },
+    "Chat history on this device was reset." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chat history on this device was reset."
+          }
+        }
+      }
+    },
+    "Check your recovery key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check your recovery key"
+          }
+        }
+      }
+    },
+    "Choose a username" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose a username"
+          }
+        }
+      }
+    },
+    "Confirm" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirm"
+          }
+        }
+      }
+    },
+    "Continue" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continue"
+          }
+        }
+      }
+    },
+    "Copied" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copied"
+          }
+        }
+      }
+    },
+    "Copy" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy"
+          }
+        }
+      }
+    },
+    "Create account" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create account"
+          }
+        }
+      }
+    },
+    "Dismiss" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dismiss"
+          }
+        }
+      }
+    },
+    "Enter them separately" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter them separately"
+          }
+        }
+      }
+    },
+    "Friends can find you with it. It's optional. You can add one later. 3 to 32 characters: a–z, 0–9, _ and ." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Friends can find you with it. It's optional. You can add one later. 3 to 32 characters: a–z, 0–9, _ and ."
+          }
+        }
+      }
+    },
+    "I already have an account" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I already have an account"
+          }
+        }
+      }
+    },
+    "I saved it" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I saved it"
+          }
+        }
+      }
+    },
+    "Last %lld characters" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last %lld characters"
+          }
+        }
+      }
+    },
+    "Old chats don't come back. Ask friends to add you to groups again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Old chats don't come back. Ask friends to add you to groups again."
+          }
+        }
+      }
+    },
+    "Paste all of it. We find your Account ID and recovery key in it." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paste all of it. We find your Account ID and recovery key in it."
+          }
+        }
+      }
+    },
+    "Paste your recovery kit" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paste your recovery kit"
+          }
+        }
+      }
+    },
+    "People see this name in your chats. You can change it later." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "People see this name in your chats. You can change it later."
+          }
+        }
+      }
+    },
+    "Recovery key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recovery key"
+          }
+        }
+      }
+    },
+    "Remove all other devices" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove all other devices"
+          }
+        }
+      }
+    },
+    "Restore" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restore"
+          }
+        }
+      }
+    },
+    "Restore account" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restore account"
+          }
+        }
+      }
+    },
+    "Restore your account" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restore your account"
+          }
+        }
+      }
+    },
+    "Save as a file" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save as a file"
+          }
+        }
+      }
+    },
+    "Save username" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save username"
+          }
+        }
+      }
+    },
+    "Server" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Server"
+          }
+        }
+      }
+    },
+    "Show the kit again" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show the kit again"
+          }
+        }
+      }
+    },
+    "Skip for now" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skip for now"
+          }
+        }
+      }
+    },
+    "The server your account uses." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The server your account uses."
+          }
+        }
+      }
+    },
+    "They get signed out. Do this if a device was lost or stolen." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "They get signed out. Do this if a device was lost or stolen."
+          }
+        }
+      }
+    },
+    "Type the last %lld characters of your recovery key. This makes sure you saved it." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Type the last %lld characters of your recovery key. This makes sure you saved it."
+          }
+        }
+      }
+    },
+    "Use another server" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use another server"
+          }
+        }
+      }
+    },
+    "Username" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Username"
+          }
+        }
+      }
+    },
+    "Welcome to gim" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Welcome to gim"
+          }
+        }
+      }
+    },
+    "What should people call you?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What should people call you?"
+          }
+        }
+      }
+    },
+    "You see it only now. Save it somewhere safe." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You see it only now. Save it somewhere safe."
+          }
+        }
+      }
+    },
+    "Your name" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your name"
+          }
+        }
+      }
+    },
+    "Your recovery kit" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your recovery kit"
+          }
+        }
+      }
+    },
+    "gim recovery kit" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "gim recovery kit"
+          }
+        }
+      }
+    },
+    "https://" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "https://"
+          }
+        }
+      }
+    }
+  },
   "version" : "1.0"
 }
