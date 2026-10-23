@@ -205,7 +205,7 @@ final class RestoreViewModelTests: XCTestCase {
 
         await viewModel.submit()
 
-        XCTAssertEqual(viewModel.errorMessage, "This hub does not admit your account.")
+        XCTAssertEqual(viewModel.errorMessage, "This server doesn't accept your account.")
         XCTAssertFalse(viewModel.showsRejoinNotice)
         XCTAssertTrue(registered.registrations.isEmpty)
     }

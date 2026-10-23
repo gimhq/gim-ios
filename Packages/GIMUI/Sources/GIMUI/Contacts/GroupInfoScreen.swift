@@ -38,7 +38,8 @@ public struct GroupInfoScreen: View {
         .navigationTitle(
             viewModel.summary?.kind == .direct
                 ? Text("Chat info", tableName: "Contacts", bundle: .module)
-                : Text("Group info", tableName: "Contacts", bundle: .module))
+                : Text("Group info", tableName: "Contacts", bundle: .module)
+        )
         .navigationBarTitleDisplayMode(.inline)
         .task {
             viewModel.start()
@@ -92,8 +93,8 @@ public struct GroupInfoScreen: View {
                 TextField(
                     String(localized: "Group name", table: "Contacts", bundle: .module), text: $viewModel.editedName
                 )
-                    .submitLabel(.done)
-                    .onSubmit(saveName)
+                .submitLabel(.done)
+                .onSubmit(saveName)
                 if viewModel.isSavingName {
                     ProgressView()
                 } else {
@@ -142,10 +143,10 @@ public struct GroupInfoScreen: View {
                 TextField(
                     String(localized: "Username", table: "Contacts", bundle: .module), text: $viewModel.memberHandle
                 )
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .submitLabel(.done)
-                    .onSubmit(addMember)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.done)
+                .onSubmit(addMember)
                 if viewModel.isUpdatingMembers {
                     ProgressView()
                 } else {
@@ -161,8 +162,8 @@ public struct GroupInfoScreen: View {
             Button(String(localized: "Leave group", table: "Contacts", bundle: .module), role: .destructive) {
                 confirmsLeave = true
             }
-                .disabled(viewModel.isLeaving)
-                .accessibilityIdentifier("groupInfo.leave")
+            .disabled(viewModel.isLeaving)
+            .accessibilityIdentifier("groupInfo.leave")
         }
     }
 
