@@ -20,12 +20,23 @@ public final class ChatListViewModel {
     private var exits: [String: MembershipChangeKind] = [:]
     /// Lookups of `exits`, by chat id; kept once finished so each left chat is looked up once.
     @ObservationIgnored private var exitLookups: [String: Task<Void, Never>] = [:]
+    /// How many own-last-message timelines are followed at once; a chat beyond the cap closes the oldest lookup.
+    public static let maxStatusLookups = 20
     /// Status of the own last message of each active chat whose timeline was looked up, by chat id.
     private var lastMessageStatuses: [String: MessageStatus] = [:]
-    /// Open lookups of `lastMessageStatuses`, by chat id, each with the `lastMessageSentAtMs` it was started for.
-    @ObservationIgnored private var statusLookups: [String: (sentAtMs: UInt64?, task: Task<Void, Never>)] = [:]
+    /// Lookups of `lastMessageStatuses`, by chat id, each with the `lastMessageSentAtMs` it was started for.
+    @ObservationIgnored private var statusLookups: [String: StatusLookup] = [:]
+    /// Start order of the last status lookup; lower is older.
+    @ObservationIgnored private var statusLookupOrder = 0
     @ObservationIgnored private var listTask: Task<Void, Never>?
     @ObservationIgnored private var connectionTask: Task<Void, Never>?
+
+    private struct StatusLookup {
+        var sentAtMs: UInt64?
+        var order: Int
+        /// `nil` once the cap closed the lookup; it reopens when a slot is free.
+        var task: Task<Void, Never>?
+    }
 
     public init(client: any GimClientAPI, dateFormatter: RelativeDateFormatter = RelativeDateFormatter()) {
         self.client = client
@@ -58,7 +69,7 @@ public final class ChatListViewModel {
         listTask?.cancel()
         connectionTask?.cancel()
         for lookup in exitLookups.values { lookup.cancel() }
-        for lookup in statusLookups.values { lookup.task.cancel() }
+        for lookup in statusLookups.values { lookup.task?.cancel() }
     }
 
     /// Subscribes to the chat list and the connection state. Does nothing while already subscribed.
@@ -92,7 +103,7 @@ public final class ChatListViewModel {
         connectionTask?.cancel()
         listTask = nil
         connectionTask = nil
-        for lookup in statusLookups.values { lookup.task.cancel() }
+        for lookup in statusLookups.values { lookup.task?.cancel() }
         statusLookups = [:]
     }
 
@@ -153,29 +164,49 @@ public final class ChatListViewModel {
     }
 
     /// Follows the status of the own last message of each active chat; a chat is looked up again when its last
-    /// message changes and forgotten when its last message is someone else's or it is no longer active.
+    /// message changes and forgotten when its last message is someone else's or it is no longer active. At most
+    /// `maxStatusLookups` lookups are open: a chat that newly qualifies closes the oldest, a chat closed by the cap
+    /// reopens only into a free slot.
     private func lookUpLastMessageStatuses() {
+        let qualifying = rows.filter { $0.state == .active && $0.lastMessageIsOwn }
         let wanted = Dictionary(
-            rows.filter { $0.state == .active && $0.lastMessageIsOwn }.map { ($0.id, $0.lastMessageSentAtMs) },
-            uniquingKeysWith: { _, last in last })
+            qualifying.map { ($0.id, $0.lastMessageSentAtMs) }, uniquingKeysWith: { _, last in last })
         for (chatId, lookup) in statusLookups where wanted[chatId] != .some(lookup.sentAtMs) {
-            lookup.task.cancel()
+            lookup.task?.cancel()
             statusLookups[chatId] = nil
             lastMessageStatuses[chatId] = nil
         }
-        let client = client
-        for (chatId, sentAtMs) in wanted where statusLookups[chatId] == nil {
-            let task = Task { [weak self] in
-                guard let stream = try? await ListenerBridge.timeline(client, chatId: chatId) else { return }
-                var items: [TimelineItem] = []
-                // The subscription stays open so the ticks follow sent -> delivered -> read; cancelling ends it.
-                for await diffs in stream {
-                    _ = try? DiffApplier.apply(diffs, to: &items)
-                    guard !Task.isCancelled else { return }
-                    self?.lastMessageStatuses[chatId] = Self.newestOwnMessageStatus(items)
-                }
+        var openCount = statusLookups.values.filter { $0.task != nil }.count
+        for row in qualifying {
+            if let lookup = statusLookups[row.id] {
+                guard lookup.task == nil, openCount < Self.maxStatusLookups else { continue }
+            } else if openCount >= Self.maxStatusLookups,
+                let oldest = statusLookups.filter({ $0.value.task != nil }).min(by: { $0.value.order < $1.value.order })
+            {
+                oldest.value.task?.cancel()
+                statusLookups[oldest.key]?.task = nil
+                lastMessageStatuses[oldest.key] = nil
+                openCount -= 1
             }
-            statusLookups[chatId] = (sentAtMs, task)
+            statusLookupOrder += 1
+            statusLookups[row.id] = StatusLookup(
+                sentAtMs: row.lastMessageSentAtMs, order: statusLookupOrder, task: followLastMessageStatus(row.id))
+            openCount += 1
+        }
+    }
+
+    /// Subscribes to the chat's timeline and stores the status of its newest own message after each batch. The
+    /// subscription stays open so the ticks follow sent -> delivered -> read; cancelling the task ends it.
+    private func followLastMessageStatus(_ chatId: String) -> Task<Void, Never> {
+        let client = client
+        return Task { [weak self] in
+            guard let stream = try? await ListenerBridge.timeline(client, chatId: chatId) else { return }
+            var items: [TimelineItem] = []
+            for await diffs in stream {
+                _ = try? DiffApplier.apply(diffs, to: &items)
+                guard !Task.isCancelled else { return }
+                self?.lastMessageStatuses[chatId] = Self.newestOwnMessageStatus(items)
+            }
         }
     }
 
