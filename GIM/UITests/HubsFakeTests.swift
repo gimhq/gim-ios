@@ -44,7 +44,7 @@ final class HubsFakeTests: E2ETestCase {
                 "https://unverified-\(suffix).example.eu", into: app.textFields["addHub.url"], "step c: URL field", app)
             try tap(app.buttons["addHub.submit"], "step c: Add Hub submit", app)
             try waitForLabel(
-                app.staticTexts["addHub.error"], containing: "couldn't prove it is reachable at this address",
+                app.staticTexts["addHub.error"], containing: "Couldn't reach a server at this address",
                 "step c: HubNotVerified shown inline", app)
             try tap(backButton(app, to: "Hubs"), "step c: back to Hubs", app)
             try addHub(secondUrl, "step c", app)
