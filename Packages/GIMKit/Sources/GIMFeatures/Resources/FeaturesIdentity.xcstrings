@@ -1,0 +1,16 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Paste the link code shown on your new device." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paste the link code shown on your new device."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

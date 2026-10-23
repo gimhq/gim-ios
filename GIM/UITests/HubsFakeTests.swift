@@ -30,7 +30,7 @@ final class HubsFakeTests: E2ETestCase {
 
         summary.start("b")
         try XCTContext.runActivity(named: "step b: the home hub is listed as primary, verified and signed in") { _ in
-            try requireHub(home, state: "Verified", signedIn: true, "step b", app)
+            try requireHub(home, state: "Connected", signedIn: true, "step b", app)
             try requireBadge("primary", on: home, "step b", app)
             try requireBadge("home", on: home, "step b", app)
         }
@@ -44,11 +44,11 @@ final class HubsFakeTests: E2ETestCase {
                 "https://unverified-\(suffix).example.eu", into: app.textFields["addHub.url"], "step c: URL field", app)
             try tap(app.buttons["addHub.submit"], "step c: Add Hub submit", app)
             try waitForLabel(
-                app.staticTexts["addHub.error"], containing: "couldn't prove it is reachable at this address",
+                app.staticTexts["addHub.error"], containing: "Couldn't reach a server at this address",
                 "step c: HubNotVerified shown inline", app)
             try tap(backButton(app, to: "Hubs"), "step c: back to Hubs", app)
             try addHub(secondUrl, "step c", app)
-            try requireHub(second, state: "Verified", signedIn: true, "step c", app)
+            try requireHub(second, state: "Connected", signedIn: true, "step c", app)
         }
         summary.finish("c")
 
@@ -63,25 +63,26 @@ final class HubsFakeTests: E2ETestCase {
         summary.start("e")
         try XCTContext.runActivity(named: "step e: removing the home hub explains why it stays") { _ in
             try requestHubRemoval(home, "step e", app)
-            let alert = app.alerts["Can't Remove Home Hub"]
+            let alert = app.alerts["Can't remove your main server"]
             try require(alert.waitForExistence(timeout: networkTimeout), "step e: home hub alert", app)
             try tap(alert.buttons["OK"], "step e: OK button", app)
-            try requireHub(home, state: "Verified", signedIn: true, "step e", app)
+            try requireHub(home, state: "Connected", signedIn: true, "step e", app)
         }
         summary.finish("e")
 
         summary.start("f")
         try XCTContext.runActivity(named: "step f: a hub owning groups is removed after the warning") { _ in
             try addHub(ownerUrl, "step f", app)
-            try requireHub(owner, state: "Verified", signedIn: true, "step f", app)
+            try requireHub(owner, state: "Connected", signedIn: true, "step f", app)
             try requestHubRemoval(owner, "step f", app)
-            let alert = app.alerts["Remove Hub?"]
+            let alert = app.alerts["Remove server?"]
             try require(alert.waitForExistence(timeout: networkTimeout), "step f: owned groups warning", app)
             try require(
-                alert.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'This hub hosts 2 groups you own.'"))
-                    .firstMatch.exists,
+                alert.staticTexts.matching(
+                    NSPredicate(format: "label BEGINSWITH 'This server hosts 2 groups you own.'")
+                ).firstMatch.exists,
                 "step f: warning names the 2 owned groups", app)
-            try tap(alert.buttons["Remove Anyway"], "step f: Remove Anyway button", app)
+            try tap(alert.buttons["Remove anyway"], "step f: Remove Anyway button", app)
             try requireHub(owner, state: "Removed", signedIn: false, "step f", app)
         }
         summary.finish("f")
