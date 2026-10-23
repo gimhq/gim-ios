@@ -4,7 +4,8 @@ import Observation
 
 /// A message of the `FeaturesOnboarding` table; `key` is the English text.
 func onboardingText(_ key: String) -> String {
-    NSLocalizedString(key, tableName: "FeaturesOnboarding", bundle: FeaturesLocalization.bundle, value: key, comment: "")
+    NSLocalizedString(
+        key, tableName: "FeaturesOnboarding", bundle: FeaturesLocalization.bundle, value: key, comment: "")
 }
 
 /// Pure validation and normalisation rules for the registration form.

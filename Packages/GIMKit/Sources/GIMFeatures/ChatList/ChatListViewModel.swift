@@ -251,8 +251,8 @@ public enum ChatRowSubtitle: Sendable, Hashable {
         case .preview(let preview): preview
         case .noMessages:
             NSLocalizedString(
-                "No messages yet", tableName: "FeaturesChat", bundle: FeaturesLocalization.bundle, value: "No messages yet",
-                comment: "")
+                "No messages yet", tableName: "FeaturesChat", bundle: FeaturesLocalization.bundle,
+                value: "No messages yet", comment: "")
         case .leaving:
             NSLocalizedString(
                 "Leaving…", tableName: "FeaturesChat", bundle: FeaturesLocalization.bundle, value: "Leaving…",
@@ -263,8 +263,8 @@ public enum ChatRowSubtitle: Sendable, Hashable {
                 comment: "")
         case .removed:
             NSLocalizedString(
-                "You were removed", tableName: "FeaturesChat", bundle: FeaturesLocalization.bundle, value: "You were removed",
-                comment: "")
+                "You were removed", tableName: "FeaturesChat", bundle: FeaturesLocalization.bundle,
+                value: "You were removed", comment: "")
         case .leftUnknown:
             NSLocalizedString(
                 "Left", tableName: "FeaturesChat", bundle: FeaturesLocalization.bundle, value: "Left",

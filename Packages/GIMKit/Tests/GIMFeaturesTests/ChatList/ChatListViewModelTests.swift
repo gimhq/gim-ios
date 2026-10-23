@@ -215,7 +215,8 @@ final class ChatListViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.subtitle(for: active), "No messages yet")
         var left = summary
         left.state = .left
-        XCTAssertEqual(viewModel.subtitleKind(for: ChatRow(summary: left, dateFormatter: makeFormatter())), .leftUnknown)
+        XCTAssertEqual(
+            viewModel.subtitleKind(for: ChatRow(summary: left, dateFormatter: makeFormatter())), .leftUnknown)
     }
 
     @MainActor
