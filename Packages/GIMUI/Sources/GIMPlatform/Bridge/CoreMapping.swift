@@ -221,6 +221,18 @@ extension GIMClientKit.MessagePreview {
     }
 }
 
+extension GIMCore.RecoveryKitLabels {
+    init(_ mirror: GIMClientKit.RecoveryKitLabels) {
+        self.init(title: mirror.title, accountId: mirror.accountId, recoveryKey: mirror.recoveryKey, note: mirror.note)
+    }
+}
+
+extension GIMClientKit.ParsedRecoveryKit {
+    init(_ core: GIMCore.ParsedRecoveryKit) {
+        self.init(userId: core.userId, recoveryCode: core.recoveryCode)
+    }
+}
+
 extension GIMClientKit.MediaRef {
     init(_ core: GIMCore.MediaRef) {
         self.init(

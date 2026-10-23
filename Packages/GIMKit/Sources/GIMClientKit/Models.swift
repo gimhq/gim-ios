@@ -252,6 +252,33 @@ public struct MessagePreview: Sendable, Hashable {
     }
 }
 
+/// The app's localized words of the kit text.
+public struct RecoveryKitLabels: Sendable, Hashable {
+    public var title: String
+    public var accountId: String
+    public var recoveryKey: String
+    public var note: String
+
+    public init(title: String, accountId: String, recoveryKey: String, note: String) {
+        self.title = title
+        self.accountId = accountId
+        self.recoveryKey = recoveryKey
+        self.note = note
+    }
+}
+
+/// What `parseRecoveryKit` found: the normalized, valid user id and recovery code (39 symbols, no separators), each
+/// if present.
+public struct ParsedRecoveryKit: Sendable, Hashable {
+    public var userId: String?
+    public var recoveryCode: String?
+
+    public init(userId: String?, recoveryCode: String?) {
+        self.userId = userId
+        self.recoveryCode = recoveryCode
+    }
+}
+
 /// One row of a chat timeline.
 public enum TimelineItem: Sendable, Hashable {
     case message(item: MessageItem)
