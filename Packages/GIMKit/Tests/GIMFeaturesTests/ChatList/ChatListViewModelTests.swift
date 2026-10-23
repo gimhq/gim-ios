@@ -277,4 +277,68 @@ private final class FailingChatListClient: GimClientAPI {
     func processPush(payload: String) async throws -> NotificationContent {
         throw GimError.NotRegistered
     }
+
+    func ownProfile() async throws -> UserProfile? {
+        throw GimError.NotRegistered
+    }
+
+    func setAvatar(filePath: String, mime: String) async throws {
+        throw GimError.NotRegistered
+    }
+
+    func removeAvatar() async throws {
+        throw GimError.NotRegistered
+    }
+
+    func fetchUserAvatar(userId: String, destPath: String) async throws -> String {
+        throw GimError.NotRegistered
+    }
+
+    func fetchChatAvatar(chatId: String, destPath: String) async throws -> String {
+        throw GimError.NotRegistered
+    }
+
+    func privacy() async throws -> PrivacySettings {
+        throw GimError.NotRegistered
+    }
+
+    func setReadReceipts(enabled: Bool) async throws {
+        throw GimError.NotRegistered
+    }
+
+    func setTypingIndicators(enabled: Bool) async throws {
+        throw GimError.NotRegistered
+    }
+
+    func blockUser(userId: String) async throws {
+        throw GimError.NotRegistered
+    }
+
+    func unblockUser(userId: String) async throws {
+        throw GimError.NotRegistered
+    }
+
+    func setChatMuted(chatId: String, mutedUntilMs: UInt64) async throws {
+        throw GimError.NotRegistered
+    }
+
+    func setChatPinned(chatId: String, pinned: Bool) async throws {
+        throw GimError.NotRegistered
+    }
+
+    func setChatArchived(chatId: String, archived: Bool) async throws {
+        throw GimError.NotRegistered
+    }
+
+    func reportUser(userId: String, reason: ReportReason, note: String?, messageIds: [String]) async throws -> String {
+        throw GimError.NotRegistered
+    }
+
+    func rotateRecoveryCode() async throws -> RecoveryRotation {
+        throw GimError.NotRegistered
+    }
+
+    func deleteAccount() async throws -> [String] {
+        throw GimError.NotRegistered
+    }
 }

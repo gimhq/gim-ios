@@ -159,6 +159,29 @@ listener parameter spelling above.
 | `registerPush(registration:) async throws` | same |
 | `unregisterPush() async throws` | same |
 | `processPush(payload:) async throws -> NotificationContent` | same |
+| `ownProfile() async throws -> UserProfile?` | same |
+| `setAvatar(filePath:mime:) async throws` | same |
+| `removeAvatar() async throws` | same |
+| `fetchUserAvatar(userId:destPath:) async throws -> String` | same; `NotFound` without a photo |
+| `fetchChatAvatar(chatId:destPath:) async throws -> String` | same; `NotFound` without an avatar |
+| `privacy() async throws -> PrivacySettings` | same |
+| `setReadReceipts(enabled:) async throws` | same |
+| `setTypingIndicators(enabled:) async throws` | same |
+| `blockUser(userId:) async throws` | same; `InvalidInput` for the signed-in user |
+| `unblockUser(userId:) async throws` | same |
+| `setChatMuted(chatId:mutedUntilMs: UInt64) async throws` | same; `mutedForever()` for good, 0 to unmute |
+| `setChatPinned(chatId:pinned:) async throws` | same |
+| `setChatArchived(chatId:archived:) async throws` | same |
+| `reportUser(userId:reason: ReportReason, note: String?, messageIds: [String]) async throws -> String` | same; **needs the meta server** (`InvalidInput` without `ClientConfig.metaServerUrl`): keep it hidden in the UI until gim-meta is deployed |
+| `rotateRecoveryCode() async throws -> RecoveryRotation` | same |
+| `deleteAccount() async throws -> [String]` | same; returns the other hubs it could not reach. Deletes the meta server's data first when one is configured, so it works without one |
+
+The meta server (gim-meta, `ClientConfig.metaServerUrl`) is not deployed: the app passes `nil`. Without it
+`reportUser` fails with `InvalidInput` and the privacy settings (blocked users included) are not backed up, so they
+do not survive the loss of every device; per-chat settings are never backed up. `FakeGimClient.reportUser` needs no
+meta server and records the report in `reports`. The vendored `16a5efa` still names the generated field
+`ClientConfig.appServerUrl` (gim-client-sdk `b86283e` renames it `metaServerUrl`); until the re-vendor the bridge maps
+the mirror's `metaServerUrl` to it.
 
 `chatMembers` has no listener in M1. `GroupInfoViewModel` queries it again when a `ChatListDiff` changes that chat or
 a `TimelineItem.membershipChange` arrives. When a query fails before any list has loaded it shows the error with
@@ -190,8 +213,12 @@ yet mirrored: `ClientConfig` gained `appServerUrl: String? = nil` (the bridge pa
 `setTypingIndicators`, `setChatMuted`, `setChatPinned`, `setChatArchived`, `reportUser`, `rotateRecoveryCode`,
 `deleteAccount`, `ownProfile`, `setAvatar`, `removeAvatar`, `fetchUserAvatar`, `fetchChatAvatar`; new functions
 `mutedForever`, `formatRecoveryKit`, `parseRecoveryKit`, `recoveryKeyEnding`, `matchesRecoveryKeyEnding`. No enum
-case and no callback interface changed. The core → mirror mappings ignore the new fields for now, except
-`MessagePreview.sendState` and the recovery-kit records and functions, which are now mirrored.
+case and no callback interface changed. All of it is now mirrored, with the field renamed `metaServerUrl` in the
+mirror (see "GimClient methods"). `FakeGimClient` implements the new methods in memory (see its doc comment):
+blocking drops the blocked user's messages and typing, refuses chats with them and marks their direct chat; sends to
+a blocked chat are allowed (gim-core specifies no error); read receipts off stops own messages at `delivered`;
+typing indicators off hides peer typing; pinned chats come first; `rotateRecoveryCode` replaces the code
+`restoreFromRecovery` accepts; `deleteAccount` wipes like `signOut`, forgets the account and returns `[]`.
 
 ## Changes since `fa6f7e9`
 

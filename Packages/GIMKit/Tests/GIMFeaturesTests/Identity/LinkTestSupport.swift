@@ -210,6 +210,70 @@ actor LinkRecordingClient: GimClientAPI {
     func processPush(payload: String) async throws -> NotificationContent {
         try await fake.processPush(payload: payload)
     }
+
+    func ownProfile() async throws -> UserProfile? {
+        try await fake.ownProfile()
+    }
+
+    func setAvatar(filePath: String, mime: String) async throws {
+        try await fake.setAvatar(filePath: filePath, mime: mime)
+    }
+
+    func removeAvatar() async throws {
+        try await fake.removeAvatar()
+    }
+
+    func fetchUserAvatar(userId: String, destPath: String) async throws -> String {
+        try await fake.fetchUserAvatar(userId: userId, destPath: destPath)
+    }
+
+    func fetchChatAvatar(chatId: String, destPath: String) async throws -> String {
+        try await fake.fetchChatAvatar(chatId: chatId, destPath: destPath)
+    }
+
+    func privacy() async throws -> PrivacySettings {
+        try await fake.privacy()
+    }
+
+    func setReadReceipts(enabled: Bool) async throws {
+        try await fake.setReadReceipts(enabled: enabled)
+    }
+
+    func setTypingIndicators(enabled: Bool) async throws {
+        try await fake.setTypingIndicators(enabled: enabled)
+    }
+
+    func blockUser(userId: String) async throws {
+        try await fake.blockUser(userId: userId)
+    }
+
+    func unblockUser(userId: String) async throws {
+        try await fake.unblockUser(userId: userId)
+    }
+
+    func setChatMuted(chatId: String, mutedUntilMs: UInt64) async throws {
+        try await fake.setChatMuted(chatId: chatId, mutedUntilMs: mutedUntilMs)
+    }
+
+    func setChatPinned(chatId: String, pinned: Bool) async throws {
+        try await fake.setChatPinned(chatId: chatId, pinned: pinned)
+    }
+
+    func setChatArchived(chatId: String, archived: Bool) async throws {
+        try await fake.setChatArchived(chatId: chatId, archived: archived)
+    }
+
+    func reportUser(userId: String, reason: ReportReason, note: String?, messageIds: [String]) async throws -> String {
+        try await fake.reportUser(userId: userId, reason: reason, note: note, messageIds: messageIds)
+    }
+
+    func rotateRecoveryCode() async throws -> RecoveryRotation {
+        try await fake.rotateRecoveryCode()
+    }
+
+    func deleteAccount() async throws -> [String] {
+        try await fake.deleteAccount()
+    }
 }
 
 /// Polls `condition` on the main actor until it holds or about two seconds passed.
