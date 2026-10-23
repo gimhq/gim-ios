@@ -24,7 +24,8 @@ final class MessageCell: UICollectionViewCell {
     var onReplyTap: (() -> Void)?
     var onMediaTap: (() -> Void)?
     var onRetry: (() -> Void)?
-    /// The VoiceOver Reply action; the action is offered only while this is set.
+    /// The VoiceOver Reply action; the action is offered only while this is set. The body label, image and file row
+    /// are the elements VoiceOver focuses, so they carry the action and the options hint too.
     var onReply: (() -> Void)? {
         didSet {
             accessibilityCustomActions =
@@ -38,6 +39,10 @@ final class MessageCell: UICollectionViewCell {
                         return true
                     }
                 ]
+            for view in [bodyLabel, imageView, fileView] as [UIView] {
+                view.accessibilityCustomActions = accessibilityCustomActions
+                view.accessibilityHint = onReply == nil ? nil : accessibilityHint
+            }
         }
     }
     /// Loads the image; cancelled on reuse.
