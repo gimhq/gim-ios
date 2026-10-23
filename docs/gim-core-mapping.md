@@ -28,7 +28,7 @@ Generated records are `Equatable, Hashable` plus `extension …: Sendable`; the 
 | `HubInfo` | `HubInfo` | `hubId`, `url: String?`, `state: HubState`, `priority: UInt8`, `isPrimary`, `isHome`, `signedIn` |
 | `UserProfile` | `UserProfile` | `userId`, `handle`, `displayName` |
 | `ChatSummary` | `ChatSummary` | `chatId`, `kind`, `name`, `avatar: MediaRef?`, `lastMessage: MessagePreview?`, `unreadCount: UInt32`, `updatedAtMs: UInt64`, `memberCount: UInt32`, `state: ChatState` |
-| `MessagePreview` | `MessagePreview` | `senderName`, `text`, `sentAtMs: UInt64`, `isOwn` |
+| `MessagePreview` | `MessagePreview` | `senderName`, `text`, `sentAtMs: UInt64`, `isOwn`, `sendState: SendState?` (own messages only; the mirror init defaults it to `nil`) |
 | `MessageItem` | `MessageItem` | `messageId`, `chatId`, `sender: UserProfile`, `isOwn`, `sentAtMs: UInt64`, `content`, `replyTo: ReplyPreview?`, `reactions: [ReactionGroup]`, `edited`, `sendState: SendState?` |
 | `MediaRef` | `MediaRef` | `chatId`, `messageId`, `mime`, `size: UInt64`, `hasThumbnail` |
 | `ReplyPreview` | `ReplyPreview` | `messageId`, `senderName`, `text` |
@@ -167,7 +167,8 @@ yet mirrored: `ClientConfig` gained `appServerUrl: String? = nil` (the bridge pa
 `setTypingIndicators`, `setChatMuted`, `setChatPinned`, `setChatArchived`, `reportUser`, `rotateRecoveryCode`,
 `deleteAccount`, `ownProfile`, `setAvatar`, `removeAvatar`, `fetchUserAvatar`, `fetchChatAvatar`; new functions
 `mutedForever`, `formatRecoveryKit`, `parseRecoveryKit`, `recoveryKeyEnding`, `matchesRecoveryKeyEnding`. No enum
-case and no callback interface changed. The core → mirror mappings ignore the new fields for now.
+case and no callback interface changed. The core → mirror mappings ignore the new fields for now, except
+`MessagePreview.sendState`, which is now mirrored.
 
 ## Changes since `fa6f7e9`
 

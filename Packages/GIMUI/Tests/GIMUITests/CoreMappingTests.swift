@@ -52,6 +52,25 @@ final class CoreMappingTests: XCTestCase {
         }
     }
 
+    func testMessagePreviewMapsTheSendState() {
+        let own = GIMCore.MessagePreview(
+            senderName: "Alex Morgan", text: "On my way", sentAtMs: 1_790_000_000_000, isOwn: true,
+            sendState: .delivered)
+        XCTAssertEqual(
+            GIMClientKit.MessagePreview(own),
+            GIMClientKit.MessagePreview(
+                senderName: "Alex Morgan", text: "On my way", sentAtMs: 1_790_000_000_000, isOwn: true,
+                sendState: .delivered))
+        let failed = GIMCore.MessagePreview(
+            senderName: "Alex Morgan", text: "On my way", sentAtMs: 1_790_000_000_000, isOwn: true,
+            sendState: .failed(reason: "refused", cause: .rejected))
+        XCTAssertEqual(
+            GIMClientKit.MessagePreview(failed).sendState, .failed(reason: "refused", cause: .rejected))
+        let peer = GIMCore.MessagePreview(
+            senderName: "Sofia Marin", text: "Ahoy", sentAtMs: 1_790_000_000_000, isOwn: false, sendState: nil)
+        XCTAssertNil(GIMClientKit.MessagePreview(peer).sendState)
+    }
+
     func testPushRegistrationMapsEveryField() {
         let mirror = GIMClientKit.PushRegistration(
             provider: "unifiedpush", token: "https://push.example.eu/up/abc", appId: "im.g.apps", sandbox: false,

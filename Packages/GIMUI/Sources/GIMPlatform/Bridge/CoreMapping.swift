@@ -215,7 +215,9 @@ extension GIMClientKit.ChatSummary {
 
 extension GIMClientKit.MessagePreview {
     init(_ core: GIMCore.MessagePreview) {
-        self.init(senderName: core.senderName, text: core.text, sentAtMs: core.sentAtMs, isOwn: core.isOwn)
+        self.init(
+            senderName: core.senderName, text: core.text, sentAtMs: core.sentAtMs, isOwn: core.isOwn,
+            sendState: core.sendState.map { GIMClientKit.SendState($0) })
     }
 }
 

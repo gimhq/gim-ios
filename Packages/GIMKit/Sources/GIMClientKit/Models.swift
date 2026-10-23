@@ -239,12 +239,16 @@ public struct MessagePreview: Sendable, Hashable {
     public var text: String
     public var sentAtMs: UInt64
     public var isOwn: Bool
+    /// Delivery state of an own message, for the ticks of the row (as `MessageItem.sendState`); `nil` for messages
+    /// from others.
+    public var sendState: SendState?
 
-    public init(senderName: String, text: String, sentAtMs: UInt64, isOwn: Bool) {
+    public init(senderName: String, text: String, sentAtMs: UInt64, isOwn: Bool, sendState: SendState? = nil) {
         self.senderName = senderName
         self.text = text
         self.sentAtMs = sentAtMs
         self.isOwn = isOwn
+        self.sendState = sendState
     }
 }
 
