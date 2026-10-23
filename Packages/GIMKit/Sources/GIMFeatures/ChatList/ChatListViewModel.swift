@@ -20,6 +20,10 @@ public final class ChatListViewModel {
     private var exits: [String: MembershipChangeKind] = [:]
     /// Lookups of `exits`, by chat id; kept once finished so each left chat is looked up once.
     @ObservationIgnored private var exitLookups: [String: Task<Void, Never>] = [:]
+    /// Status of the own last message of each active chat whose timeline was looked up, by chat id.
+    private var lastMessageStatuses: [String: MessageStatus] = [:]
+    /// Open lookups of `lastMessageStatuses`, by chat id, each with the `lastMessageSentAtMs` it was started for.
+    @ObservationIgnored private var statusLookups: [String: (sentAtMs: UInt64?, task: Task<Void, Never>)] = [:]
     @ObservationIgnored private var listTask: Task<Void, Never>?
     @ObservationIgnored private var connectionTask: Task<Void, Never>?
 
@@ -43,10 +47,18 @@ public final class ChatListViewModel {
         }
     }
 
+    /// Status ticks of the row's last message: set once the chat is active, its last message is the user's own and
+    /// the lookup in the chat's timeline finished.
+    public func lastMessageStatus(for row: ChatRow) -> MessageStatus? {
+        guard row.state == .active, row.lastMessageIsOwn else { return nil }
+        return lastMessageStatuses[row.id]
+    }
+
     deinit {
         listTask?.cancel()
         connectionTask?.cancel()
         for lookup in exitLookups.values { lookup.cancel() }
+        for lookup in statusLookups.values { lookup.task.cancel() }
     }
 
     /// Subscribes to the chat list and the connection state. Does nothing while already subscribed.
@@ -74,12 +86,14 @@ public final class ChatListViewModel {
         }
     }
 
-    /// Cancels both subscriptions.
+    /// Cancels both subscriptions and the status lookups.
     public func stop() {
         listTask?.cancel()
         connectionTask?.cancel()
         listTask = nil
         connectionTask = nil
+        for lookup in statusLookups.values { lookup.task.cancel() }
+        statusLookups = [:]
     }
 
     /// Subscribes again; the new subscription starts with a full reset.
@@ -100,6 +114,7 @@ public final class ChatListViewModel {
             return
         }
         lookUpExits()
+        lookUpLastMessageStatuses()
     }
 
     /// Looks up how the user left each newly left chat; forgets chats that are no longer left.
@@ -133,6 +148,42 @@ public final class ChatListViewModel {
         for case .membershipChange(_, let change, _, let userId, _) in items.reversed()
         where userId == ownUserId && change != .added {
             return change
+        }
+        return nil
+    }
+
+    /// Follows the status of the own last message of each active chat; a chat is looked up again when its last
+    /// message changes and forgotten when its last message is someone else's or it is no longer active.
+    private func lookUpLastMessageStatuses() {
+        let wanted = Dictionary(
+            rows.filter { $0.state == .active && $0.lastMessageIsOwn }.map { ($0.id, $0.lastMessageSentAtMs) },
+            uniquingKeysWith: { _, last in last })
+        for (chatId, lookup) in statusLookups where wanted[chatId] != .some(lookup.sentAtMs) {
+            lookup.task.cancel()
+            statusLookups[chatId] = nil
+            lastMessageStatuses[chatId] = nil
+        }
+        let client = client
+        for (chatId, sentAtMs) in wanted where statusLookups[chatId] == nil {
+            let task = Task { [weak self] in
+                guard let stream = try? await ListenerBridge.timeline(client, chatId: chatId) else { return }
+                var items: [TimelineItem] = []
+                // The subscription stays open so the ticks follow sent -> delivered -> read; cancelling ends it.
+                for await diffs in stream {
+                    _ = try? DiffApplier.apply(diffs, to: &items)
+                    guard !Task.isCancelled else { return }
+                    self?.lastMessageStatuses[chatId] = Self.newestOwnMessageStatus(items)
+                }
+            }
+            statusLookups[chatId] = (sentAtMs, task)
+        }
+    }
+
+    /// Status of the newest message among `items` when it is the user's own; `nil` when it is someone else's or
+    /// there is no message.
+    private static func newestOwnMessageStatus(_ items: [TimelineItem]) -> MessageStatus? {
+        for case .message(let message) in items.reversed() {
+            return message.isOwn ? message.sendState.map(MessageStatus.init) : nil
         }
         return nil
     }

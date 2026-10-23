@@ -175,6 +175,85 @@ final class ChatListViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testLastMessageStatusIsNilForForeignLastMessages() async throws {
+        let (client, _) = await connected(makeDemoClient())
+        let viewModel = await startedViewModel(client)
+
+        for row in viewModel.rows {
+            XCTAssertFalse(row.lastMessageIsOwn, row.id)
+            XCTAssertNil(viewModel.lastMessageStatus(for: row), row.id)
+        }
+        await settle()
+        XCTAssertNil(viewModel.lastMessageStatus(for: try row(FakeGimClient.demoDirectChatId, viewModel)))
+    }
+
+    @MainActor
+    func testLastMessageStatusFollowsOwnMessageProgression() async throws {
+        let (client, scheduler) = await connected(makeDemoClient())
+        let viewModel = await startedViewModel(client)
+        let chatId = FakeGimClient.demoDirectChatId
+
+        _ = try await client.sendText(chatId: chatId, body: "Ready", replyTo: nil)
+
+        await eventually { (try? self.row(chatId, viewModel).lastMessageIsOwn) == true }
+        await eventually { self.lastMessageStatus(chatId, viewModel) == .sending }
+        await scheduler.advance(by: .milliseconds(300))
+        await eventually { self.lastMessageStatus(chatId, viewModel) == .sent }
+        await scheduler.advance(by: .milliseconds(700))
+        await eventually { self.lastMessageStatus(chatId, viewModel) == .delivered }
+        await scheduler.advance(by: .milliseconds(1500))
+        await eventually { self.lastMessageStatus(chatId, viewModel) == .read }
+        XCTAssertNil(viewModel.lastMessageStatus(for: try row(FakeGimClient.demoGroupChatId, viewModel)))
+
+        try await client.receiveText(chatId: chatId, from: "user-sofia", body: "On my way")
+
+        await eventually { (try? self.row(chatId, viewModel).lastMessageIsOwn) == false }
+        XCTAssertNil(lastMessageStatus(chatId, viewModel))
+    }
+
+    @MainActor
+    func testLastMessageStatusIsNilOnceTheChatIsLeft() async throws {
+        let (client, scheduler) = await connected(makeDemoClient())
+        let viewModel = await startedViewModel(client)
+        let chatId = FakeGimClient.demoGroupChatId
+        _ = try await client.sendText(chatId: chatId, body: "Leaving now", replyTo: nil)
+        await scheduler.runUntilIdle()
+        await eventually { self.lastMessageStatus(chatId, viewModel) == .read }
+
+        try await client.leaveChat(chatId: chatId)
+
+        await eventually { (try? self.row(chatId, viewModel).state) == .leaving }
+        XCTAssertNil(lastMessageStatus(chatId, viewModel))
+        await settle()
+        await scheduler.advance(by: FakeGimClient.leaveCommitDelay)
+        await eventually { (try? self.row(chatId, viewModel).state) == .left }
+        let left = try row(chatId, viewModel)
+        XCTAssertTrue(left.lastMessageIsOwn)
+        XCTAssertNil(viewModel.lastMessageStatus(for: left))
+    }
+
+    @MainActor
+    func testStopCancelsLastMessageStatusLookups() async throws {
+        let (client, scheduler) = await connected(makeDemoClient())
+        let viewModel = await startedViewModel(client)
+        let chatId = FakeGimClient.demoDirectChatId
+        _ = try await client.sendText(chatId: chatId, body: "Ready", replyTo: nil)
+        await eventually { self.lastMessageStatus(chatId, viewModel) == .sending }
+
+        viewModel.stop()
+        await settle()
+        await scheduler.runUntilIdle()
+        await settle()
+
+        XCTAssertEqual(lastMessageStatus(chatId, viewModel), .sending)
+    }
+
+    @MainActor
+    private func lastMessageStatus(_ chatId: String, _ viewModel: ChatListViewModel) -> MessageStatus? {
+        (try? row(chatId, viewModel)).flatMap { viewModel.lastMessageStatus(for: $0) }
+    }
+
+    @MainActor
     private func row(_ chatId: String, _ viewModel: ChatListViewModel) throws -> ChatRow {
         try XCTUnwrap(viewModel.rows.first { $0.id == chatId })
     }
