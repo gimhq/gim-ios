@@ -8,6 +8,39 @@ import Observation
 @MainActor
 @Observable
 public final class RestoreViewModel {
+    /// An error of the restore form; `text` gives the localized message.
+    public enum ErrorKind: Sendable, Hashable {
+        /// gim-core found no user with this user id (`NotFound`).
+        case notFound
+        /// The recovery code doesn't fit the user (`Crypto`).
+        case wrongCode
+        case userIdMissing
+        case recoveryCodeMissing
+        /// The kit text contains neither a user id nor a recovery code.
+        case kitNotRecognized
+        /// The kit text contains only one of the user id and the recovery code.
+        case kitPartMissing
+        /// Any other restore error, presented like on registration.
+        case error(ErrorPresenter.Kind)
+
+        /// The localized message.
+        public var text: String {
+            switch self {
+            case .notFound:
+                onboardingText("This server has no account with this Account ID. Check the ID and the server.")
+            case .wrongCode:
+                onboardingText("This recovery key doesn't fit this account. Check the key and the Account ID.")
+            case .userIdMissing: onboardingText("Enter your Account ID.")
+            case .recoveryCodeMissing: onboardingText("Enter your recovery key.")
+            case .kitNotRecognized:
+                onboardingText(
+                    "We couldn't find an Account ID or recovery key here. Paste the whole kit, or type them below.")
+            case .kitPartMissing: onboardingText("Part of the kit is missing. Fill in the empty field below.")
+            case .error(let kind): ErrorPresenter.text(for: kind)
+            }
+        }
+    }
+
     /// The pasted recovery kit; each part found in it replaces its field.
     public var kitText = "" {
         didSet { if kitText != oldValue { kitChanged() } }
@@ -23,22 +56,20 @@ public final class RestoreViewModel {
 
     public private(set) var isSubmitting = false
     /// Error from the last failed submission.
-    public private(set) var errorMessage: String?
+    public var errorMessage: String? { errorKind?.text }
+    /// The kind behind `errorMessage`.
+    public private(set) var errorKind: ErrorKind?
     /// Set by the first submit attempt so empty fields also show their messages.
     public private(set) var showsAllErrors = false
     /// Whether the restore succeeded and the notice about chats waits to be dismissed with `finish()`.
     public var showsRejoinNotice: Bool { registration != nil }
 
-    public static let notFoundMessage = onboardingText(
-        "This server has no account with this Account ID. Check the ID and the server.")
-    public static let wrongCodeMessage = onboardingText(
-        "This recovery key doesn't fit this account. Check the key and the Account ID.")
-    public static let userIdMissingMessage = onboardingText("Enter your Account ID.")
-    public static let recoveryCodeMissingMessage = onboardingText("Enter your recovery key.")
-    public static let kitNotRecognizedMessage = onboardingText(
-        "We couldn't find an Account ID or recovery key here. Paste the whole kit, or type them below.")
-    public static let kitPartMissingMessage = onboardingText(
-        "Part of the kit is missing. Fill in the empty field below.")
+    public static let notFoundMessage = ErrorKind.notFound.text
+    public static let wrongCodeMessage = ErrorKind.wrongCode.text
+    public static let userIdMissingMessage = ErrorKind.userIdMissing.text
+    public static let recoveryCodeMissingMessage = ErrorKind.recoveryCodeMissing.text
+    public static let kitNotRecognizedMessage = ErrorKind.kitNotRecognized.text
+    public static let kitPartMissingMessage = ErrorKind.kitPartMissing.text
 
     private let context: OnboardingContext
     private var registration: Registration?
@@ -55,11 +86,16 @@ public final class RestoreViewModel {
 
     /// Message for the kit text; `nil` while it is blank or both parts were found.
     public var kitError: String? {
+        kitErrorKind?.text
+    }
+
+    /// The kind behind `kitError`.
+    public var kitErrorKind: ErrorKind? {
         guard let parsed else { return nil }
         switch (parsed.userId, parsed.recoveryCode) {
         case (.some, .some): return nil
-        case (nil, nil): return Self.kitNotRecognizedMessage
-        default: return Self.kitPartMissingMessage
+        case (nil, nil): return .kitNotRecognized
+        default: return .kitPartMissing
         }
     }
 
@@ -69,14 +105,24 @@ public final class RestoreViewModel {
 
     /// Inline message for the user id field; `nil` while the field is untouched.
     public var userIdError: String? {
+        userIdErrorKind?.text
+    }
+
+    /// The kind behind `userIdError`.
+    public var userIdErrorKind: ErrorKind? {
         guard showsAllErrors || !userId.isEmpty else { return nil }
-        return Self.normalized(userId).isEmpty ? Self.userIdMissingMessage : nil
+        return Self.normalized(userId).isEmpty ? .userIdMissing : nil
     }
 
     /// Inline message for the recovery code field; `nil` while the field is untouched. gim-core validates the format.
     public var recoveryCodeError: String? {
+        recoveryCodeErrorKind?.text
+    }
+
+    /// The kind behind `recoveryCodeError`.
+    public var recoveryCodeErrorKind: ErrorKind? {
         guard showsAllErrors || !recoveryCode.isEmpty else { return nil }
-        return Self.normalized(recoveryCode).isEmpty ? Self.recoveryCodeMissingMessage : nil
+        return Self.normalized(recoveryCode).isEmpty ? .recoveryCodeMissing : nil
     }
 
     public var canSubmit: Bool {
@@ -88,7 +134,7 @@ public final class RestoreViewModel {
         showsAllErrors = true
         guard canSubmit else { return }
         isSubmitting = true
-        errorMessage = nil
+        errorKind = nil
         defer { isSubmitting = false }
         do {
             let client = try await context.client()
@@ -100,11 +146,11 @@ public final class RestoreViewModel {
             recoveryCode = ""
             registration = Registration(client: client, config: context.config, session: session)
         } catch GimError.NotFound {
-            errorMessage = Self.notFoundMessage
+            errorKind = .notFound
         } catch GimError.Crypto {
-            errorMessage = Self.wrongCodeMessage
+            errorKind = .wrongCode
         } catch {
-            errorMessage = ErrorPresenter.registrationMessage(for: error)
+            errorKind = .error(ErrorPresenter.registrationKind(for: error))
         }
     }
 

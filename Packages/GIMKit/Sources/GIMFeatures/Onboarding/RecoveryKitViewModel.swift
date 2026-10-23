@@ -6,7 +6,20 @@ import Observation
 @MainActor
 @Observable
 public final class RecoveryKitViewModel {
-    public static let mismatchMessage = onboardingText("That doesn't match. Look at your recovery key and try again.")
+    /// Why the typed ending was not accepted; `text` gives the localized message.
+    public enum EndingErrorKind: Sendable, Hashable {
+        /// The typed symbols are not the code's ending.
+        case mismatch
+
+        /// The localized message.
+        public var text: String {
+            switch self {
+            case .mismatch: onboardingText("That doesn't match. Look at your recovery key and try again.")
+            }
+        }
+    }
+
+    public static let mismatchMessage = EndingErrorKind.mismatch.text
 
     public let userId: String
     /// The code as returned by `createIdentity`; `nil` once confirmed.
@@ -16,7 +29,9 @@ public final class RecoveryKitViewModel {
     public private(set) var isChecking = false
     public var endingInput = ""
     /// Message after a wrong ending was typed.
-    public private(set) var endingError: String?
+    public var endingError: String? { endingErrorKind?.text }
+    /// The kind behind `endingError`.
+    public private(set) var endingErrorKind: EndingErrorKind?
 
     private let onConfirmed: @MainActor () -> Void
 
@@ -49,7 +64,7 @@ public final class RecoveryKitViewModel {
     public func continueToCheck() {
         guard !isConfirmed else { return }
         endingInput = ""
-        endingError = nil
+        endingErrorKind = nil
         isChecking = true
     }
 
@@ -63,12 +78,12 @@ public final class RecoveryKitViewModel {
     public func confirm() {
         guard isChecking, let code else { return }
         guard RecoveryKit.matchesEnding(code, typed: endingInput) else {
-            endingError = Self.mismatchMessage
+            endingErrorKind = .mismatch
             return
         }
         self.code = nil
         endingInput = ""
-        endingError = nil
+        endingErrorKind = nil
         onConfirmed()
     }
 }
