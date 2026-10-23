@@ -157,14 +157,7 @@ final class MessagingSmokeTests: E2ETestCase {
         try XCTContext.runActivity(named: "step h: sign out returns to onboarding") { _ in
             try tap(backButton(app), "step h: back to Chats", app)
             try signOut(app)
-            let serverField = app.textFields["onboarding.serverUrl"]
-            try require(
-                app.buttons["onboarding.create"].waitForExistence(timeout: networkTimeout),
-                "step h: onboarding visible after sign-out", app)
-            try require(
-                serverField.value as? String == serverUrl,
-                "step h: server field pre-filled with \(serverUrl), found \(String(describing: serverField.value))",
-                app)
+            try expectOnboarding(app, "step h")
         }
         summary.finish("h")
     }
