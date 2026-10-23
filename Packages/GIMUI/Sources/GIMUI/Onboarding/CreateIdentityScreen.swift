@@ -9,15 +9,19 @@ struct CreateIdentityScreen: View {
     var body: some View {
         Form {
             Section {
-                TextField("Display name", text: $viewModel.displayName)
-                    .textContentType(.name)
-                    .focused($focusesName)
-                    .accessibilityIdentifier("identity.displayName")
-                    .submitLabel(.go)
-                    .onSubmit(submit)
+                TextField(
+                    String(localized: "Your name", table: "Onboarding", bundle: .module), text: $viewModel.displayName
+                )
+                .textContentType(.name)
+                .focused($focusesName)
+                .accessibilityIdentifier("identity.displayName")
+                .submitLabel(.go)
+                .onSubmit(submit)
                 ValidationMessage(text: viewModel.displayNameError)
             } footer: {
-                Text("Shown to the people you chat with. You can change it later.")
+                Text(
+                    "People see this name in your chats. You can change it later.", tableName: "Onboarding",
+                    bundle: .module)
             }
 
             Section {
@@ -27,7 +31,7 @@ struct CreateIdentityScreen: View {
                         if viewModel.isSubmitting {
                             ProgressView()
                         } else {
-                            Text("Create Identity").bold()
+                            Text("Create account", tableName: "Onboarding", bundle: .module).bold()
                         }
                         Spacer()
                     }
@@ -42,7 +46,7 @@ struct CreateIdentityScreen: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .disabled(viewModel.isSubmitting)
-        .navigationTitle("New Identity")
+        .navigationTitle(Text("What should people call you?", tableName: "Onboarding", bundle: .module))
         .onAppear { focusesName = true }
     }
 
