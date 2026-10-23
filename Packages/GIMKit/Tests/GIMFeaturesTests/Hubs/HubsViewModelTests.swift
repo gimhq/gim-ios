@@ -45,7 +45,7 @@ final class HubsViewModelTests: XCTestCase {
         XCTAssertTrue(hub.isHome)
         XCTAssertTrue(hub.signedIn)
         XCTAssertEqual(HubsViewModel.address(of: hub), "gim.example.eu")
-        XCTAssertEqual(HubsViewModel.stateText(hub.state), "Verified")
+        XCTAssertEqual(HubsViewModel.stateText(hub.state), "Connected")
         XCTAssertFalse(viewModel.canSetPrimary(hub))
         XCTAssertTrue(viewModel.canRemove(hub))
     }
@@ -59,7 +59,7 @@ final class HubsViewModelTests: XCTestCase {
         await eventually { viewModel.hubs.count == 2 }
         let added = viewModel.hubs[1]
         XCTAssertEqual(HubsViewModel.address(of: added), "hub2.example.eu:8443")
-        XCTAssertEqual(HubsViewModel.stateText(added.state), "Unverified")
+        XCTAssertEqual(HubsViewModel.stateText(added.state), "Not checked")
         XCTAssertFalse(added.signedIn)
         XCTAssertFalse(viewModel.canSetPrimary(added))
 
@@ -150,8 +150,8 @@ final class HubsViewModelTests: XCTestCase {
         XCTAssertEqual(warning.groupCount, 3)
         XCTAssertEqual(
             warning.message,
-            "This server hosts 3 groups you own. Removing it doesn't move them: they keep running there and you still"
-                + " reach them through your other hubs.")
+            "This server hosts 3 groups you own. Removing it doesn't move them: they keep running there, and you still"
+                + " reach them through your other servers.")
         XCTAssertNil(viewModel.errorMessage)
         XCTAssertEqual(viewModel.hubs[1].state, .verified)
 
@@ -189,7 +189,7 @@ final class HubsViewModelTests: XCTestCase {
         viewModel.requestRemoval(viewModel.hubs[0])
         await viewModel.confirmRemoval(of: viewModel.hubs[0])
 
-        XCTAssertEqual(viewModel.notice?.title, "Can't Remove Home Hub")
+        XCTAssertEqual(viewModel.notice?.title, "Can't remove your main server")
         XCTAssertEqual(viewModel.notice?.message, ErrorPresenter.message(for: GimError.HomeHub(hubId: home)))
         XCTAssertNil(viewModel.errorMessage)
         viewModel.dismissNotice()
@@ -208,7 +208,7 @@ final class HubsViewModelTests: XCTestCase {
         viewModel.requestRemoval(viewModel.hubs[0])
         await viewModel.confirmRemoval(of: viewModel.hubs[0])
 
-        XCTAssertEqual(viewModel.notice?.title, "Can't Remove Last Hub")
+        XCTAssertEqual(viewModel.notice?.title, "Can't remove your only server")
         XCTAssertEqual(viewModel.notice?.message, ErrorPresenter.message(for: GimError.LastHub(hubId: second)))
     }
 
@@ -222,7 +222,7 @@ final class HubsViewModelTests: XCTestCase {
         viewModel.requestRemoval(viewModel.hubs[1])
         await viewModel.confirmRemoval(of: viewModel.hubs[1])
 
-        XCTAssertEqual(viewModel.notice?.title, "Try Again Later")
+        XCTAssertEqual(viewModel.notice?.title, "Try again later")
         XCTAssertEqual(viewModel.notice?.message.hasSuffix("Try again later."), true)
         XCTAssertEqual(viewModel.hubs[1].state, .verified)
 

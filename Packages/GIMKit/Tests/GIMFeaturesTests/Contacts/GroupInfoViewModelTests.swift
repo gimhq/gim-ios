@@ -86,7 +86,7 @@ final class GroupInfoViewModelTests: XCTestCase {
         viewModel.memberHandle = "nobody"
         await viewModel.addMember()
 
-        XCTAssertEqual(viewModel.errorMessage, "No one uses the handle @nobody.")
+        XCTAssertEqual(viewModel.errorMessage, "No one has the username @nobody.")
         XCTAssertEqual(viewModel.memberHandle, "nobody")
         XCTAssertEqual(viewModel.members?.count, 3)
     }
@@ -236,7 +236,7 @@ final class GroupInfoViewModelTests: XCTestCase {
         // Adding still works; the count follows the chat list.
         viewModel.memberHandle = "kai"
         await viewModel.addMember()
-        XCTAssertEqual(viewModel.errorMessage, "No one uses the handle @kai.")
+        XCTAssertEqual(viewModel.errorMessage, "No one has the username @kai.")
 
         await client.failChatMembers(with: nil)
         await viewModel.load()
@@ -324,7 +324,7 @@ final class GroupInfoViewModelTests: XCTestCase {
         viewModel.memberHandle = "kai"
         await viewModel.addMember()
 
-        XCTAssertEqual(viewModel.errorMessage, "None of these users could be found")
+        XCTAssertEqual(viewModel.errorMessage, "Couldn't find anyone with these usernames.")
         XCTAssertEqual(viewModel.memberHandle, "kai")
         XCTAssertEqual(viewModel.members?.count, 3)
     }
