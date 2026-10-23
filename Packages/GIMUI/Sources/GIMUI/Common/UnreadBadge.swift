@@ -4,6 +4,8 @@ import SwiftUI
 public struct UnreadBadge: View {
     let count: UInt32
 
+    @ScaledMetric(relativeTo: .caption) private var minSize: CGFloat = 20
+
     public init(count: UInt32) {
         self.count = count
     }
@@ -14,9 +16,9 @@ public struct UnreadBadge: View {
                 .font(.caption.weight(.semibold).monospacedDigit())
                 .foregroundStyle(.white)
                 .padding(.horizontal, 6)
-                .frame(minWidth: 20, minHeight: 20)
-                .background(Capsule().fill(.tint))
-                .accessibilityLabel("\(count) unread")
+                .frame(minWidth: minSize, minHeight: minSize)
+                .background(Capsule().fill(ChatColors.unreadBadge))
+                .accessibilityLabel(Text("\(Int(count)) unread", tableName: "Common", bundle: .module))
         }
     }
 }

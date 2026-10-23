@@ -16,7 +16,9 @@ public final class NewChatViewModel {
 
     public static let defaultDebounce: Duration = .milliseconds(300)
     /// `createDirectChat` fails with `NotFound` when the user does not exist or has no device.
-    public static let notFoundMessage = "User not found"
+    public static let notFoundMessage = NSLocalizedString(
+        "No one has this username.", tableName: "FeaturesContacts", bundle: FeaturesLocalization.bundle,
+        value: "No one has this username.", comment: "")
 
     /// Typing restarts the debounced search.
     public var query = "" {

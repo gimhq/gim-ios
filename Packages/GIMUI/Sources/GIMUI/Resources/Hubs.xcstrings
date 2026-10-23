@@ -1,0 +1,146 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "%@ will no longer receive or keep your messages." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ will no longer receive or keep your messages."
+          }
+        }
+      }
+    },
+    "Add server" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add server"
+          }
+        }
+      }
+    },
+    "Home" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Home"
+          }
+        }
+      }
+    },
+    "Main" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Main"
+          }
+        }
+      }
+    },
+    "Make main" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Make main"
+          }
+        }
+      }
+    },
+    "Messages go through your main server first. Your other servers keep a copy and take over when it is down." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Messages go through your main server first. Your other servers keep a copy and take over when it is down."
+          }
+        }
+      }
+    },
+    "Remove anyway" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove anyway"
+          }
+        }
+      }
+    },
+    "Remove server?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove server?"
+          }
+        }
+      }
+    },
+    "Remove this server?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove this server?"
+          }
+        }
+      }
+    },
+    "Server address" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Server address"
+          }
+        }
+      }
+    },
+    "Servers" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Servers"
+          }
+        }
+      }
+    },
+    "Signed in" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Signed in"
+          }
+        }
+      }
+    },
+    "Your messages are also kept on this server. It takes over when your other servers are down." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your messages are also kept on this server. It takes over when your other servers are down."
+          }
+        }
+      }
+    },
+    "https://hub.example.eu" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "https://hub.example.eu"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}
