@@ -130,7 +130,7 @@ actor TimelineLayoutEngine {
     }
 
     static func footerText(_ row: TimelineMessageRow) -> String {
-        row.isEdited ? "\(String(localized: "edited", table: "Chat", bundle: .module))  \(row.timeText)" : row.timeText
+        row.isEdited ? "edited  \(row.timeText)" : row.timeText
     }
 
     /// Display size of an image: the media size clamped to `maxImageSize`, keeping the aspect ratio.

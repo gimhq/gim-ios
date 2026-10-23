@@ -39,7 +39,7 @@ final class ChatStateFakeTests: E2ETestCase {
             // At once: the rejection is final, so there is no pending phase to wait out.
             try require(notSent.waitForExistence(timeout: 5), "step b: the message shows Not sent", app)
             try openMenu(on: messageText(text, in: app), "step b: message menu", app)
-            try require(menuItem("Try again", in: app).exists, "step b: Try again menu item", app)
+            try require(menuItem("Retry", in: app).exists, "step b: Retry menu item", app)
             try tap(menuItem("Delete", in: app), "step b: Delete menu item", app)
             try tap(app.buttons["Delete"], "step b: delete confirmation", app)
             let gone = XCTNSPredicateExpectation(
@@ -81,7 +81,7 @@ extension E2ETestCase {
     /// Leaves the open group through Group Info and waits until Group Info closed again.
     @MainActor
     func leaveGroup(_ step: String, _ app: XCUIApplication) throws {
-        try tap(app.navigationBars.buttons["Group info"], "\(step): Group Info button", app)
+        try tap(app.navigationBars.buttons["Group Info"], "\(step): Group Info button", app)
         // The button is the form's last row, below the member list.
         let leave = app.buttons["groupInfo.leave"]
         for _ in 0..<5 where !(leave.exists && leave.isHittable) {
@@ -90,7 +90,7 @@ extension E2ETestCase {
         try tap(leave, "\(step): Leave Group button", app)
         // The confirmation dialog's button has the same title.
         let confirm = app.buttons
-            .matching(NSPredicate(format: "label == 'Leave group' AND identifier != 'groupInfo.leave'"))
+            .matching(NSPredicate(format: "label == 'Leave Group' AND identifier != 'groupInfo.leave'"))
             .firstMatch
         try tap(confirm, "\(step): Leave Group confirmation", app)
         let closed = XCTNSPredicateExpectation(

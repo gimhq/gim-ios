@@ -3,7 +3,6 @@ import PackageDescription
 
 let package = Package(
     name: "GIMUI",
-    defaultLocalization: "en",
     platforms: [.iOS(.v18)],
     products: [
         .library(name: "GIMUI", targets: ["GIMUI"]),
@@ -28,8 +27,7 @@ let package = Package(
                 "GIMPlatform",
                 .product(name: "GIMClientKit", package: "GIMKit"),
                 .product(name: "GIMFeatures", package: "GIMKit"),
-            ],
-            resources: [.process("Resources")]
+            ]
         ),
         .testTarget(name: "GIMUITests", dependencies: ["GIMUI", "GIMPlatform"]),
     ]

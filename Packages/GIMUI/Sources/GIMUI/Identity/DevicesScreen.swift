@@ -23,22 +23,18 @@ struct DevicesScreen: View {
                     Button {
                         UIPasteboard.general.string = userId
                     } label: {
-                        LabeledContent {
+                        LabeledContent("User ID") {
                             HStack {
                                 Text(userId).lineLimit(1).truncationMode(.middle)
                                 Image(systemName: "doc.on.doc")
                             }
-                        } label: {
-                            Text("Account ID", tableName: "Devices", bundle: .module)
                         }
                     }
                     .foregroundStyle(.primary)
-                    .accessibilityHint(Text("Copies your Account ID", tableName: "Devices", bundle: .module))
+                    .accessibilityHint("Copies the user ID")
                     .accessibilityIdentifier("devices.userId")
                 } footer: {
-                    Text(
-                        "You need your Account ID and your recovery key to get your account back on a new phone.",
-                        tableName: "Devices", bundle: .module)
+                    Text("You need the user ID and your recovery code to restore your identity.")
                 }
             }
             Section {
@@ -59,18 +55,16 @@ struct DevicesScreen: View {
         }
         .refreshable { await viewModel.load() }
         .task { await viewModel.load() }
-        .navigationTitle(Text("Devices", tableName: "Devices", bundle: .module))
+        .navigationTitle("Devices")
         .confirmationDialog(
-            Text("Remove this device?", tableName: "Devices", bundle: .module), isPresented: revokeDialogPresented,
-            titleVisibility: .visible, presenting: revokeCandidate
+            "Revoke this device?", isPresented: revokeDialogPresented, titleVisibility: .visible,
+            presenting: revokeCandidate
         ) { device in
-            Button(String(localized: "Remove", table: "Common", bundle: .module), role: .destructive) {
+            Button("Revoke", role: .destructive) {
                 Task { await viewModel.revoke(deviceId: device.deviceId) }
             }
         } message: { _ in
-            Text(
-                "It will be signed out and removed from all your chats. This can't be undone.",
-                tableName: "Devices", bundle: .module)
+            Text("It will be signed out and removed from all your chats. This can't be undone.")
         }
     }
 
@@ -80,20 +74,18 @@ struct DevicesScreen: View {
                 Text(device.deviceId).lineLimit(1).truncationMode(.middle)
                 Group {
                     if device.isCurrent {
-                        Text("This device", tableName: "Devices", bundle: .module)
-                            .accessibilityIdentifier("devices.current")
+                        Text("This device").accessibilityIdentifier("devices.current")
                     } else if device.revoked {
-                        Text("Removed", tableName: "Devices", bundle: .module)
+                        Text("Revoked")
                     } else {
-                        Text("Active", tableName: "Devices", bundle: .module)
+                        Text("Active")
                     }
                 }
                 .font(.footnote)
                 .foregroundStyle(device.isCurrent ? Color.accentColor : .secondary)
                 if device.createdAtMs > 0 {
                     Text(
-                        "Added \(Date(epochMilliseconds: device.createdAtMs).formatted(date: .abbreviated, time: .omitted))",
-                        tableName: "Devices", bundle: .module
+                        "Added \(Date(epochMilliseconds: device.createdAtMs).formatted(date: .abbreviated, time: .omitted))"
                     )
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -103,11 +95,9 @@ struct DevicesScreen: View {
             if viewModel.revokingDeviceId == device.deviceId {
                 ProgressView()
             } else if viewModel.canRevoke(device) {
-                Button(String(localized: "Remove", table: "Common", bundle: .module), role: .destructive) {
-                    revokeCandidate = device
-                }
-                .buttonStyle(.borderless)
-                .accessibilityIdentifier("devices.revoke.\(device.deviceId)")
+                Button("Revoke", role: .destructive) { revokeCandidate = device }
+                    .buttonStyle(.borderless)
+                    .accessibilityIdentifier("devices.revoke.\(device.deviceId)")
             }
         }
         .foregroundStyle(device.revoked ? .secondary : .primary)

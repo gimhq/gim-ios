@@ -63,15 +63,11 @@ private struct LaunchView: View {
     var body: some View {
         if let error {
             ContentUnavailableView {
-                Label {
-                    Text("Couldn't start", tableName: "Common", bundle: .module)
-                } icon: {
-                    Image(systemName: "exclamationmark.triangle")
-                }
+                Label("Can't Start", systemImage: "exclamationmark.triangle")
             } description: {
                 Text(error)
             } actions: {
-                Button(action: retry) { Text("Try again", tableName: "Common", bundle: .module) }
+                Button("Try Again", action: retry)
                     .buttonStyle(.borderedProminent)
             }
         } else {

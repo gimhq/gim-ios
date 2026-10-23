@@ -150,38 +150,17 @@ public final class HubsViewModel {
     }
 
     static func ownedGroupsMessage(_ groupCount: UInt32) -> String {
-        if groupCount == 1 {
-            return NSLocalizedString(
-                "This server hosts 1 group you own. Removing it doesn't move them: they keep running there, and you still reach them through your other servers.",
-                tableName: "FeaturesHubs", bundle: FeaturesLocalization.bundle,
-                value:
-                    "This server hosts 1 group you own. Removing it doesn't move them: they keep running there, and you still reach them through your other servers.",
-                comment: "")
-        }
-        let format = NSLocalizedString(
-            "This server hosts %lld groups you own. Removing it doesn't move them: they keep running there, and you still reach them through your other servers.",
-            tableName: "FeaturesHubs", bundle: FeaturesLocalization.bundle,
-            value:
-                "This server hosts %lld groups you own. Removing it doesn't move them: they keep running there, and you still reach them through your other servers.",
-            comment: "")
-        return String(format: format, Int(groupCount))
+        ErrorPresenter.message(for: GimError.HubOwnsGroups(hubId: "", groupCount: groupCount))
+            + " Removing it doesn't move them: they keep running there and you still reach them through your other"
+            + " hubs."
     }
 
     /// The alert title of removal errors that are explained rather than shown as a failure.
     static func noticeTitle(_ error: GimError) -> String? {
         switch error {
-        case .HomeHub:
-            NSLocalizedString(
-                "Can't remove your main server", tableName: "FeaturesHubs", bundle: FeaturesLocalization.bundle,
-                value: "Can't remove your main server", comment: "")
-        case .LastHub:
-            NSLocalizedString(
-                "Can't remove your only server", tableName: "FeaturesHubs", bundle: FeaturesLocalization.bundle,
-                value: "Can't remove your only server", comment: "")
-        case .HubNotDrained:
-            NSLocalizedString(
-                "Try again later", tableName: "FeaturesHubs", bundle: FeaturesLocalization.bundle,
-                value: "Try again later", comment: "")
+        case .HomeHub: "Can't Remove Home Hub"
+        case .LastHub: "Can't Remove Last Hub"
+        case .HubNotDrained: "Try Again Later"
         default: nil
         }
     }
@@ -200,18 +179,9 @@ public final class HubsViewModel {
 
     public nonisolated static func stateText(_ state: HubState) -> String {
         switch state {
-        case .unverified:
-            NSLocalizedString(
-                "Not checked", tableName: "FeaturesHubs", bundle: FeaturesLocalization.bundle, value: "Not checked",
-                comment: "")
-        case .verified:
-            NSLocalizedString(
-                "Connected", tableName: "FeaturesHubs", bundle: FeaturesLocalization.bundle, value: "Connected",
-                comment: "")
-        case .removed:
-            NSLocalizedString(
-                "Removed", tableName: "FeaturesHubs", bundle: FeaturesLocalization.bundle, value: "Removed",
-                comment: "")
+        case .unverified: "Unverified"
+        case .verified: "Verified"
+        case .removed: "Removed"
         }
     }
 }

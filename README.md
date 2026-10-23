@@ -13,18 +13,6 @@ vendored as `Vendor/GIMCore` (UniFFI bindings + `GIMCore.xcframework.zip`, versi
   to the mirror, without SwiftUI, which the extension links).
 - `docs/gim-core-mapping.md` — how the mirror maps to the generated gim-core API.
 
-## Localization
-
-String Catalogs live in `Packages/GIMUI/Sources/GIMUI/Resources/<Table>.xcstrings`, one table per area: Common, Chat,
-Contacts, Hubs, Devices, Explainer, Onboarding, Settings. GIMFeatures texts live in
-`Packages/GIMKit/Sources/GIMFeatures/Resources/Features*.xcstrings`. Keys are the English source text with an explicit
-`en` value (`"Try again"`; format arguments as `%@` / `%lld`), except Explainer, keyed by the Android resource names.
-Code reads them with `String(localized: "Try again", table: "Common", bundle: .module)` or
-`Text("Chats", tableName: "Chat", bundle: .module)`, also for accessibility labels and UIKit; GIMFeatures, which also
-builds on Linux, uses `NSLocalizedString(_:tableName:bundle:value:comment:)`. The app declares en,
-zh-Hans, zh-Hant and es in `project.yml`; the usage descriptions are in `GIM/Resources/InfoPlist.xcstrings`. The words
-to use are in `docs/glossary.md`. Translations are a later step.
-
 ## Build
 
 ```sh

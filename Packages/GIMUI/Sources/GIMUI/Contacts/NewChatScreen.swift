@@ -23,11 +23,7 @@ public struct NewChatScreen: View {
                 NavigationLink {
                     NewGroupScreen(client: client, onCreated: onOpen)
                 } label: {
-                    Label {
-                        Text("New group", tableName: "Contacts", bundle: .module)
-                    } icon: {
-                        Image(systemName: "person.3")
-                    }
+                    Label("New Group", systemImage: "person.3")
                 }
                 .accessibilityIdentifier("newChat.newGroup")
             }
@@ -40,16 +36,15 @@ public struct NewChatScreen: View {
             }
         }
         .searchable(
-            text: $viewModel.query, placement: .navigationBarDrawer(displayMode: .always),
-            prompt: Text("Username", tableName: "Contacts", bundle: .module)
+            text: $viewModel.query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Handle"
         )
         .textInputAutocapitalization(.never)
         .autocorrectionDisabled()
-        .navigationTitle(Text("New chat", tableName: "Contacts", bundle: .module))
+        .navigationTitle("New Chat")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button(String(localized: "Cancel", table: "Common", bundle: .module)) { dismiss() }
+                Button("Cancel") { dismiss() }
             }
         }
     }
@@ -58,12 +53,12 @@ public struct NewChatScreen: View {
     private var result: some View {
         switch viewModel.state {
         case .idle:
-            Text("Type your friend's exact username.", tableName: "Contacts", bundle: .module)
+            Text("Enter the exact handle of the person you want to message.")
                 .foregroundStyle(.secondary)
         case .searching:
             HStack {
                 ProgressView()
-                Text("Searching…", tableName: "Contacts", bundle: .module).foregroundStyle(.secondary)
+                Text("Searching…").foregroundStyle(.secondary)
             }
         case .found(let user):
             Button {
@@ -79,12 +74,8 @@ public struct NewChatScreen: View {
             }
             .disabled(viewModel.isStarting)
         case .notFound:
-            Label {
-                Text("No one has this username.", tableName: "Contacts", bundle: .module)
-            } icon: {
-                Image(systemName: "person.crop.circle.badge.questionmark")
-            }
-            .foregroundStyle(.secondary)
+            Label("No one uses this handle.", systemImage: "person.crop.circle.badge.questionmark")
+                .foregroundStyle(.secondary)
         case .error(let message):
             Label(message, systemImage: "exclamationmark.triangle")
                 .foregroundStyle(.red)

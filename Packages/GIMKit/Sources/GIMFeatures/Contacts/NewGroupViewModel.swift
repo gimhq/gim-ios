@@ -11,9 +11,7 @@ public final class NewGroupViewModel {
     /// `createGroupChat` and `addMembers` fail with `NotFound` when every invitee is unknown or has no device (or with
     /// `ContactNotAdmitted` when one of them refused this user). Some skipped invitees do not fail the call; the
     /// timeline reports each as removed.
-    public static let noneFoundMessage = NSLocalizedString(
-        "Couldn't find anyone with these usernames.", tableName: "FeaturesContacts",
-        bundle: FeaturesLocalization.bundle, value: "Couldn't find anyone with these usernames.", comment: "")
+    public static let noneFoundMessage = "None of these users could be found"
 
     public var name = ""
     /// Handle typed into the "add member" field.
@@ -34,17 +32,8 @@ public final class NewGroupViewModel {
 
     /// Why the group can't be created yet, or `nil` when it can.
     public var validationMessage: String? {
-        if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return NSLocalizedString(
-                "Enter a group name.", tableName: "FeaturesContacts", bundle: FeaturesLocalization.bundle,
-                value: "Enter a group name.", comment: "")
-        }
-        if members.count < Self.minimumMembers {
-            let format = NSLocalizedString(
-                "Add at least %lld members.", tableName: "FeaturesContacts", bundle: FeaturesLocalization.bundle,
-                value: "Add at least %lld members.", comment: "")
-            return String(format: format, Self.minimumMembers)
-        }
+        if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "Enter a group name." }
+        if members.count < Self.minimumMembers { return "Add at least \(Self.minimumMembers) members." }
         return nil
     }
 
@@ -59,17 +48,11 @@ public final class NewGroupViewModel {
         defer { isAddingMember = false }
         do {
             guard let user = try await client.findUser(handle: handle) else {
-                let format = NSLocalizedString(
-                    "No one has the username @%@.", tableName: "FeaturesContacts",
-                    bundle: FeaturesLocalization.bundle, value: "No one has the username @%@.", comment: "")
-                memberError = String(format: format, handle)
+                memberError = "No one uses the handle @\(handle)."
                 return
             }
             if try await client.session()?.userId == user.userId {
-                memberError = NSLocalizedString(
-                    "You're in your own groups automatically.", tableName: "FeaturesContacts",
-                    bundle: FeaturesLocalization.bundle, value: "You're in your own groups automatically.",
-                    comment: "")
+                memberError = "You are added to your groups automatically."
                 return
             }
             if !members.contains(where: { $0.userId == user.userId }) { members.append(user) }

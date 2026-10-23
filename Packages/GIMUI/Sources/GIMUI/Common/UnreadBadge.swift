@@ -16,7 +16,7 @@ public struct UnreadBadge: View {
                 .padding(.horizontal, 6)
                 .frame(minWidth: 20, minHeight: 20)
                 .background(Capsule().fill(.tint))
-                .accessibilityLabel(Text("\(Int(count)) unread", tableName: "Common", bundle: .module))
+                .accessibilityLabel("\(count) unread")
         }
     }
 }

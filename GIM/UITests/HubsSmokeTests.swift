@@ -56,11 +56,11 @@ final class HubsSmokeTests: E2ETestCase {
         summary.start("b")
         try XCTContext.runActivity(named: "step b: app adds hub B, it becomes verified and signed in") { _ in
             try openHubs("step b", app)
-            try requireHub(hubA, state: "Connected", signedIn: true, "step b", app)
+            try requireHub(hubA, state: "Verified", signedIn: true, "step b", app)
             try requireBadge("home", on: hubA, "step b", app)
             try requireBadge("primary", on: hubA, "step b", app)
             try addHub(serverUrlB, "step b", app)
-            try requireHub(hubB, state: "Connected", signedIn: true, timeout: 60, "step b", app)
+            try requireHub(hubB, state: "Verified", signedIn: true, timeout: 60, "step b", app)
         }
         summary.finish("b")
 
@@ -103,7 +103,7 @@ final class HubsSmokeTests: E2ETestCase {
             try removeHubRetryingUntilDrained(hubB, "step e", app)
             try requireHub(hubB, state: "Removed", signedIn: false, timeout: 60, "step e", app)
             try requireBadge("primary", on: hubA, "step e", app)
-            try requireHub(hubA, state: "Connected", signedIn: true, "step e", app)
+            try requireHub(hubA, state: "Verified", signedIn: true, "step e", app)
         }
         summary.finish("e", removalOutcome)
 
@@ -131,8 +131,8 @@ final class HubsSmokeTests: E2ETestCase {
     private func removeHubRetryingUntilDrained(_ key: String, _ step: String, _ app: XCUIApplication) throws {
         for attempt in 1...6 {
             try requestHubRemoval(key, "\(step) (attempt \(attempt))", app)
-            let ownedGroups = app.alerts["Remove server?"]
-            let notDrained = app.alerts["Try again later"]
+            let ownedGroups = app.alerts["Remove Hub?"]
+            let notDrained = app.alerts["Try Again Later"]
             let removed = app.staticTexts.matching(
                 NSPredicate(format: "identifier == %@ AND label == 'Removed'", "hubs.state.\(key)")
             ).firstMatch
@@ -143,7 +143,7 @@ final class HubsSmokeTests: E2ETestCase {
             if ownedGroups.exists {
                 print("[e2e] \(step): \(ownedGroups.staticTexts.allElementsBoundByIndex.map(\.label))")
                 removalOutcome = "owned-groups"
-                try tap(ownedGroups.buttons["Remove anyway"], "\(step): Remove Anyway button", app)
+                try tap(ownedGroups.buttons["Remove Anyway"], "\(step): Remove Anyway button", app)
                 return
             }
             guard notDrained.exists else { return }

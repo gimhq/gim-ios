@@ -30,24 +30,24 @@ public struct ConversationScreen: View {
                 editing: editing)
         }
         .confirmationDialog(
-            Text("Delete this message for everyone?", tableName: "Chat", bundle: .module),
+            "Delete this message for everyone?",
             isPresented: Binding(
                 get: { actions.pendingDelete != nil },
                 set: { if !$0 { actions.cancelDelete() } }),
             titleVisibility: .visible,
             presenting: actions.pendingDelete
         ) { message in
-            Button(String(localized: "Delete", table: "Common", bundle: .module), role: .destructive) {
+            Button("Delete", role: .destructive) {
                 Task { await actions.delete(message) }
             }
         }
         .alert(
-            Text("Something went wrong", tableName: "Common", bundle: .module),
+            "Something Went Wrong",
             isPresented: Binding(
                 get: { actions.errorMessage != nil },
                 set: { if !$0 { actions.dismissError() } })
         ) {
-            Button(String(localized: "OK", table: "Common", bundle: .module), role: .cancel) {}
+            Button("OK", role: .cancel) {}
         } message: {
             Text(actions.errorMessage ?? "")
         }

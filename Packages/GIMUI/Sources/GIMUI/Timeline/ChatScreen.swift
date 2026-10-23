@@ -75,7 +75,7 @@ public struct ChatScreen<Composer: View>: View {
                     } label: {
                         Image(systemName: "info.circle")
                     }
-                    .accessibilityLabel(Text("Group info", tableName: "Chat", bundle: .module))
+                    .accessibilityLabel("Group Info")
                 }
             }
         }
@@ -83,12 +83,12 @@ public struct ChatScreen<Composer: View>: View {
         // returning from group info keeps the scroll position.
         .task { viewModel.start() }
         .alert(
-            Text("Something went wrong", tableName: "Common", bundle: .module),
+            "Something Went Wrong",
             isPresented: Binding(
                 get: { viewModel.errorMessage != nil },
                 set: { if !$0 { viewModel.dismissError() } })
         ) {
-            Button(String(localized: "OK", table: "Common", bundle: .module), role: .cancel) {}
+            Button("OK", role: .cancel) {}
         } message: {
             Text(viewModel.errorMessage ?? "")
         }

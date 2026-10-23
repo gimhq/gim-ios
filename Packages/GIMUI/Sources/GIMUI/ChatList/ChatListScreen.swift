@@ -39,12 +39,12 @@ public struct ChatListScreen: View {
                 .animation(.default, value: viewModel.connectionState)
         }
         .refreshable { viewModel.refresh() }
-        .navigationTitle(Text("Chats", tableName: "Chat", bundle: .module))
+        .navigationTitle("Chats")
         .toolbar {
             if let onOpenSettings {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(action: onOpenSettings) {
-                        Label(String(localized: "Settings", table: "Chat", bundle: .module), systemImage: "gearshape")
+                        Label("Settings", systemImage: "gearshape")
                     }
                     .accessibilityIdentifier("chatList.settings")
                 }
@@ -53,8 +53,7 @@ public struct ChatListScreen: View {
                 Button {
                     showsNewChat = true
                 } label: {
-                    Label(
-                        String(localized: "New chat", table: "Chat", bundle: .module), systemImage: "square.and.pencil")
+                    Label("New Chat", systemImage: "square.and.pencil")
                 }
                 .accessibilityIdentifier("chatList.newChat")
             }
@@ -74,25 +73,21 @@ public struct ChatListScreen: View {
     private var emptyState: some View {
         if let error = viewModel.errorMessage, viewModel.rows.isEmpty {
             ContentUnavailableView {
-                Label(
-                    String(localized: "Couldn't load chats", table: "Chat", bundle: .module),
-                    systemImage: "exclamationmark.triangle")
+                Label("Can't Load Chats", systemImage: "exclamationmark.triangle")
             } description: {
                 Text(error)
             } actions: {
-                Button(String(localized: "Try again", table: "Common", bundle: .module)) { viewModel.refresh() }
+                Button("Try Again") { viewModel.refresh() }
             }
         } else if viewModel.isLoading {
             ProgressView()
         } else if viewModel.rows.isEmpty {
             ContentUnavailableView {
-                Label(
-                    String(localized: "No chats yet", table: "Chat", bundle: .module),
-                    systemImage: "bubble.left.and.bubble.right")
+                Label("No Chats Yet", systemImage: "bubble.left.and.bubble.right")
             } description: {
-                Text("Start a chat. Search for a friend's username.", tableName: "Chat", bundle: .module)
+                Text("Start a conversation by searching for someone's handle.")
             } actions: {
-                Button(String(localized: "New chat", table: "Chat", bundle: .module)) { showsNewChat = true }
+                Button("New Chat") { showsNewChat = true }
                     .buttonStyle(.borderedProminent)
             }
         }

@@ -39,11 +39,11 @@ final class NewGroupViewModelTests: XCTestCase {
         let viewModel = NewGroupViewModel(client: client)
 
         await add("nobody", to: viewModel)
-        XCTAssertEqual(viewModel.memberError, "No one has the username @nobody.")
+        XCTAssertEqual(viewModel.memberError, "No one uses the handle @nobody.")
         XCTAssertEqual(viewModel.memberHandle, "nobody")
 
         await add("alex", to: viewModel)
-        XCTAssertEqual(viewModel.memberError, "You're in your own groups automatically.")
+        XCTAssertEqual(viewModel.memberError, "You are added to your groups automatically.")
 
         await add("sofia", to: viewModel)
         await add("sofia", to: viewModel)
@@ -112,7 +112,7 @@ final class NewGroupViewModelTests: XCTestCase {
         let created = await viewModel.create()
 
         XCTAssertNil(created)
-        XCTAssertEqual(viewModel.errorMessage, "Couldn't find anyone with these usernames.")
+        XCTAssertEqual(viewModel.errorMessage, "None of these users could be found")
     }
 
     @MainActor
@@ -145,6 +145,6 @@ final class NewGroupViewModelTests: XCTestCase {
         let created = await viewModel.create()
 
         XCTAssertNil(created)
-        XCTAssertEqual(viewModel.errorMessage, "Sofia Marin and Luca Bianchi don't accept messages from you.")
+        XCTAssertEqual(viewModel.errorMessage, "Sofia Marin and Luca Bianchi do not accept contacts from you.")
     }
 }

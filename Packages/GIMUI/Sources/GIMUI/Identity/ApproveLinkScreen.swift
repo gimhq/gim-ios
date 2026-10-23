@@ -29,7 +29,7 @@ struct ApproveLinkScreen: View {
             }
         }
         .scrollDismissesKeyboard(.interactively)
-        .navigationTitle(Text("Link a new device", tableName: "Devices", bundle: .module))
+        .navigationTitle("Link a New Device")
         .navigationBarBackButtonHidden(viewModel.isWorking)
         .onDisappear {
             Task { await viewModel.abandon() }
@@ -52,52 +52,45 @@ struct ApproveLinkScreen: View {
                     }
                     .frame(height: 280)
                     .listRowInsets(EdgeInsets())
-                    .accessibilityLabel(Text("Camera", tableName: "Devices", bundle: .module))
+                    .accessibilityLabel("Camera")
                 case .notDetermined:
-                    Text("Allow camera access to scan the code.", tableName: "Devices", bundle: .module)
+                    Text("Allow camera access to scan the code.")
                         .foregroundStyle(.secondary)
                         .task {
                             _ = await AVCaptureDevice.requestAccess(for: .video)
                             cameraStatus = AVCaptureDevice.authorizationStatus(for: .video)
                         }
                 default:
-                    Text(
-                        "GIM can't use the camera. Allow camera access in Settings or paste the link code below.",
-                        tableName: "Devices", bundle: .module
-                    )
-                    .foregroundStyle(.secondary)
-                    Button(String(localized: "Open Settings", table: "Devices", bundle: .module)) {
+                    Text("GIM can't use the camera. Allow camera access in Settings or paste the link code below.")
+                        .foregroundStyle(.secondary)
+                    Button("Open Settings") {
                         if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
                     }
                 }
             } header: {
-                Text("Scan", tableName: "Devices", bundle: .module)
+                Text("Scan")
             } footer: {
-                Text(
-                    "On your new device, choose Link to an existing device and scan the code it shows.",
-                    tableName: "Devices", bundle: .module)
+                Text("On your new device, choose Link to an Existing Device and scan the code it shows.")
             }
         }
     }
 
     private var paste: some View {
         Section {
-            TextField(text: $viewModel.linkCode) {
-                Text("Paste link code", tableName: "Devices", bundle: .module)
-            }
-            .textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
-            .focused($focusesCode)
-            .accessibilityIdentifier("approve.paste")
-            .submitLabel(.go)
-            .onSubmit(submit)
+            TextField("Paste link code", text: $viewModel.linkCode)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .focused($focusesCode)
+                .accessibilityIdentifier("approve.paste")
+                .submitLabel(.go)
+                .onSubmit(submit)
             Button(action: submit) {
                 HStack {
                     Spacer()
                     if viewModel.isWorking {
                         ProgressView()
                     } else {
-                        Text("Link device", tableName: "Devices", bundle: .module).bold()
+                        Text("Link Device").bold()
                     }
                     Spacer()
                 }
@@ -105,14 +98,12 @@ struct ApproveLinkScreen: View {
             .disabled(!viewModel.canApprove)
             .accessibilityIdentifier("approve.submit")
         } header: {
-            Text("Or paste the code", tableName: "Devices", bundle: .module)
+            Text("Or paste the code")
         } footer: {
             if let error = viewModel.errorMessage {
                 Text(error).foregroundStyle(.red)
             } else {
-                Text(
-                    "On your new device, tap Copy link code, then paste it here.", tableName: "Devices", bundle: .module
-                )
+                Text("Use Copy Link Code on your new device and paste the code here.")
             }
         }
     }
@@ -132,14 +123,10 @@ struct ApproveLinkScreen: View {
                     .frame(maxWidth: .infinity)
                     .accessibilityIdentifier("approve.sas")
                 if let deviceId = viewModel.newDeviceId {
-                    LabeledContent {
-                        Text(deviceId)
-                    } label: {
-                        Text("New device", tableName: "Devices", bundle: .module)
-                    }
+                    LabeledContent("New device", value: deviceId)
                 }
             } footer: {
-                Text("Check that your new device shows the same code.", tableName: "Devices", bundle: .module)
+                Text("Check that your new device shows the same code.")
             }
             Section {
                 Button {
@@ -150,16 +137,14 @@ struct ApproveLinkScreen: View {
                         if viewModel.isWorking {
                             ProgressView()
                         } else {
-                            Text("Codes match", tableName: "Devices", bundle: .module).bold()
+                            Text("Codes Match").bold()
                         }
                         Spacer()
                     }
                 }
                 .accessibilityIdentifier("approve.match")
-                Button(String(localized: "Codes don't match", table: "Devices", bundle: .module), role: .destructive) {
-                    confirm(codesMatch: false)
-                }
-                .accessibilityIdentifier("approve.mismatch")
+                Button("Codes Don't Match", role: .destructive) { confirm(codesMatch: false) }
+                    .accessibilityIdentifier("approve.mismatch")
             } footer: {
                 if let error = viewModel.errorMessage {
                     Text(error).foregroundStyle(.red)
@@ -179,19 +164,13 @@ struct ApproveLinkScreen: View {
         Section {
             switch outcome {
             case .linked:
-                Label(
-                    String(
-                        localized: "Device linked. It will join your chats on its next sync.", table: "Devices",
-                        bundle: .module),
-                    systemImage: "checkmark.circle")
+                Label("Device linked. It will join your chats on its next sync.", systemImage: "checkmark.circle")
             case .rejected:
                 Label(
-                    String(
-                        localized: "The new device was removed. Choose Codes don't match on it too.", table: "Devices",
-                        bundle: .module),
+                    "The new device was removed. Choose Codes Don't Match on it too.",
                     systemImage: "xmark.circle")
             }
-            Button(String(localized: "Done", table: "Common", bundle: .module)) { dismiss() }
+            Button("Done") { dismiss() }
                 .accessibilityIdentifier("approve.done")
         }
     }

@@ -195,7 +195,7 @@ final class LinkThisDeviceViewModelTests: XCTestCase {
 
         await viewModel.start()
 
-        XCTAssertEqual(viewModel.step, .failed(message: "This server doesn't accept your account."))
+        XCTAssertEqual(viewModel.step, .failed(message: "This hub does not admit your account."))
         XCTAssertTrue(outcome.registrations.isEmpty)
         let session = try await client.session()
         XCTAssertNil(session)

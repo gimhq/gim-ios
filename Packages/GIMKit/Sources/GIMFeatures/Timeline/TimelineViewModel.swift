@@ -192,7 +192,7 @@ public final class TimelineViewModel {
     /// Local path of the decrypted attachment, fetched on first use. `fileName` keeps the extension QuickLook needs.
     /// A temporary failure marks the message's row `isMediaUnavailable` until `retryMedia(messageId:)`.
     public func mediaFilePath(for media: MediaRef, fileName: String?) async throws -> String {
-        let destination = try mediaPath(media, name: fileName.map { Self.safeComponent($0) } ?? "media")
+        let destination = try mediaPath(media, name: fileName.map(Self.safeComponent) ?? "media")
         if FileManager.default.fileExists(atPath: destination) { return destination }
         do {
             return try await client.fetchMedia(chatId: media.chatId, messageId: media.messageId, destPath: destination)

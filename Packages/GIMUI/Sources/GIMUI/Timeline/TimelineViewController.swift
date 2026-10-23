@@ -280,8 +280,7 @@ public final class TimelineViewController: UIViewController, UICollectionViewDel
         configuration.baseBackgroundColor = .secondarySystemBackground
         configuration.baseForegroundColor = .label
         jumpButton.configuration = configuration
-        jumpButton.accessibilityLabel = String(
-            localized: "Scroll to the latest message", table: "Chat", bundle: .module)
+        jumpButton.accessibilityLabel = "Scroll to the latest message"
         jumpButton.accessibilityIdentifier = "timeline.jumpToLatest"
         jumpButton.layer.shadowColor = UIColor.black.cgColor
         jumpButton.layer.shadowOpacity = 0.15
@@ -321,8 +320,7 @@ public final class TimelineViewController: UIViewController, UICollectionViewDel
         jumpButton.isHidden = hidden
         badgeLabel.isHidden = hidden || unreadBelow == 0
         badgeLabel.text = unreadBelow > 99 ? " 99+ " : " \(unreadBelow) "
-        jumpButton.accessibilityValue =
-            unreadBelow > 0 ? String(localized: "\(unreadBelow) new", table: "Chat", bundle: .module) : nil
+        jumpButton.accessibilityValue = unreadBelow > 0 ? "\(unreadBelow) new" : nil
     }
 
     // MARK: - Cells
@@ -439,11 +437,8 @@ public final class TimelineViewController: UIViewController, UICollectionViewDel
 
     private func presentError(_ message: String) {
         guard presentedViewController == nil else { return }
-        let alert = UIAlertController(
-            title: String(localized: "Can't open", table: "Chat", bundle: .module), message: message,
-            preferredStyle: .alert)
-        alert.addAction(
-            UIAlertAction(title: String(localized: "OK", table: "Common", bundle: .module), style: .cancel))
+        let alert = UIAlertController(title: "Can't Open", message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .cancel))
         present(alert, animated: true)
     }
 

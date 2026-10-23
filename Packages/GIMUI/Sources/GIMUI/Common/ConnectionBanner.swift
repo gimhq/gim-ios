@@ -16,17 +16,17 @@ public struct ConnectionBanner: View {
         case .syncing:
             banner {
                 ProgressView().controlSize(.small)
-                Text("Updating…", tableName: "Common", bundle: .module)
+                Text("Updating…")
             }
         case .connecting:
             banner {
                 ProgressView().controlSize(.small)
-                Text("Connecting…", tableName: "Common", bundle: .module)
+                Text("Connecting…")
             }
         case .offline:
             banner {
                 Image(systemName: "wifi.slash")
-                Text("Waiting for internet", tableName: "Common", bundle: .module)
+                Text("Waiting for network")
             }
         }
     }

@@ -48,10 +48,7 @@ public final class ApproveLinkViewModel {
         guard canApprove else { return }
         let code = qrString.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !code.isEmpty else {
-            errorMessage = NSLocalizedString(
-                "Paste the link code shown on your new device.", tableName: "FeaturesIdentity",
-                bundle: FeaturesLocalization.bundle, value: "Paste the link code shown on your new device.",
-                comment: "")
+            errorMessage = "Paste the link code shown on your new device."
             return
         }
         isWorking = true

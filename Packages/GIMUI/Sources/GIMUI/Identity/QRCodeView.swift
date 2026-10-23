@@ -20,7 +20,7 @@ struct QRCodeView: View {
             }
         }
         .accessibilityElement()
-        .accessibilityLabel(Text("Link QR code", tableName: "Devices", bundle: .module))
+        .accessibilityLabel("Link QR code")
         .accessibilityValue(text)
     }
 

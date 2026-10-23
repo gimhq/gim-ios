@@ -16,7 +16,7 @@ enum TimelineColors {
 /// come from the precomputed `MessageLayout`; the cell measures nothing.
 final class MessageCell: UICollectionViewCell {
     /// Shown instead of an attachment that couldn't be downloaded for now; tapping it fetches it again.
-    static let mediaRetryText = String(localized: "Couldn't load. Tap to try again.", table: "Chat", bundle: .module)
+    static let mediaRetryText = "Couldn't load — Tap to retry"
 
     let bubbleView = UIView()
     private let bubbleShape = CAShapeLayer()
@@ -176,9 +176,7 @@ final class MessageCell: UICollectionViewCell {
             imageView.frame = layout.media ?? .zero
             mediaRetryLabel.isHidden = !row.isMediaUnavailable
             mediaRetryLabel.frame = imageView.bounds.insetBy(dx: 8, dy: 8)
-            imageView.accessibilityLabel =
-                row.isMediaUnavailable
-                ? Self.mediaRetryText : caption ?? String(localized: "Photo", table: "Chat", bundle: .module)
+            imageView.accessibilityLabel = row.isMediaUnavailable ? Self.mediaRetryText : caption ?? "Photo"
             bodyLabel.font = fonts.body
             bodyLabel.text = caption
         case .file(_, let fileName, let sizeText, let caption):
@@ -215,8 +213,7 @@ final class MessageCell: UICollectionViewCell {
             label.text = TimelineLayoutEngine.reactionText(reaction)
             label.backgroundColor =
                 reaction.own ? TimelineColors.readTicks.withAlphaComponent(0.2) : .tertiarySystemFill
-            label.accessibilityLabel = String(
-                localized: "\(reaction.emoji), \(Int(reaction.count))", table: "Chat", bundle: .module)
+            label.accessibilityLabel = "\(reaction.emoji), \(reaction.count)"
         }
     }
 
@@ -229,15 +226,11 @@ final class MessageCell: UICollectionViewCell {
         if let name = row.senderName { parts.append(name) }
         switch row.body {
         case .text(let text), .placeholder(let text): parts.append(text)
-        case .image(_, _, _, let caption):
-            parts.append(
-                caption.map { String(localized: "Photo, \($0)", table: "Chat", bundle: .module) }
-                    ?? String(localized: "Photo", table: "Chat", bundle: .module))
-        case .file(_, let name, let size, _):
-            parts.append(String(localized: "File \(name), \(size)", table: "Chat", bundle: .module))
+        case .image(_, _, _, let caption): parts.append(caption.map { "Photo, \($0)" } ?? "Photo")
+        case .file(_, let name, let size, _): parts.append("File \(name), \(size)")
         }
         parts.append(row.timeText)
-        if row.isEdited { parts.append(String(localized: "edited", table: "Chat", bundle: .module)) }
+        if row.isEdited { parts.append("edited") }
         return parts.joined(separator: ", ")
     }
 }
@@ -262,7 +255,7 @@ final class ReplyPreviewView: UIControl {
         }
         isAccessibilityElement = true
         accessibilityTraits = .button
-        accessibilityHint = String(localized: "Shows the original message", table: "Chat", bundle: .module)
+        accessibilityHint = "Shows the original message"
     }
 
     @available(*, unavailable)
@@ -275,8 +268,7 @@ final class ReplyPreviewView: UIControl {
         textLabel.font = fonts.replyText
         nameLabel.text = reply.senderName
         textLabel.text = reply.text
-        accessibilityLabel = String(
-            localized: "Reply to \(reply.senderName): \(reply.text)", table: "Chat", bundle: .module)
+        accessibilityLabel = "Reply to \(reply.senderName): \(reply.text)"
         setNeedsLayout()
     }
 
@@ -322,7 +314,7 @@ final class FileRowView: UIControl {
         sizeLabel.font = fonts.footer
         nameLabel.text = name
         sizeLabel.text = size
-        accessibilityLabel = String(localized: "File \(name), \(size)", table: "Chat", bundle: .module)
+        accessibilityLabel = "File \(name), \(size)"
         setNeedsLayout()
     }
 
@@ -373,11 +365,11 @@ final class StatusTicksView: UIControl {
         case .sending:
             first.image = UIImage(systemName: "clock")
             first.tintColor = .secondaryLabel
-            accessibilityLabel = String(localized: "Sending", table: "Chat", bundle: .module)
+            accessibilityLabel = "Sending"
         case .sent:
             first.image = checkmark
             first.tintColor = .secondaryLabel
-            accessibilityLabel = String(localized: "Sent", table: "Chat", bundle: .module)
+            accessibilityLabel = "Sent"
         case .delivered, .read:
             let color = status == .read ? TimelineColors.readTicks : .secondaryLabel
             first.image = checkmark
@@ -385,22 +377,16 @@ final class StatusTicksView: UIControl {
             first.tintColor = color
             second.tintColor = color
             second.isHidden = false
-            accessibilityLabel =
-                status == .read
-                ? String(localized: "Read", table: "Chat", bundle: .module)
-                : String(localized: "Delivered", table: "Chat", bundle: .module)
+            accessibilityLabel = status == .read ? "Read" : "Delivered"
         case .failed(_, let cause):
             first.image = UIImage(systemName: "exclamationmark.circle.fill")
             first.tintColor = .systemRed
             isEnabled = true
             accessibilityTraits = .button
-            accessibilityLabel = String(localized: "Not sent", table: "Chat", bundle: .module)
+            accessibilityLabel = "Not sent"
             // `TimelineViewModel.retry` explains a cause that can't be retried instead of resending.
             let canRetry = MessageActionsViewModel.canRetry(cause)
-            accessibilityHint =
-                canRetry
-                ? String(localized: "Sends the message again", table: "Chat", bundle: .module)
-                : String(localized: "Shows why it wasn't sent", table: "Chat", bundle: .module)
+            accessibilityHint = canRetry ? "Sends the message again" : "Shows why it wasn't sent"
         }
         setNeedsLayout()
     }

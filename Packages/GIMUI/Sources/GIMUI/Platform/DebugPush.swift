@@ -71,36 +71,20 @@
         var body: some View {
             NavigationStack {
                 VStack(alignment: .leading, spacing: 12) {
-                    field(
-                        String(localized: "Title", table: "Common", bundle: .module), presentation.title,
-                        id: "debug.push.title")
-                    field(
-                        String(localized: "Body", table: "Common", bundle: .module), presentation.body,
-                        id: "debug.push.body")
-                    field(
-                        String(localized: "Thread", table: "Common", bundle: .module), presentation.threadIdentifier,
-                        id: "debug.push.threadIdentifier")
-                    field(
-                        String(localized: "Collapse ID", table: "Common", bundle: .module),
-                        presentation.collapseId ?? "none", id: "debug.push.collapseId")
-                    field(
-                        String(localized: "Display", table: "Common", bundle: .module),
-                        presentation.isDisplayed ? "true" : "false", id: "debug.push.shouldDisplay")
-                    field(
-                        String(localized: "Kind", table: "Common", bundle: .module),
-                        String(describing: presentation.kind), id: "debug.push.kind")
+                    field("Title", presentation.title, id: "debug.push.title")
+                    field("Body", presentation.body, id: "debug.push.body")
+                    field("Thread", presentation.threadIdentifier, id: "debug.push.threadIdentifier")
+                    field("Collapse ID", presentation.collapseId ?? "none", id: "debug.push.collapseId")
+                    field("Display", presentation.isDisplayed ? "true" : "false", id: "debug.push.shouldDisplay")
+                    field("Kind", String(describing: presentation.kind), id: "debug.push.kind")
                     Spacer()
                 }
                 .padding()
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .navigationTitle(Text("Processed push", tableName: "Common", bundle: .module))
+                .navigationTitle("Processed Push")
                 .toolbar {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Text("Done", tableName: "Common", bundle: .module)
-                    }
-                    .accessibilityIdentifier("debug.push.done")
+                    Button("Done") { dismiss() }
+                        .accessibilityIdentifier("debug.push.done")
                 }
             }
         }

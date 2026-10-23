@@ -69,12 +69,12 @@ public struct ComposerView: View {
             .ignoresSafeArea()
         }
         .alert(
-            Text("Couldn't send", tableName: "Chat", bundle: .module),
+            "Can't Send",
             isPresented: Binding(
                 get: { viewModel.errorMessage != nil },
                 set: { if !$0 { viewModel.dismissError() } })
         ) {
-            Button(String(localized: "OK", table: "Common", bundle: .module), role: .cancel) {}
+            Button("OK", role: .cancel) {}
         } message: {
             Text(viewModel.errorMessage ?? "")
         }
@@ -84,18 +84,14 @@ public struct ComposerView: View {
     private var input: some View {
         if let message = viewModel.editTarget {
             TargetBar(
-                systemImage: "pencil", title: String(localized: "Edit message", table: "Chat", bundle: .module),
-                text: ComposerViewModel.previewText(for: message)
+                systemImage: "pencil", title: "Edit Message", text: ComposerViewModel.previewText(for: message)
             ) {
                 viewModel.cancelEdit()
             }
         } else if let message = viewModel.replyTarget {
             TargetBar(
                 systemImage: "arrowshape.turn.up.left",
-                title: message.isOwn
-                    ? String(localized: "Reply to yourself", table: "Chat", bundle: .module)
-                    : String(
-                        localized: "Reply to \(UserLabel.name(for: message.sender))", table: "Chat", bundle: .module),
+                title: message.isOwn ? "Reply to Yourself" : "Reply to \(UserLabel.name(for: message.sender))",
                 text: ComposerViewModel.previewText(for: message)
             ) {
                 viewModel.setReplyTarget(nil)
@@ -106,7 +102,7 @@ public struct ComposerView: View {
             ZStack(alignment: .topLeading) {
                 GrowingTextView(text: viewModel.text) { viewModel.textChanged($0) }
                 if viewModel.text.isEmpty {
-                    Text("Message", tableName: "Chat", bundle: .module)
+                    Text("Message")
                         .foregroundStyle(.tertiary)
                         .padding(.horizontal, 9)
                         .padding(.vertical, 8)
@@ -143,22 +139,15 @@ public struct ComposerView: View {
                 .frame(width: 36, height: 36)
         } else {
             Menu {
-                Button(
-                    String(localized: "Photo Library", table: "Chat", bundle: .module),
-                    systemImage: "photo.on.rectangle"
-                ) {
-                    showsPhotoPicker = true
-                }
-                Button(String(localized: "Files", table: "Chat", bundle: .module), systemImage: "folder") {
-                    showsDocumentPicker = true
-                }
+                Button("Photo Library", systemImage: "photo.on.rectangle") { showsPhotoPicker = true }
+                Button("Files", systemImage: "folder") { showsDocumentPicker = true }
             } label: {
                 Image(systemName: "paperclip")
                     .font(.title3)
                     .frame(width: 36, height: 36)
             }
             .disabled(!viewModel.canAttach)
-            .accessibilityLabel(Text("Attach a photo or file", tableName: "Chat", bundle: .module))
+            .accessibilityLabel("Attach")
             .accessibilityIdentifier("composer.attach")
         }
     }
@@ -172,11 +161,7 @@ public struct ComposerView: View {
                 .frame(width: 36, height: 36)
         }
         .disabled(!viewModel.canSend)
-        .accessibilityLabel(
-            viewModel.editTarget == nil
-                ? Text("Send message", tableName: "Chat", bundle: .module)
-                : Text("Save edit", tableName: "Chat", bundle: .module)
-        )
+        .accessibilityLabel(viewModel.editTarget == nil ? "Send" : "Save Edit")
         .accessibilityIdentifier("composer.send")
     }
 
@@ -227,7 +212,7 @@ private struct TargetBar: View {
                     .font(.title3)
                     .foregroundStyle(.secondary)
             }
-            .accessibilityLabel(Text("Cancel", tableName: "Common", bundle: .module))
+            .accessibilityLabel("Cancel")
         }
         .fixedSize(horizontal: false, vertical: true)
         .padding(.horizontal, 12)

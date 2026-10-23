@@ -367,7 +367,7 @@ final class ComposerViewModelTests: XCTestCase {
 
         await viewModel.send()
 
-        XCTAssertEqual(viewModel.errorMessage, "You're no longer in this chat.")
+        XCTAssertEqual(viewModel.errorMessage, "You're no longer a member of this chat.")
     }
 
     @MainActor
@@ -379,6 +379,6 @@ final class ComposerViewModelTests: XCTestCase {
 
         await viewModel.send()
 
-        XCTAssertEqual(viewModel.errorMessage, "Another server isn't answering. Try again in 12 s.")
+        XCTAssertEqual(viewModel.errorMessage, "Another server is unavailable. Try again in 12 s.")
     }
 }
