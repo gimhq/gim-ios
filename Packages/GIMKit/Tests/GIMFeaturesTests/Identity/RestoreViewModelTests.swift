@@ -58,7 +58,7 @@ final class RestoreViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testPastingAFullKitFillsBothFields() {
+    func testPastingAFullKitFillsBothFields() async {
         for labels in [english, chinese] {
             let (viewModel, _) = makeViewModel { FakeGimClient() }
             XCTAssertFalse(viewModel.showsFields)
@@ -77,7 +77,7 @@ final class RestoreViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testPastingOnlyTheKeyFillsTheCodeAndReportsTheMissingPart() {
+    func testPastingOnlyTheKeyFillsTheCodeAndReportsTheMissingPart() async {
         let (viewModel, _) = makeViewModel { FakeGimClient() }
         viewModel.userId = "typed before"
 
@@ -90,7 +90,7 @@ final class RestoreViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testPastingProseReportsThatNothingWasRecognized() {
+    func testPastingProseReportsThatNothingWasRecognized() async {
         let (viewModel, _) = makeViewModel { FakeGimClient() }
 
         viewModel.kitText = "Hello, I lost my phone. Can you help?"
@@ -103,7 +103,7 @@ final class RestoreViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testBlankKitTextClearsTheParseAndTheError() {
+    func testBlankKitTextClearsTheParseAndTheError() async {
         let (viewModel, _) = makeViewModel { FakeGimClient() }
         viewModel.kitText = "not a kit"
         XCTAssertNotNil(viewModel.kitError)
@@ -116,7 +116,7 @@ final class RestoreViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testEnteringSeparatelyShowsTheFields() {
+    func testEnteringSeparatelyShowsTheFields() async {
         let (viewModel, _) = makeViewModel { FakeGimClient() }
 
         viewModel.enterSeparately()

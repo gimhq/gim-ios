@@ -23,7 +23,7 @@ final class RecoveryKitViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testShowsTheKitTextAndTheGroupedCode() {
+    func testShowsTheKitTextAndTheGroupedCode() async {
         let (viewModel, _) = makeViewModel(code: code.replacingOccurrences(of: "-", with: "").lowercased())
 
         XCTAssertEqual(viewModel.userId, userId)
@@ -36,7 +36,7 @@ final class RecoveryKitViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testContinueToCheckAndShowKitAgain() {
+    func testContinueToCheckAndShowKitAgain() async {
         let (viewModel, _) = makeViewModel()
         viewModel.continueToCheck()
         XCTAssertTrue(viewModel.isChecking)
@@ -54,7 +54,7 @@ final class RecoveryKitViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testWrongEndingShowsTheErrorAndKeepsTheCode() {
+    func testWrongEndingShowsTheErrorAndKeepsTheCode() async {
         let (viewModel, confirmations) = makeViewModel()
         viewModel.continueToCheck()
         viewModel.endingInput = "M-V7Q"
@@ -69,7 +69,7 @@ final class RecoveryKitViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testRightEndingInAnyFormDropsTheCodeAndConfirmsOnce() {
+    func testRightEndingInAnyFormDropsTheCodeAndConfirmsOnce() async {
         for typed in ["MV7R", "mv7r", "m-v7r", " M V7R "] {
             let (viewModel, confirmations) = makeViewModel()
             viewModel.continueToCheck()
@@ -94,7 +94,7 @@ final class RecoveryKitViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testConfirmBeforeTheCheckStepDoesNothing() {
+    func testConfirmBeforeTheCheckStepDoesNothing() async {
         let (viewModel, confirmations) = makeViewModel()
         viewModel.endingInput = "MV7R"
 
