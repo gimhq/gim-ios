@@ -9,13 +9,13 @@ final class LocalizationResourcesTests: XCTestCase {
     func testFeaturesCommonKeyLoadsTheEnglishText() {
         XCTAssertEqual(
             NSLocalizedString(
-                "Something went wrong. Please try again.",
+                "Something went wrong. Try again.",
                 tableName: "FeaturesCommon",
                 bundle: FeaturesLocalization.bundle,
                 value: "",
                 comment: ""
             ),
-            "Something went wrong. Please try again."
+            "Something went wrong. Try again."
         )
     }
 }

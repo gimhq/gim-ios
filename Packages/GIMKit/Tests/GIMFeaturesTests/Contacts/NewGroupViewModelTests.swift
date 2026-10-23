@@ -145,6 +145,6 @@ final class NewGroupViewModelTests: XCTestCase {
         let created = await viewModel.create()
 
         XCTAssertNil(created)
-        XCTAssertEqual(viewModel.errorMessage, "Sofia Marin and Luca Bianchi do not accept contacts from you.")
+        XCTAssertEqual(viewModel.errorMessage, "Sofia Marin and Luca Bianchi don't accept messages from you.")
     }
 }

@@ -150,7 +150,7 @@ final class HubsViewModelTests: XCTestCase {
         XCTAssertEqual(warning.groupCount, 3)
         XCTAssertEqual(
             warning.message,
-            "This hub hosts 3 groups you own. Removing it doesn't move them: they keep running there and you still"
+            "This server hosts 3 groups you own. Removing it doesn't move them: they keep running there and you still"
                 + " reach them through your other hubs.")
         XCTAssertNil(viewModel.errorMessage)
         XCTAssertEqual(viewModel.hubs[1].state, .verified)
@@ -170,7 +170,7 @@ final class HubsViewModelTests: XCTestCase {
         await eventually { viewModel.hubs.count == 2 }
         viewModel.requestRemoval(viewModel.hubs[1])
         await viewModel.confirmRemoval(of: viewModel.hubs[1])
-        XCTAssertEqual(viewModel.ownedGroupsWarning?.message.hasPrefix("This hub hosts 1 group you own."), true)
+        XCTAssertEqual(viewModel.ownedGroupsWarning?.message.hasPrefix("This server hosts 1 group you own."), true)
 
         viewModel.cancelOwnedGroupsRemoval()
 
