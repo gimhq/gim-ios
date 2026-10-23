@@ -29,7 +29,7 @@ public final class RecoveryCodeViewModel {
     }
 
     /// The groups of the code as displayed; empty once confirmed.
-    public var groups: [String] { code.map(Self.groups(of:)) ?? [] }
+    public var groups: [String] { code.map { Self.groups(of: $0) } ?? [] }
 
     /// The group number shown to the user, starting at 1.
     public var confirmationGroupNumber: Int { confirmationGroupIndex + 1 }
