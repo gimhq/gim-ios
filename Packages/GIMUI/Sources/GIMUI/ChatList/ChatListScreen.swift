@@ -28,9 +28,11 @@ public struct ChatListScreen: View {
             Button {
                 onOpen(row.id)
             } label: {
-                ChatRowView(row: row, subtitle: viewModel.subtitle(for: row))
+                ChatRowView(
+                    row: row, subtitle: viewModel.subtitle(for: row), status: viewModel.lastMessageStatus(for: row))
             }
             .accessibilityIdentifier("chatList.row")
+            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
         }
         .listStyle(.plain)
         .overlay { emptyState }
@@ -92,46 +94,12 @@ public struct ChatListScreen: View {
             } description: {
                 Text("Start a chat. Search for a friend's username.", tableName: "Chat", bundle: .module)
             } actions: {
-                Button(String(localized: "New chat", table: "Chat", bundle: .module)) { showsNewChat = true }
+                Button(String(localized: "Start a chat", table: "Chat", bundle: .module)) { showsNewChat = true }
                     .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .accessibilityIdentifier("chatList.emptyNewChat")
             }
         }
-    }
-}
-
-private struct ChatRowView: View {
-    let row: ChatRow
-    let subtitle: String
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            AvatarView(id: row.id, name: row.title, avatarPath: nil, size: 52)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(row.title)
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                    Spacer(minLength: 8)
-                    if let time = row.time {
-                        Text(time)
-                            .font(.caption)
-                            .foregroundStyle(row.unreadCount > 0 ? Color.accentColor : Color.secondary)
-                    }
-                }
-                HStack(alignment: .top) {
-                    Text(subtitle)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2, reservesSpace: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    UnreadBadge(count: row.unreadCount)
-                }
-            }
-        }
-        .padding(.vertical, 4)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
     }
 }
 
