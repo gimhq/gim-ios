@@ -114,7 +114,7 @@ extension GIMCore.ChatState {
 
 extension GIMCore.ClientConfig {
     init(_ mirror: GIMClientKit.ClientConfig) {
-        self.init(serverUrl: mirror.serverUrl, mode: mirror.mode.map { GIMCore.ClientMode($0) })
+        self.init(serverUrl: mirror.serverUrl, mode: mirror.mode.map { GIMCore.ClientMode($0) }, appServerUrl: nil)
     }
 }
 

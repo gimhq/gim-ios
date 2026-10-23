@@ -3,8 +3,10 @@
 `Packages/GIMKit/Sources/GIMClientKit` mirrors the UniFFI Swift bindings of gim-core so that switching to the real
 `GIMCore.xcframework` is a mechanical swap.
 
-- Mirrored and vendored commit: gim-core `c1b7503`, GIMCore `0.1.0+c1b7503` (`bindings/gim-ffi/src/`, generated
+- Mirrored commit: gim-core `c1b7503` (`bindings/gim-ffi/src/`, generated
   `bindings/gim-ffi/generated/swift/GIMCore.swift`, contract in `docs/API.md`).
+- Vendored commit: gim-client-sdk `16a5efa` (CI run 40023818869), GIMCore `0.1.0+16a5efa`; the mirror catches up in
+  the following changes (see "Changes since `c1b7503`").
 - Mirror sources: `GimClientAPI.swift` (objects, callback interfaces, hooks, `createClient`) and `Models.swift`
   (records, enums, diffs, errors).
 - Everything else in GIMClientKit (`Fake/`, `GimClientFactory`, `CoreGimClientFactory`) is app-level and stays after
@@ -153,6 +155,19 @@ a `TimelineItem.membershipChange` arrives. When a query fails before any list ha
 `ChatSummary.memberCount` (no member list, no removal); a list that loaded before stays on later failures.
 Renaming a group goes `GroupInfoViewModel.saveName()` → `GimClientAPI.setGroupInfo(name:)` →
 `RealGimClient` → `GIMCore.GimClient.setGroupInfo`.
+
+## Changes since `c1b7503`
+
+`16a5efa` (gim-client-sdk, vendored with `scripts/sync-gim-core.sh 40023818869`; the vendored `Package.swift` adds
+macOS 15 and links SystemConfiguration, CoreFoundation, c++ and resolv). Diff of the generated `GIMCore.swift`, not
+yet mirrored: `ClientConfig` gained `appServerUrl: String? = nil` (the bridge passes `nil`); `UserProfile` gained
+`hasAvatar`; `ChatSummary` gained `peer`, `mutedUntilMs`, `pinned`, `archived` and `blocked`; `MessagePreview` gained
+`sendState`; new records `PrivacySettings`, `RecoveryRotation`, `RecoveryKitLabels`, `ParsedRecoveryKit`, a new enum
+`ReportReason`; new `GimClient` methods `blockUser`, `unblockUser`, `privacy`, `setReadReceipts`,
+`setTypingIndicators`, `setChatMuted`, `setChatPinned`, `setChatArchived`, `reportUser`, `rotateRecoveryCode`,
+`deleteAccount`, `ownProfile`, `setAvatar`, `removeAvatar`, `fetchUserAvatar`, `fetchChatAvatar`; new functions
+`mutedForever`, `formatRecoveryKit`, `parseRecoveryKit`, `recoveryKeyEnding`, `matchesRecoveryKeyEnding`. No enum
+case and no callback interface changed. The core → mirror mappings ignore the new fields for now.
 
 ## Changes since `fa6f7e9`
 
