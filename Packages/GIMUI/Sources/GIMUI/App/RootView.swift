@@ -6,12 +6,17 @@ import SwiftUI
 public struct RootView: View {
     private let model: AppModel
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage(AppearanceSetting.defaultsKey) private var appearanceRaw = AppearanceSetting.system.rawValue
     #if DEBUG
         @State private var debugPush = DebugPushProcessor()
     #endif
 
     public init(model: AppModel) {
         self.model = model
+    }
+
+    private var appearance: AppearanceSetting {
+        AppearanceSetting(rawValue: appearanceRaw) ?? .system
     }
 
     public var body: some View {
@@ -27,10 +32,11 @@ public struct RootView: View {
                 }
             case .ready(let client):
                 SignedInView(
-                    client: client, session: model.session, serverUrl: model.serverUrl,
+                    client: client, session: model.session,
                     refreshSession: { await model.refreshSession() }, signOut: { await model.signOut() })
             }
         }
+        .preferredColorScheme(appearance.colorScheme)
         .task { await model.start() }
         .onChange(of: scenePhase, initial: true) { _, newPhase in
             Task { await model.scenePhaseChanged(newPhase) }
@@ -83,7 +89,6 @@ private struct LaunchView: View {
 private struct SignedInView: View {
     let client: any GimClientAPI
     let session: Session?
-    let serverUrl: String?
     let refreshSession: @MainActor () async -> Void
     let signOut: () async -> String?
 
@@ -92,12 +97,11 @@ private struct SignedInView: View {
     @State private var showsSettings = false
 
     init(
-        client: any GimClientAPI, session: Session?, serverUrl: String?,
+        client: any GimClientAPI, session: Session?,
         refreshSession: @escaping @MainActor () async -> Void, signOut: @escaping () async -> String?
     ) {
         self.client = client
         self.session = session
-        self.serverUrl = serverUrl
         self.refreshSession = refreshSession
         self.signOut = signOut
     }
@@ -105,17 +109,17 @@ private struct SignedInView: View {
     var body: some View {
         NavigationStack(path: $path) {
             ChatListScreen(
-                client: client, onOpen: { path.append($0) },
+                client: client, session: session, onOpen: { path.append($0) },
                 onOpenSettings: { showsSettings = true }
             )
             .navigationDestination(for: String.self) { chatId in
                 ConversationScreen(client: client, chatId: chatId, drafts: drafts)
             }
         }
-        .sheet(isPresented: $showsSettings) {
-            SettingsSheet(
-                client: client, session: session, serverUrl: serverUrl, refreshSession: refreshSession,
-                signOut: signOut)
+        .fullScreenCover(isPresented: $showsSettings) {
+            NavigationStack {
+                SettingsScreen(client: client, session: session, refreshSession: refreshSession, signOut: signOut)
+            }
         }
     }
 }
