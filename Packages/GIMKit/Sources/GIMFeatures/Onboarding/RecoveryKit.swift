@@ -37,9 +37,6 @@ public enum RecoveryKit {
     public static let endingSymbols = 4
 
     private static let crockford: [Character] = Array("0123456789ABCDEFGHJKMNPQRSTVWXYZ")
-    /// Base32 (RFC 4648, lowercase, unpadded), from gim-core docs/identity.md ("Identifiers").
-    private static let userIdAlphabet = "abcdefghijklmnopqrstuvwxyz234567"
-    private static let userIdLength = 56
 
     // MARK: Kit text
 
@@ -59,9 +56,10 @@ public enum RecoveryKit {
     /// copied by hand still parses (SDK: parseRecoveryKit). Tokens are runs of letters and digits; the code may be
     /// one token or tokens joined by single `-` or spaces. The user ID token is never part of the code.
     public static func parse(_ text: String) -> Parsed {
-        let tokens = self.tokens(in: text)
-        let isUserId = tokens.map { isValidUserId($0.lowercased()) }
-        let userId = tokens.indices.first { isUserId[$0] }.map { tokens[$0].lowercased() }
+        // Maximal runs of letters and digits, as substrings of `text` so the separators between them can be read.
+        let tokens = text.split { !($0.isLetter || $0.isNumber) }
+        let isUserId = tokens.map { UserID.isValid(String($0)) }
+        let userId = UserID.firstValid(in: text)
 
         // Chains of tokens joined by a single '-' or space, split at the user ID.
         var chains: [[Substring]] = []
@@ -92,26 +90,6 @@ public enum RecoveryKit {
             }
         }
         return Parsed(userId: userId, recoveryCode: recoveryCode)
-    }
-
-    /// Maximal runs of letters and digits, as substrings of `text` so the separators between them can be read.
-    private static func tokens(in text: String) -> [Substring] {
-        var tokens: [Substring] = []
-        var runStart: String.Index?
-        for index in text.indices {
-            let character = text[index]
-            let isSymbol = character.isLetter || character.isNumber
-            if isSymbol {
-                if runStart == nil { runStart = index }
-            } else if let start = runStart {
-                tokens.append(text[start..<index])
-                runStart = nil
-            }
-        }
-        if let start = runStart {
-            tokens.append(text[start...])
-        }
-        return tokens
     }
 
     /// The valid code made of `chain`'s tokens from `start` holding exactly `recoveryCodeSymbols` characters, if any.
@@ -145,18 +123,14 @@ public enum RecoveryKit {
 
     // MARK: User ID and recovery code input
 
-    /// What the user pasted or typed, trimmed and lowercased (ids are canonical lowercase).
+    /// What the user pasted or typed, trimmed and lowercased; same as `UserID.normalized(_:)`.
     public static func normalizedUserId(_ value: String) -> String {
-        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        UserID.normalized(value)
     }
 
-    /// `"u"` + 55 base32 symbols, the last carrying 3 zero bits (`u[a-z2-7]{54}[aiqy]`).
+    /// A whole user ID after normalization; same as `UserID.isValid(_:)`.
     public static func isValidUserId(_ value: String) -> Bool {
-        let symbols = Array(value)
-        guard symbols.count == userIdLength, symbols[0] == "u", "aiqy".contains(symbols[userIdLength - 1]) else {
-            return false
-        }
-        return symbols[1..<(userIdLength - 1)].allSatisfy(userIdAlphabet.contains)
+        UserID.isValid(value)
     }
 
     /// The recovery code's symbols as gim-core parses them: `-` and whitespace dropped, uppercased, `I`/`L` -> `1`

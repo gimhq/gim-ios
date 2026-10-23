@@ -12,13 +12,15 @@ final class RecoveryKitTests: XCTestCase {
         title: "Recovery kit", accountId: "Account ID", recoveryKey: "Recovery key", note: "Keep this safe.")
 
     func testFormatWritesTheKitLines() {
-        let text = RecoveryKit.format(userId: " \(userId.uppercased()) ", recoveryCode: symbols.lowercased(), labels: labels)
+        let text = RecoveryKit.format(
+            userId: " \(userId.uppercased()) ", recoveryCode: symbols.lowercased(), labels: labels)
         XCTAssertEqual(text, "Recovery kit\nAccount ID: \(userId)\nRecovery key: \(code)\n\nKeep this safe.\n")
     }
 
     func testFormatThenParseRoundTrips() {
         for code in [code, symbols] {
-            XCTAssertEqual(RecoveryKit.parse(RecoveryKit.format(userId: userId, recoveryCode: code, labels: labels)), full)
+            XCTAssertEqual(
+                RecoveryKit.parse(RecoveryKit.format(userId: userId, recoveryCode: code, labels: labels)), full)
         }
     }
 
@@ -34,7 +36,8 @@ final class RecoveryKitTests: XCTestCase {
             note: "Guárdalo.")
         let chinese = RecoveryKit.Labels(title: "恢复工具包", accountId: "账户 ID", recoveryKey: "恢复密钥", note: "请妥善保管。")
         for labels in [spanish, chinese] {
-            XCTAssertEqual(RecoveryKit.parse(RecoveryKit.format(userId: userId, recoveryCode: code, labels: labels)), full)
+            XCTAssertEqual(
+                RecoveryKit.parse(RecoveryKit.format(userId: userId, recoveryCode: code, labels: labels)), full)
         }
         XCTAssertEqual(RecoveryKit.parse("账户 ID：\(userId)\n恢复密钥：\(code)\n"), full)
     }
@@ -47,7 +50,8 @@ final class RecoveryKitTests: XCTestCase {
     }
 
     func testParseAcceptsHandCopiedAmbiguousLetters() {
-        let copied = code
+        let copied =
+            code
             .replacingOccurrences(of: "0HZR", with: "OHZR")
             .replacingOccurrences(of: "1SJD", with: "lSJD")
             .replacingOccurrences(of: "PC63", with: "pc63")
@@ -66,7 +70,8 @@ final class RecoveryKitTests: XCTestCase {
 
     func testParseReturnsWhateverPartIsThere() {
         XCTAssertEqual(RecoveryKit.parse("my key is \(code)"), RecoveryKit.Parsed(userId: nil, recoveryCode: symbols))
-        XCTAssertEqual(RecoveryKit.parse("Account ID: \(userId)"), RecoveryKit.Parsed(userId: userId, recoveryCode: nil))
+        XCTAssertEqual(
+            RecoveryKit.parse("Account ID: \(userId)"), RecoveryKit.Parsed(userId: userId, recoveryCode: nil))
         let empty = RecoveryKit.Parsed(userId: nil, recoveryCode: nil)
         XCTAssertEqual(RecoveryKit.parse(""), empty)
         XCTAssertEqual(RecoveryKit.parse("  \n\t "), empty)
@@ -75,7 +80,8 @@ final class RecoveryKitTests: XCTestCase {
 
     func testParseRejectsBadTokens() {
         let badPadding = String(code.dropLast()) + "S"
-        XCTAssertEqual(RecoveryKit.parse("\(userId)\n\(badPadding)"), RecoveryKit.Parsed(userId: userId, recoveryCode: nil))
+        XCTAssertEqual(
+            RecoveryKit.parse("\(userId)\n\(badPadding)"), RecoveryKit.Parsed(userId: userId, recoveryCode: nil))
         // A user ID glued to other letters is not a whole token.
         XCTAssertEqual(RecoveryKit.parse("x\(userId)"), RecoveryKit.Parsed(userId: nil, recoveryCode: nil))
     }
@@ -119,7 +125,7 @@ final class RecoveryKitTests: XCTestCase {
     func testUserIdValidity() {
         XCTAssertEqual(RecoveryKit.normalizedUserId(" \(userId.uppercased())\n"), userId)
         XCTAssertTrue(RecoveryKit.isValidUserId(userId))
-        XCTAssertFalse(RecoveryKit.isValidUserId(userId.uppercased()))
+        XCTAssertTrue(RecoveryKit.isValidUserId(userId.uppercased()))
         XCTAssertFalse(RecoveryKit.isValidUserId(String(userId.dropLast()) + "b"))
         XCTAssertFalse(RecoveryKit.isValidUserId(String(userId.dropLast())))
         XCTAssertFalse(RecoveryKit.isValidUserId("x" + userId.dropFirst()))
