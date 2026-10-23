@@ -113,7 +113,7 @@ final class OnboardingViewModelTests: XCTestCase {
         let registrations = Registrations()
         let viewModel = OnboardingViewModel(
             factory: factory, hooks: TestHooks(dataDir: makeTemporaryDirectory()), serverUrl: serverUrl,
-            client: client, localStateReset: localStateReset, chooseGroup: { $0 - 1 }
+            client: client, localStateReset: localStateReset
         ) { registrations.results.append($0) }
         return (viewModel, registrations)
     }
@@ -131,6 +131,45 @@ final class OnboardingViewModelTests: XCTestCase {
         XCTAssertNil(viewModel.context)
         XCTAssertNil(viewModel.createIdentity)
         XCTAssertTrue(factory.configs.isEmpty)
+    }
+
+    @MainActor
+    func testTheServerFieldIsHiddenWithAValidDefaultServer() async {
+        let (viewModel, _) = makeViewModel(serverUrl: "https://gim.example.eu")
+        XCTAssertFalse(viewModel.showsServerField)
+
+        viewModel.choose(.createIdentity)
+
+        XCTAssertFalse(viewModel.showsServerField)
+        XCTAssertEqual(viewModel.path, [.createIdentity])
+    }
+
+    @MainActor
+    func testTheServerFieldIsShownWithoutADefaultServer() async {
+        let (viewModel, _) = makeViewModel(serverUrl: "")
+        XCTAssertTrue(viewModel.showsServerField)
+    }
+
+    @MainActor
+    func testRevealingTheServerFieldShowsIt() async {
+        let (viewModel, _) = makeViewModel(serverUrl: "https://gim.example.eu")
+
+        viewModel.revealServerField()
+
+        XCTAssertTrue(viewModel.showsServerField)
+    }
+
+    @MainActor
+    func testChoosingWithAnInvalidTypedServerRevealsTheFieldAndStays() async {
+        let (viewModel, _) = makeViewModel(serverUrl: "https://gim.example.eu")
+        viewModel.serverUrl = "gim.example.eu"
+
+        viewModel.choose(.restore)
+
+        XCTAssertTrue(viewModel.showsServerField)
+        XCTAssertNotNil(viewModel.serverUrlError)
+        XCTAssertTrue(viewModel.path.isEmpty)
+        XCTAssertNil(viewModel.context)
     }
 
     @MainActor
@@ -165,7 +204,7 @@ final class OnboardingViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testCreateFlowShowsTheCodeConfirmsItClaimsTheHandleAndRegisters() async throws {
+    func testCreateFlowShowsTheKitChecksTheEndingClaimsTheHandleAndRegisters() async throws {
         let client = FakeGimClient()
         let factory = RecordingFactory { _ in client }
         let (viewModel, registrations) = makeViewModel(factory: factory, serverUrl: "https://gim.example.eu/")
@@ -176,13 +215,15 @@ final class OnboardingViewModelTests: XCTestCase {
         await create.submit()
 
         XCTAssertEqual(factory.configs, [ClientConfig(serverUrl: "https://gim.example.eu")])
-        guard case .recoveryCode(let recovery) = viewModel.stage else {
-            return XCTFail("expected the recovery code, got \(String(describing: viewModel.stage))")
+        guard case .recoveryKit(let recovery) = viewModel.stage else {
+            return XCTFail("expected the recovery kit, got \(String(describing: viewModel.stage))")
         }
-        XCTAssertEqual(recovery.groups.count, 10)
-        XCTAssertEqual(recovery.confirmationGroupIndex, 9, "chooseGroup picks the last group")
-        recovery.continueToConfirmation()
-        recovery.confirmationInput = recovery.groups[9]
+        XCTAssertEqual(recovery.userId, client.userId())
+        XCTAssertEqual(recovery.groupedCode.split(separator: "-").count, 10)
+        recovery.continueToCheck()
+        // The last four symbols, typed in lowercase with a dash.
+        let ending = RecoveryKit.ending(of: recovery.groupedCode).lowercased()
+        recovery.endingInput = "\(ending.prefix(1))-\(ending.dropFirst())"
         recovery.confirm()
 
         XCTAssertNil(recovery.code, "the code is dropped after confirmation")
@@ -208,9 +249,9 @@ final class OnboardingViewModelTests: XCTestCase {
         let create = try XCTUnwrap(viewModel.createIdentity)
         create.displayName = "Sofia"
         await create.submit()
-        guard case .recoveryCode(let recovery) = viewModel.stage else { return XCTFail("expected the recovery code") }
-        recovery.continueToConfirmation()
-        recovery.confirmationInput = recovery.groups[recovery.confirmationGroupIndex]
+        guard case .recoveryKit(let recovery) = viewModel.stage else { return XCTFail("expected the recovery kit") }
+        recovery.continueToCheck()
+        recovery.endingInput = RecoveryKit.ending(of: recovery.groupedCode)
         recovery.confirm()
         guard case .claimHandle(let claim) = viewModel.stage else { return XCTFail("expected the handle step") }
 
