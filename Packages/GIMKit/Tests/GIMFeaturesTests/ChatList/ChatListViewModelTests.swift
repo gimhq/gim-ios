@@ -175,6 +175,50 @@ final class ChatListViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testSubtitleKindFollowsChatStateAfterOwnLeave() async throws {
+        let (client, scheduler) = await connected(makeDemoClient())
+        let viewModel = await startedViewModel(client)
+        let groupId = FakeGimClient.demoGroupChatId
+        XCTAssertEqual(
+            viewModel.subtitleKind(for: try row(groupId, viewModel)),
+            .preview("Nikos Papadopoulos: Me, grilled octopus 🐙"))
+
+        try await client.leaveChat(chatId: groupId)
+
+        await eventually { (try? self.row(groupId, viewModel).state) == .leaving }
+        XCTAssertEqual(viewModel.subtitleKind(for: try row(groupId, viewModel)), .leaving)
+        await settle()
+        await scheduler.advance(by: FakeGimClient.leaveCommitDelay)
+        await eventually { (try? viewModel.subtitleKind(for: self.row(groupId, viewModel))) == .left }
+    }
+
+    @MainActor
+    func testSubtitleKindOfChatTheUserWasRemovedFrom() async throws {
+        let (client, _) = await connected(makeDemoClient())
+        let viewModel = await startedViewModel(client)
+        let groupId = FakeGimClient.demoGroupChatId
+
+        try await client.simulateRemoval(chatId: groupId, by: "user-nikos")
+
+        await eventually { (try? viewModel.subtitleKind(for: self.row(groupId, viewModel))) == .removed }
+    }
+
+    @MainActor
+    func testSubtitleKindWithoutPreviewOrOwnMembershipChange() async throws {
+        let summary = ChatSummary(
+            chatId: "h/g1", kind: .group, name: "Old crew", avatar: nil, lastMessage: nil, unreadCount: 0,
+            updatedAtMs: 0, memberCount: 2, state: .active)
+        let viewModel = ChatListViewModel(client: FakeGimClient(), dateFormatter: makeFormatter())
+        let active = ChatRow(summary: summary, dateFormatter: makeFormatter())
+
+        XCTAssertEqual(viewModel.subtitleKind(for: active), .noMessages)
+        XCTAssertEqual(viewModel.subtitle(for: active), "No messages yet")
+        var left = summary
+        left.state = .left
+        XCTAssertEqual(viewModel.subtitleKind(for: ChatRow(summary: left, dateFormatter: makeFormatter())), .leftUnknown)
+    }
+
+    @MainActor
     func testLastMessageStatusIsNilForForeignLastMessages() async throws {
         let (client, _) = await connected(makeDemoClient())
         let viewModel = await startedViewModel(client)

@@ -43,17 +43,22 @@ public final class ChatListViewModel {
         self.dateFormatter = dateFormatter
     }
 
-    /// The text under the row's title: the last message while the chat is active, otherwise its `ChatState`.
-    /// A left chat says how the user left when its timeline shows the own `left` or `removed` change.
+    /// The text under the row's title: `subtitleKind(for:)` in the FeaturesChat table.
     public func subtitle(for row: ChatRow) -> String {
+        subtitleKind(for: row).text
+    }
+
+    /// What the text under the row's title says: the last message while the chat is active, otherwise its
+    /// `ChatState`. A left chat says how the user left when its timeline shows the own `left` or `removed` change.
+    public func subtitleKind(for row: ChatRow) -> ChatRowSubtitle {
         switch row.state {
-        case .active: row.preview ?? "No messages yet"
-        case .leaving: "Leaving…"
+        case .active: row.preview.map(ChatRowSubtitle.preview) ?? .noMessages
+        case .leaving: .leaving
         case .left:
             switch exits[row.id] {
-            case .left: "You left"
-            case .removed: "You were removed"
-            case .added, nil: "Left"
+            case .left: .left
+            case .removed: .removed
+            case .added, nil: .leftUnknown
             }
         }
     }
@@ -222,5 +227,48 @@ public final class ChatListViewModel {
     private func fail(_ error: any Error) {
         isLoading = false
         errorMessage = ErrorPresenter.message(for: error)
+    }
+}
+
+/// What the text under a chat row's title says.
+public enum ChatRowSubtitle: Sendable, Hashable {
+    /// The chat is active; the preview of its last message, shown as is.
+    case preview(String)
+    /// The chat is active and has no message yet.
+    case noMessages
+    /// The user's leave is pending.
+    case leaving
+    /// The user left the chat.
+    case left
+    /// The user was removed from the chat.
+    case removed
+    /// The chat is left; how is not known (yet).
+    case leftUnknown
+
+    /// The English text, localized through the FeaturesChat table.
+    public var text: String {
+        switch self {
+        case .preview(let preview): preview
+        case .noMessages:
+            NSLocalizedString(
+                "No messages yet", tableName: "FeaturesChat", bundle: FeaturesLocalization.bundle, value: "No messages yet",
+                comment: "")
+        case .leaving:
+            NSLocalizedString(
+                "Leaving…", tableName: "FeaturesChat", bundle: FeaturesLocalization.bundle, value: "Leaving…",
+                comment: "")
+        case .left:
+            NSLocalizedString(
+                "You left", tableName: "FeaturesChat", bundle: FeaturesLocalization.bundle, value: "You left",
+                comment: "")
+        case .removed:
+            NSLocalizedString(
+                "You were removed", tableName: "FeaturesChat", bundle: FeaturesLocalization.bundle, value: "You were removed",
+                comment: "")
+        case .leftUnknown:
+            NSLocalizedString(
+                "Left", tableName: "FeaturesChat", bundle: FeaturesLocalization.bundle, value: "Left",
+                comment: "")
+        }
     }
 }
