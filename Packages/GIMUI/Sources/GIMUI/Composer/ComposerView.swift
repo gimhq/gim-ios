@@ -175,7 +175,8 @@ public struct ComposerView: View {
         .accessibilityLabel(
             viewModel.editTarget == nil
                 ? Text("Send message", tableName: "Chat", bundle: .module)
-                : Text("Save edit", tableName: "Chat", bundle: .module))
+                : Text("Save edit", tableName: "Chat", bundle: .module)
+        )
         .accessibilityIdentifier("composer.send")
     }
 

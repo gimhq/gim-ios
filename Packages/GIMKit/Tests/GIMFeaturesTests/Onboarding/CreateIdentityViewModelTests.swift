@@ -130,7 +130,7 @@ final class CreateIdentityViewModelTests: XCTestCase {
 
         await viewModel.submit()
 
-        XCTAssertEqual(viewModel.errorMessage, "This hub does not admit your account.")
+        XCTAssertEqual(viewModel.errorMessage, "This server doesn't accept your account.")
         XCTAssertTrue(created.results.isEmpty)
         let session = try await client.session()
         XCTAssertNil(session, "nothing is kept")
