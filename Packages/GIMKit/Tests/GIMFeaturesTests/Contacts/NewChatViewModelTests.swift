@@ -124,7 +124,7 @@ final class NewChatViewModelTests: XCTestCase {
 
         let chatId = await viewModel.startChat()
         XCTAssertNil(chatId)
-        XCTAssertEqual(viewModel.startError, "User not found")
+        XCTAssertEqual(viewModel.startError, "No one has this username.")
     }
 
     @MainActor
@@ -140,6 +140,6 @@ final class NewChatViewModelTests: XCTestCase {
 
         let chatId = await viewModel.startChat()
         XCTAssertNil(chatId)
-        XCTAssertEqual(viewModel.startError, "Luca Bianchi does not accept contacts from you.")
+        XCTAssertEqual(viewModel.startError, "Luca Bianchi doesn't accept messages from you.")
     }
 }
