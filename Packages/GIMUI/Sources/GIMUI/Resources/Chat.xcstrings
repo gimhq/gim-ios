@@ -361,6 +361,16 @@
         }
       }
     },
+    "Start a chat" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start a chat"
+          }
+        }
+      }
+    },
     "Start a chat. Search for a friend's username." : {
       "localizations" : {
         "en" : {
