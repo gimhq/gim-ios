@@ -15,4 +15,12 @@ final class AvatarStyleTests: XCTestCase {
         XCTAssertEqual(index, AvatarStyle.colorIndex(for: "user-sofia"))
         XCTAssertTrue(AvatarStyle.palette.indices.contains(index))
     }
+
+    func testPaletteMatchesTheCatalogAvatarCount() {
+        XCTAssertEqual(AvatarStyle.palette.count, ChatColors.avatarCount)
+    }
+
+    func testUIColorIsStableForTheSameId() {
+        XCTAssertEqual(AvatarStyle.uiColor(for: "user-sofia"), AvatarStyle.uiColor(for: "user-sofia"))
+    }
 }
