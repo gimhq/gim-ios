@@ -1,0 +1,86 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Can't remove your main server" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can't remove your main server"
+          }
+        }
+      }
+    },
+    "Can't remove your only server" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can't remove your only server"
+          }
+        }
+      }
+    },
+    "Connected" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connected"
+          }
+        }
+      }
+    },
+    "Not checked" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not checked"
+          }
+        }
+      }
+    },
+    "Removed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Removed"
+          }
+        }
+      }
+    },
+    "This server hosts %lld groups you own. Removing it doesn't move them: they keep running there, and you still reach them through your other servers." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This server hosts %lld groups you own. Removing it doesn't move them: they keep running there, and you still reach them through your other servers."
+          }
+        }
+      }
+    },
+    "This server hosts 1 group you own. Removing it doesn't move them: they keep running there, and you still reach them through your other servers." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This server hosts 1 group you own. Removing it doesn't move them: they keep running there, and you still reach them through your other servers."
+          }
+        }
+      }
+    },
+    "Try again later" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Try again later"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}
