@@ -110,11 +110,11 @@ public final class TimelineItemBuilder {
 
     /// "Alice is typing…", "Alice and Bob are typing…", "3 people are typing…"; `nil` when nobody types.
     public static func typingText(names: [String]) -> String? {
-        typingKind(names: names)?.text
+        typingKind(names: names.map(Optional.some))?.text
     }
 
-    /// What the typing row says for `names`; `nil` when nobody types.
-    public static func typingKind(names: [String]) -> TimelineTypingKind? {
+    /// What the typing row says for `names` (`nil` for a user whose name is unknown); `nil` when nobody types.
+    public static func typingKind(names: [String?]) -> TimelineTypingKind? {
         switch names.count {
         case 0: nil
         case 1: .one(names[0])
@@ -245,10 +245,10 @@ public enum TimelineDayLabelKind: Sendable, Hashable {
     }
 }
 
-/// What the typing row at the bottom of the timeline says.
+/// What the typing row at the bottom of the timeline says; a `nil` name is a user whose name is unknown.
 public enum TimelineTypingKind: Sendable, Hashable {
-    case one(String)
-    case two(String, String)
+    case one(String?)
+    case two(String?, String?)
     /// Three or more people.
     case many(count: Int)
 
@@ -256,12 +256,16 @@ public enum TimelineTypingKind: Sendable, Hashable {
     public var text: String {
         switch self {
         case .one(let name):
-            String(format: chatText("%@ is typing…"), name)
+            String(format: chatText("%@ is typing…"), Self.name(name))
         case .two(let first, let second):
-            String(format: chatText("%@ and %@ are typing…"), first, second)
+            String(format: chatText("%@ and %@ are typing…"), Self.name(first), Self.name(second))
         case .many(let count):
             String(format: chatText("%lld people are typing…"), Int64(count))
         }
+    }
+
+    private static func name(_ name: String?) -> String {
+        name ?? chatText("Someone")
     }
 }
 

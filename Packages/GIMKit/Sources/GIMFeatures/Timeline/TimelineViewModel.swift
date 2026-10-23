@@ -19,6 +19,8 @@ public final class TimelineViewModel {
     public private(set) var lastChange = TimelineChangeSet.reset
     /// Who is typing, for the navigation subtitle; the same text is in the typing row.
     public private(set) var typingText: String?
+    /// What `typingText` says; a user without a known name is `nil` ("Someone").
+    public private(set) var typingKind: TimelineTypingKind?
     /// True until the first timeline arrives.
     public private(set) var isLoading = true
     /// Whether gim-core may have older history; false once `paginateBackwards` reports none.
@@ -288,7 +290,8 @@ public final class TimelineViewModel {
     }
 
     private func rebuild(isReset: Bool) {
-        typingText = TimelineItemBuilder.typingText(names: typingUserIds.map { names[$0] ?? "Someone" })
+        typingKind = TimelineItemBuilder.typingKind(names: typingUserIds.map { names[$0] })
+        typingText = typingKind?.text
         let newItems = builder.build(
             source, isGroup: isGroup, typingText: typingText, unavailableMedia: unavailableMedia,
             ownUserId: client.userId(), names: names)

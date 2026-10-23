@@ -8,12 +8,16 @@ final class TimelineTextKindsTests: XCTestCase {
         XCTAssertEqual(TimelineTypingKind.one("Alice").text, "Alice is typing…")
         XCTAssertEqual(TimelineTypingKind.two("Alice", "Bob").text, "Alice and Bob are typing…")
         XCTAssertEqual(TimelineTypingKind.many(count: 3).text, "3 people are typing…")
+        XCTAssertEqual(TimelineTypingKind.one(nil).text, "Someone is typing…")
+        XCTAssertEqual(TimelineTypingKind.two("Alice", nil).text, "Alice and Someone are typing…")
+        XCTAssertEqual(TimelineTypingKind.two(nil, nil).text, "Someone and Someone are typing…")
     }
 
     func testTypingKindFollowsTheNames() {
         XCTAssertNil(TimelineItemBuilder.typingKind(names: []))
         XCTAssertEqual(TimelineItemBuilder.typingKind(names: ["Alice"]), .one("Alice"))
         XCTAssertEqual(TimelineItemBuilder.typingKind(names: ["Alice", "Bob"]), .two("Alice", "Bob"))
+        XCTAssertEqual(TimelineItemBuilder.typingKind(names: [nil]), .one(nil))
         XCTAssertEqual(TimelineItemBuilder.typingKind(names: ["Alice", "Bob", "Carol", "Dan"]), .many(count: 4))
     }
 

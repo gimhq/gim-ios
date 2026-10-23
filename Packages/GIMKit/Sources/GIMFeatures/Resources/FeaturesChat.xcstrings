@@ -141,6 +141,16 @@
         }
       }
     },
+    "Someone" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Someone"
+          }
+        }
+      }
+    },
     "This file couldn't be read." : {
       "localizations" : {
         "en" : {
