@@ -95,8 +95,12 @@
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .navigationTitle(Text("Processed push", tableName: "Common", bundle: .module))
                 .toolbar {
-                    Button { dismiss() } label: { Text("Done", tableName: "Common", bundle: .module) }
-                        .accessibilityIdentifier("debug.push.done")
+                    Button {
+                        dismiss()
+                    } label: {
+                        Text("Done", tableName: "Common", bundle: .module)
+                    }
+                    .accessibilityIdentifier("debug.push.done")
                 }
             }
         }
