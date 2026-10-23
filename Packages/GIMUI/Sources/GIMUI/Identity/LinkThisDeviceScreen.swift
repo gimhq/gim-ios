@@ -5,7 +5,7 @@ import UIKit
 /// New device: links this device to an existing one by QR code (`startLink`, `waitLink`, `confirmLink`).
 struct LinkThisDeviceScreen: View {
     @State private var viewModel: LinkThisDeviceViewModel
-    /// Bumped by "Try Again" to restart the link task.
+    /// Bumped by "Try again" to restart the link task.
     @State private var attempt = 0
     @Environment(\.dismiss) private var dismiss
 
@@ -21,7 +21,7 @@ struct LinkThisDeviceScreen: View {
             .padding()
             .frame(maxWidth: .infinity)
         }
-        .navigationTitle("Link Device")
+        .navigationTitle(Text("Link device", tableName: "Devices", bundle: .module))
         .navigationBarBackButtonHidden(viewModel.isConfirming)
         .task(id: attempt) { await viewModel.start() }
         .onChange(of: viewModel.step) { _, step in
@@ -43,11 +43,13 @@ struct LinkThisDeviceScreen: View {
             comparing(sas: sas)
         case .failed(let message):
             ContentUnavailableView {
-                Label("Couldn't Link", systemImage: "exclamationmark.triangle")
+                Label(
+                    String(localized: "Couldn't link", table: "Devices", bundle: .module),
+                    systemImage: "exclamationmark.triangle")
             } description: {
                 Text(message)
             } actions: {
-                Button("Try Again") { attempt += 1 }
+                Button(String(localized: "Try again", table: "Common", bundle: .module)) { attempt += 1 }
                     .buttonStyle(.borderedProminent)
                     .accessibilityIdentifier("link.retry")
             }
@@ -58,8 +60,11 @@ struct LinkThisDeviceScreen: View {
 
     private func waiting(qrString: String) -> some View {
         VStack(spacing: 24) {
-            Text("On your other device, open Settings, choose Link a New Device and scan this code.")
-                .multilineTextAlignment(.center)
+            Text(
+                "On your other device, open Settings, choose Link a new device and scan this code.",
+                tableName: "Devices", bundle: .module
+            )
+            .multilineTextAlignment(.center)
             QRCodeView(text: qrString)
                 .frame(width: 240, height: 240)
                 .padding(12)
@@ -68,24 +73,27 @@ struct LinkThisDeviceScreen: View {
             Button {
                 UIPasteboard.general.string = qrString
             } label: {
-                Label("Copy Link Code", systemImage: "doc.on.doc")
+                Label(String(localized: "Copy link code", table: "Devices", bundle: .module), systemImage: "doc.on.doc")
             }
-            .accessibilityHint("Copies the code to paste on your other device")
+            .accessibilityHint(
+                Text("Copies the code to paste on your other device", tableName: "Devices", bundle: .module)
+            )
             .accessibilityIdentifier("link.copy")
             HStack(spacing: 8) {
                 ProgressView()
-                Text("Waiting for your other device…").foregroundStyle(.secondary)
+                Text("Waiting for your other device…", tableName: "Devices", bundle: .module)
+                    .foregroundStyle(.secondary)
             }
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("link.waiting")
-            Button("Cancel", role: .cancel) { dismiss() }
+            Button(String(localized: "Cancel", table: "Common", bundle: .module), role: .cancel) { dismiss() }
                 .accessibilityIdentifier("link.cancel")
         }
     }
 
     private func comparing(sas: String) -> some View {
         VStack(spacing: 24) {
-            Text("Check that your other device shows the same code.")
+            Text("Check that your other device shows the same code.", tableName: "Devices", bundle: .module)
                 .multilineTextAlignment(.center)
             Text(sas)
                 .font(.system(size: 44, weight: .semibold, design: .monospaced))
@@ -99,14 +107,14 @@ struct LinkThisDeviceScreen: View {
             Button {
                 confirm(codesMatch: true)
             } label: {
-                Text("Codes Match").bold().frame(maxWidth: .infinity)
+                Text("Codes match", tableName: "Devices", bundle: .module).bold().frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
             .accessibilityIdentifier("link.match")
             Button(role: .destructive) {
                 confirm(codesMatch: false)
             } label: {
-                Text("Codes Don't Match").frame(maxWidth: .infinity)
+                Text("Codes don't match", tableName: "Devices", bundle: .module).frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
             .accessibilityIdentifier("link.mismatch")

@@ -14,20 +14,24 @@ struct AddHubScreen: View {
     var body: some View {
         Form {
             Section {
-                TextField("https://hub.example.eu", text: $viewModel.url)
-                    .textContentType(.URL)
-                    .keyboardType(.URL)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .focused($focusesUrl)
-                    .accessibilityIdentifier("addHub.url")
-                    .submitLabel(.done)
-                    .onSubmit(submit)
+                TextField(text: $viewModel.url) {
+                    Text("https://hub.example.eu", tableName: "Hubs", bundle: .module)
+                }
+                .textContentType(.URL)
+                .keyboardType(.URL)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .focused($focusesUrl)
+                .accessibilityIdentifier("addHub.url")
+                .submitLabel(.done)
+                .onSubmit(submit)
                 ValidationMessage(text: viewModel.urlError)
             } header: {
-                Text("Hub Address")
+                Text("Server address", tableName: "Hubs", bundle: .module)
             } footer: {
-                Text("Your messages are also kept on this hub, and it takes over while your other hubs are down.")
+                Text(
+                    "Your messages are also kept on this server. It takes over when your other servers are down.",
+                    tableName: "Hubs", bundle: .module)
             }
 
             Section {
@@ -37,7 +41,7 @@ struct AddHubScreen: View {
                         if viewModel.isSubmitting {
                             ProgressView()
                         } else {
-                            Text("Add Hub").bold()
+                            Text("Add server", tableName: "Hubs", bundle: .module).bold()
                         }
                         Spacer()
                     }
@@ -51,7 +55,7 @@ struct AddHubScreen: View {
             }
         }
         .scrollDismissesKeyboard(.interactively)
-        .navigationTitle("Add Hub")
+        .navigationTitle(Text("Add server", tableName: "Hubs", bundle: .module))
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { focusesUrl = true }
         .onChange(of: viewModel.addedHub) { _, hub in
