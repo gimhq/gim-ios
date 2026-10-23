@@ -89,27 +89,37 @@ public final class TimelineItemBuilder {
 
     /// "Today", "Yesterday", the weekday and date this year, otherwise the full date.
     public func dayLabel(_ dayStartMs: UInt64) -> String {
+        dayLabelKind(dayStartMs).text
+    }
+
+    /// What the day separator says: today, yesterday, or the formatted date.
+    public func dayLabelKind(_ dayStartMs: UInt64) -> TimelineDayLabelKind {
         let date = Date(epochMilliseconds: dayStartMs)
         let today = now()
-        if calendar.isDate(date, inSameDayAs: today) { return "Today" }
+        if calendar.isDate(date, inSameDayAs: today) { return .today }
         if let yesterday = calendar.date(byAdding: .day, value: -1, to: today),
             calendar.isDate(date, inSameDayAs: yesterday)
         {
-            return "Yesterday"
+            return .yesterday
         }
         if calendar.component(.year, from: date) == calendar.component(.year, from: today) {
-            return dayFormatter.string(from: date)
+            return .date(dayFormatter.string(from: date))
         }
-        return yearDayFormatter.string(from: date)
+        return .date(yearDayFormatter.string(from: date))
     }
 
     /// "Alice is typing…", "Alice and Bob are typing…", "3 people are typing…"; `nil` when nobody types.
     public static func typingText(names: [String]) -> String? {
+        typingKind(names: names)?.text
+    }
+
+    /// What the typing row says for `names`; `nil` when nobody types.
+    public static func typingKind(names: [String]) -> TimelineTypingKind? {
         switch names.count {
         case 0: nil
-        case 1: "\(names[0]) is typing…"
-        case 2: "\(names[0]) and \(names[1]) are typing…"
-        default: "\(names.count) people are typing…"
+        case 1: .one(names[0])
+        case 2: .two(names[0], names[1])
+        default: .many(count: names.count)
         }
     }
 
@@ -120,22 +130,43 @@ public final class TimelineItemBuilder {
         userName: String, change: MembershipChangeKind, userId: String, actorUserId: String?, ownUserId: String?,
         names: [String: String]
     ) -> String {
+        membershipKind(
+            userName: userName, change: change, userId: userId, actorUserId: actorUserId, ownUserId: ownUserId,
+            names: names
+        ).text
+    }
+
+    /// What a membership change row says, with the users named as in `membershipText`.
+    public static func membershipKind(
+        userName: String, change: MembershipChangeKind, userId: String, actorUserId: String?, ownUserId: String?,
+        names: [String: String]
+    ) -> TimelineMembershipKind {
         func name(_ id: String) -> String {
             names[id] ?? (id == userId ? UserLabel.name(userName) : UserLabel.shortUserId(id))
         }
         let isOwn = userId == ownUserId
-        let user = isOwn ? "you" : name(userId)
+        let user = name(userId)
         let actor = actorUserId.flatMap { $0 == userId ? nil : $0 }
         switch change {
         case .left:
-            return isOwn ? "You left" : "\(user) left"
+            return isOwn ? .youLeft : .left(user: user)
         case .added:
-            guard let actor else { return isOwn ? "You were added" : "\(user) was added" }
-            return actor == ownUserId ? "You added \(user)" : "\(name(actor)) added \(user)"
+            guard let actor else { return isOwn ? .youWereAdded : .wasAdded(user: user) }
+            if isOwn { return .addedYou(actor: name(actor)) }
+            return actor == ownUserId ? .youAdded(user: user) : .added(actor: name(actor), user: user)
         case .removed:
-            guard let actor else { return isOwn ? "You were removed" : "\(user) was removed" }
-            if isOwn { return "You were removed by \(name(actor))" }
-            return actor == ownUserId ? "You removed \(user)" : "\(name(actor)) removed \(user)"
+            guard let actor else { return isOwn ? .youWereRemoved : .wasRemoved(user: user) }
+            if isOwn { return .youWereRemovedBy(actor: name(actor)) }
+            return actor == ownUserId ? .youRemoved(user: user) : .removed(actor: name(actor), user: user)
+        }
+    }
+
+    /// The placeholder shown instead of deleted or unsupported content; `nil` for content that is shown.
+    public static func placeholderKind(for content: MessageContent) -> MessagePlaceholderKind? {
+        switch content {
+        case .deleted: .deleted
+        case .unsupported: .unsupported
+        case .text, .image, .file: nil
         }
     }
 
@@ -165,13 +196,13 @@ public final class TimelineItemBuilder {
             body = .image(media: media, width: width, height: height, caption: caption)
         case .file(let media, let fileName, let caption):
             body = .file(
-                media: media, fileName: fileName ?? "File",
+                media: media, fileName: fileName ?? MessagePreviewKind.file.text,
                 sizeText: byteFormatter.string(fromByteCount: Int64(media.size)),
                 caption: caption)
         case .deleted:
-            body = .placeholder("This message was deleted")
+            body = .placeholder(MessagePlaceholderKind.deleted.text)
         case .unsupported:
-            body = .placeholder("This message can't be shown in this version")
+            body = .placeholder(MessagePlaceholderKind.unsupported.text)
         }
         return TimelineMessageRow(
             message: message, body: body,
@@ -189,5 +220,96 @@ public final class TimelineItemBuilder {
         var reply = reply
         reply.senderName = UserLabel.name(reply.senderName)
         return reply
+    }
+}
+
+/// `key` from the FeaturesChat table; the key is the English text.
+private func chatText(_ key: String) -> String {
+    NSLocalizedString(key, tableName: "FeaturesChat", bundle: FeaturesLocalization.bundle, value: key, comment: "")
+}
+
+/// What a day separator says.
+public enum TimelineDayLabelKind: Sendable, Hashable {
+    case today
+    case yesterday
+    /// Any other day, formatted for the builder's locale.
+    case date(String)
+
+    /// The English text, localized through the FeaturesChat table.
+    public var text: String {
+        switch self {
+        case .today: chatText("Today")
+        case .yesterday: chatText("Yesterday")
+        case .date(let date): date
+        }
+    }
+}
+
+/// What the typing row at the bottom of the timeline says.
+public enum TimelineTypingKind: Sendable, Hashable {
+    case one(String)
+    case two(String, String)
+    /// Three or more people.
+    case many(count: Int)
+
+    /// The English text, localized through the FeaturesChat table.
+    public var text: String {
+        switch self {
+        case .one(let name):
+            String(format: chatText("%@ is typing…"), name)
+        case .two(let first, let second):
+            String(format: chatText("%@ and %@ are typing…"), first, second)
+        case .many(let count):
+            String(format: chatText("%lld people are typing…"), Int64(count))
+        }
+    }
+}
+
+/// What a membership change row says; `user` is the member who changed, `actor` who changed them.
+public enum TimelineMembershipKind: Sendable, Hashable {
+    case youLeft
+    case left(user: String)
+    case youWereAdded
+    case wasAdded(user: String)
+    case youAdded(user: String)
+    case addedYou(actor: String)
+    case added(actor: String, user: String)
+    case youWereRemoved
+    case wasRemoved(user: String)
+    case youWereRemovedBy(actor: String)
+    case youRemoved(user: String)
+    case removed(actor: String, user: String)
+
+    /// The English text, localized through the FeaturesChat table.
+    public var text: String {
+        switch self {
+        case .youLeft: chatText("You left")
+        case .left(let user): String(format: chatText("%@ left"), user)
+        case .youWereAdded: chatText("You were added")
+        case .wasAdded(let user): String(format: chatText("%@ was added"), user)
+        case .youAdded(let user): String(format: chatText("You added %@"), user)
+        case .addedYou(let actor): String(format: chatText("%@ added you"), actor)
+        case .added(let actor, let user): String(format: chatText("%@ added %@"), actor, user)
+        case .youWereRemoved: chatText("You were removed")
+        case .wasRemoved(let user): String(format: chatText("%@ was removed"), user)
+        case .youWereRemovedBy(let actor): String(format: chatText("You were removed by %@"), actor)
+        case .youRemoved(let user): String(format: chatText("You removed %@"), user)
+        case .removed(let actor, let user): String(format: chatText("%@ removed %@"), actor, user)
+        }
+    }
+}
+
+/// What a message bubble shows instead of content that can't be shown.
+public enum MessagePlaceholderKind: Sendable, Hashable {
+    case deleted
+    /// Content this version can't show.
+    case unsupported
+
+    /// The English text, localized through the FeaturesChat table.
+    public var text: String {
+        switch self {
+        case .deleted: chatText("This message was deleted")
+        case .unsupported: chatText("This message can't be shown in this version")
+        }
     }
 }
