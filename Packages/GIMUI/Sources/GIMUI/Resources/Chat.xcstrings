@@ -341,6 +341,16 @@
         }
       }
     },
+    "Shows the newest messages" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shows the newest messages"
+          }
+        }
+      }
+    },
     "Shows the original message" : {
       "localizations" : {
         "en" : {
@@ -367,6 +377,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Start a chat. Search for a friend's username."
+          }
+        }
+      }
+    },
+    "Touch and hold for options" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Touch and hold for options"
           }
         }
       }
