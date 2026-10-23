@@ -70,7 +70,8 @@ final class RestoreViewModelTests: XCTestCase {
             XCTAssertEqual(viewModel.recoveryCode, validCode)
             XCTAssertEqual(
                 viewModel.parsed,
-                RecoveryKit.Parsed(userId: validUserId, recoveryCode: validCode.replacingOccurrences(of: "-", with: "")))
+                RecoveryKit.Parsed(userId: validUserId, recoveryCode: validCode.replacingOccurrences(of: "-", with: ""))
+            )
             XCTAssertNil(viewModel.kitError)
             XCTAssertTrue(viewModel.showsFields)
         }
@@ -131,7 +132,8 @@ final class RestoreViewModelTests: XCTestCase {
         let (viewModel, registered) = makeViewModel { client }
         // The fake's user IDs are not real ones, so the kit yields only the code and the ID is typed.
         viewModel.kitText = RecoveryKit.format(userId: userId, recoveryCode: code.lowercased(), labels: english)
-        XCTAssertEqual(viewModel.recoveryCode, RecoveryKit.groupedRecoveryCode(RecoveryKit.normalizedRecoveryCode(code)))
+        XCTAssertEqual(
+            viewModel.recoveryCode, RecoveryKit.groupedRecoveryCode(RecoveryKit.normalizedRecoveryCode(code)))
         viewModel.userId = "  \(userId.uppercased())\n"
 
         await viewModel.submit()
