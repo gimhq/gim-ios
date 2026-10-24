@@ -163,6 +163,8 @@ public struct OnboardingContext {
     public let client: @MainActor () async throws -> any GimClientAPI
     /// Drops the client after it wiped itself (e.g. a rejected device link); the next `client()` creates a new one.
     public let discardClient: @MainActor () -> Void
+    /// Formats, parses and checks the recovery kit.
+    public let recoveryKit: any RecoveryKitFunctions
     /// Signs in with a client that has a session.
     public let onRegistered: @MainActor (Registration) -> Void
 
@@ -170,11 +172,13 @@ public struct OnboardingContext {
         config: ClientConfig,
         client: @escaping @MainActor () async throws -> any GimClientAPI,
         discardClient: @escaping @MainActor () -> Void,
+        recoveryKit: any RecoveryKitFunctions,
         onRegistered: @escaping @MainActor (Registration) -> Void
     ) {
         self.config = config
         self.client = client
         self.discardClient = discardClient
+        self.recoveryKit = recoveryKit
         self.onRegistered = onRegistered
     }
 }
@@ -210,17 +214,20 @@ public final class OnboardingViewModel {
 
     private let factory: any GimClientFactory
     private let hooks: any PlatformHooks
+    private let recoveryKit: any RecoveryKitFunctions
     private let onRegistered: @MainActor (Registration) -> Void
     @ObservationIgnored private var client: (any GimClientAPI)?
     @ObservationIgnored private var clientConfig: ClientConfig?
 
     /// - Parameters:
+    ///   - recoveryKit: formats, parses and checks the recovery kit for the create and restore flows.
     ///   - serverUrl: initial value of the server field.
     ///   - client: a client without a session already created for `serverUrl`; reused while the URL is unchanged.
     ///   - localStateReset: whether `client` discarded the local database when it was opened.
     public init(
         factory: any GimClientFactory,
         hooks: any PlatformHooks,
+        recoveryKit: any RecoveryKitFunctions,
         serverUrl: String = "",
         client: (any GimClientAPI)? = nil,
         localStateReset: Bool = false,
@@ -228,6 +235,7 @@ public final class OnboardingViewModel {
     ) {
         self.factory = factory
         self.hooks = hooks
+        self.recoveryKit = recoveryKit
         self.serverUrl = serverUrl
         self.onRegistered = onRegistered
         showsLocalStateResetNotice = localStateReset
@@ -275,6 +283,7 @@ public final class OnboardingViewModel {
                 self?.client = nil
                 self?.clientConfig = nil
             },
+            recoveryKit: recoveryKit,
             onRegistered: { [weak self] in self?.onRegistered($0) })
         self.context = context
         createIdentity =
@@ -297,7 +306,7 @@ public final class OnboardingViewModel {
             return
         }
         stage = .recoveryKit(
-            RecoveryKitViewModel(userId: userId, code: recoveryCode) { [weak self] in
+            RecoveryKitViewModel(userId: userId, code: recoveryCode, recoveryKit: context.recoveryKit) { [weak self] in
                 self?.stage = .claimHandle(claimHandle)
             })
     }

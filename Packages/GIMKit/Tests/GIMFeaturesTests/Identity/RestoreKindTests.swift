@@ -11,7 +11,7 @@ final class RestoreKindTests: XCTestCase {
     private func makeViewModel(client: @escaping @MainActor () async throws -> any GimClientAPI) -> RestoreViewModel {
         let context = OnboardingContext(
             config: ClientConfig(serverUrl: "https://gim.example.eu"), client: client, discardClient: {},
-            onRegistered: { _ in })
+            recoveryKit: FakeRecoveryKitFunctions(), onRegistered: { _ in })
         return RestoreViewModel(context: context)
     }
 
