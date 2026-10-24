@@ -3,8 +3,10 @@
 `Packages/GIMKit/Sources/GIMClientKit` mirrors the UniFFI Swift bindings of gim-core so that switching to the real
 `GIMCore.xcframework` is a mechanical swap.
 
-- Mirrored and vendored commit: gim-core `c1b7503`, GIMCore `0.1.0+c1b7503` (`bindings/gim-ffi/src/`, generated
+- Mirrored commit: gim-core `c1b7503` (`bindings/gim-ffi/src/`, generated
   `bindings/gim-ffi/generated/swift/GIMCore.swift`, contract in `docs/API.md`).
+- Vendored commit: gim-client-sdk `b86283e` (CI run 40038617133), GIMCore `0.1.0+b86283e`; the mirror covers it
+  (see "Changes since `16a5efa`" and "Changes since `c1b7503`").
 - Mirror sources: `GimClientAPI.swift` (objects, callback interfaces, hooks, `createClient`) and `Models.swift`
   (records, enums, diffs, errors).
 - Everything else in GIMClientKit (`Fake/`, `GimClientFactory`, `CoreGimClientFactory`) is app-level and stays after
@@ -13,24 +15,31 @@
 ## Records
 
 All records are structs with every field public and a memberwise `init` without default values, in field order,
-except `ClientConfig.mode`, which defaults to `nil` like the generated init.
+except `ClientConfig.mode` and `ClientConfig.metaServerUrl`, which default to `nil` like the generated init. Fields
+added after `c1b7503` (`MessagePreview.sendState`, `UserProfile.hasAvatar`, the account safety fields of
+`ChatSummary`) have mirror init defaults (`nil`, `false`, `0`) so existing call sites keep compiling; the generated
+inits have none.
 Generated records are `Equatable, Hashable` plus `extension …: Sendable`; the mirror declares `Sendable, Hashable`.
 
 | Mirror | GIMCore | Fields |
 |---|---|---|
-| `ClientConfig` | `ClientConfig` | `serverUrl`, `mode: ClientMode?` (`nil` is `app`) |
+| `ClientConfig` | `ClientConfig` | `serverUrl`, `mode: ClientMode?` (`nil` is `app`), `metaServerUrl: String?` (the gim meta server, gim-meta; `nil` until it is deployed, so `reportUser` fails and settings are not backed up) |
 | `PushRegistration` | `PushRegistration` | `provider`, `token`, `appId: String?`, `sandbox: Bool?`, `p256dh: String?`, `auth: String?` |
 | `NotificationContent` | `NotificationContent` | `chatId: String?`, `chatTitle: String?`, `senderUserId: String?`, `senderDisplayName: String?`, `body`, `messageId: String?`, `collapseId: String?`, `kind: NotificationKind`, `shouldDisplay`, `timestamp: UInt64` |
 | `Session` | `Session` | `userId`, `deviceId`, `handle` (empty until `claimHandle`), `displayName` |
 | `DeviceInfo` | `DeviceInfo` | `deviceId`, `createdAtMs: UInt64` (0 for revoked devices), `isCurrent`, `revoked` |
 | `HubInfo` | `HubInfo` | `hubId`, `url: String?`, `state: HubState`, `priority: UInt8`, `isPrimary`, `isHome`, `signedIn` |
-| `UserProfile` | `UserProfile` | `userId`, `handle`, `displayName` |
-| `ChatSummary` | `ChatSummary` | `chatId`, `kind`, `name`, `avatar: MediaRef?`, `lastMessage: MessagePreview?`, `unreadCount: UInt32`, `updatedAtMs: UInt64`, `memberCount: UInt32`, `state: ChatState` |
-| `MessagePreview` | `MessagePreview` | `senderName`, `text`, `sentAtMs: UInt64`, `isOwn` |
+| `UserProfile` | `UserProfile` | `userId`, `handle`, `displayName`, `hasAvatar` (get the photo with `fetchUserAvatar`) |
+| `ChatSummary` | `ChatSummary` | `chatId`, `kind`, `name`, `avatar: MediaRef?`, `lastMessage: MessagePreview?`, `unreadCount: UInt32`, `updatedAtMs: UInt64`, `memberCount: UInt32`, `state: ChatState`, `peer: UserProfile?` (direct chats: the other user), `mutedUntilMs: UInt64` (0: not muted, `mutedForever()`: until unmuted), `pinned`, `archived`, `blocked` (direct chat with a blocked user) |
+| `PrivacySettings` | `PrivacySettings` | `readReceipts`, `typingIndicators`, `blockedUserIds: [String]` |
+| `RecoveryRotation` | `RecoveryRotation` | `recoveryCode`, `unsyncedHubIds: [String]` |
+| `MessagePreview` | `MessagePreview` | `senderName`, `text`, `sentAtMs: UInt64`, `isOwn`, `sendState: SendState?` (own messages only; the mirror init defaults it to `nil`) |
 | `MessageItem` | `MessageItem` | `messageId`, `chatId`, `sender: UserProfile`, `isOwn`, `sentAtMs: UInt64`, `content`, `replyTo: ReplyPreview?`, `reactions: [ReactionGroup]`, `edited`, `sendState: SendState?` |
 | `MediaRef` | `MediaRef` | `chatId`, `messageId`, `mime`, `size: UInt64`, `hasThumbnail` |
 | `ReplyPreview` | `ReplyPreview` | `messageId`, `senderName`, `text` |
 | `ReactionGroup` | `ReactionGroup` | `emoji`, `count: UInt32`, `own` |
+| `RecoveryKitLabels` | `RecoveryKitLabels` | `title`, `accountId`, `recoveryKey`, `note` |
+| `ParsedRecoveryKit` | `ParsedRecoveryKit` | `userId: String?`, `recoveryCode: String?` (39 symbols, no separators) |
 
 ## Enums
 
@@ -46,6 +55,7 @@ Generated records are `Equatable, Hashable` plus `extension …: Sendable`; the 
 | `MessageContent` | `MessageContent` | `text(body:)`, `image(media:width:height:caption:)`, `file(media:fileName:caption:)`, `deleted`, `unsupported` |
 | `SendState` | `SendState` | `pending`, `sent`, `delivered`, `read`, `failed(reason:cause: SendFailure)` |
 | `SendFailure` | `SendFailure` | `userSuspended`, `userNotAdmitted`, `notAdmittedByPeer`, `rejected`, `other` |
+| `ReportReason` | `ReportReason` | `spam`, `harassment`, `inappropriate`, `scam`, `other` (mirror → core only) |
 | `ConnectionState` | `ConnectionState` | `offline`, `connecting`, `connected`, `syncing` |
 | `ChatListDiff` | `ChatListDiff` | `append(values:)`, `clear`, `pushFront(value:)`, `pushBack(value:)`, `popFront`, `popBack`, `insert(index:value:)`, `set(index:value:)`, `remove(index:)`, `truncate(length:)`, `reset(values:)` |
 | `TimelineDiff` | `TimelineDiff` | same cases as `ChatListDiff`, with `TimelineItem` values |
@@ -80,6 +90,8 @@ generated code writes the bare protocol name, which is the same type.
 | `protocol PendingApproval` | `open class PendingApproval: PendingApprovalProtocol` | Intentional: protocol instead of class. `deviceId() -> String`, `sas() -> String`. `RealGimClient.confirmApproval` only accepts the `RealPendingApproval` it created. |
 | `final class TaskHandle` | `open class TaskHandle: TaskHandleProtocol` | Intentional: concrete class with `init(onCancel:)`. `cancel()`, `isFinished() -> Bool`; releasing the last reference cancels, like the Rust `Drop`. No `TaskHandleProtocol` mirror. |
 | `createClient(config:hooks:) async throws -> any GimClientAPI` | `createClient(config:hooks:) async throws -> GimClient` | Mirror validates the URL like gim-core (`InvalidInput(reason: "server_url: …")`) and returns a demo `FakeGimClient` without a session that seeds the demo chats on `createIdentity`. |
+| `protocol RecoveryKitFunctions` | free functions `formatRecoveryKit(userId:recoveryCode:labels:)`, `parseRecoveryKit(text:)`, `recoveryKeyEnding(recoveryCode:)`, `matchesRecoveryKeyEnding(recoveryCode:typed:)` | Intentional: same names and labels as methods of a protocol, so Linux tests and previews can swap the implementation. See "Recovery kit". |
+| `mutedForever() -> UInt64` | `mutedForever() -> UInt64` | Same name and value (`UInt64.max`, gim-sdk `MUTED_FOREVER`); `CoreMappingTests.testMutedForeverMatchesGimCore` checks it. |
 | — | `coreVersion()`, `ciphersuiteName()` | Not mirrored; nothing uses them yet. |
 | — | `LocalTimeZoneImpl` | Generated wrapper for a Rust-implemented zone; gim-core never hands one to the app. |
 | — | `*Impl` classes, `NoHandle`, `uniffi*` | Generated plumbing, not mirrored. |
@@ -147,12 +159,73 @@ listener parameter spelling above.
 | `registerPush(registration:) async throws` | same |
 | `unregisterPush() async throws` | same |
 | `processPush(payload:) async throws -> NotificationContent` | same |
+| `ownProfile() async throws -> UserProfile?` | same |
+| `setAvatar(filePath:mime:) async throws` | same |
+| `removeAvatar() async throws` | same |
+| `fetchUserAvatar(userId:destPath:) async throws -> String` | same; `NotFound` without a photo |
+| `fetchChatAvatar(chatId:destPath:) async throws -> String` | same; `NotFound` without an avatar |
+| `privacy() async throws -> PrivacySettings` | same |
+| `setReadReceipts(enabled:) async throws` | same |
+| `setTypingIndicators(enabled:) async throws` | same |
+| `blockUser(userId:) async throws` | same; `InvalidInput` for the signed-in user |
+| `unblockUser(userId:) async throws` | same |
+| `setChatMuted(chatId:mutedUntilMs: UInt64) async throws` | same; `mutedForever()` for good, 0 to unmute |
+| `setChatPinned(chatId:pinned:) async throws` | same |
+| `setChatArchived(chatId:archived:) async throws` | same |
+| `reportUser(userId:reason: ReportReason, note: String?, messageIds: [String]) async throws -> String` | same; **needs the meta server** (`InvalidInput` without `ClientConfig.metaServerUrl`): keep it hidden in the UI until gim-meta is deployed |
+| `rotateRecoveryCode() async throws -> RecoveryRotation` | same |
+| `deleteAccount() async throws -> [String]` | same; returns the other hubs it could not reach. Deletes the meta server's data first when one is configured, so it works without one |
+
+The meta server (gim-meta, `ClientConfig.metaServerUrl`) is not deployed: the app passes `nil`. Without it
+`reportUser` fails with `InvalidInput` and the privacy settings (blocked users included) are not backed up, so they
+do not survive the loss of every device; per-chat settings are never backed up. `FakeGimClient.reportUser` needs no
+meta server and records the report in `reports`. The bridge maps `ClientConfig.metaServerUrl` 1:1.
 
 `chatMembers` has no listener in M1. `GroupInfoViewModel` queries it again when a `ChatListDiff` changes that chat or
 a `TimelineItem.membershipChange` arrives. When a query fails before any list has loaded it shows the error with
 `ChatSummary.memberCount` (no member list, no removal); a list that loaded before stays on later failures.
 Renaming a group goes `GroupInfoViewModel.saveName()` → `GimClientAPI.setGroupInfo(name:)` →
 `RealGimClient` → `GIMCore.GimClient.setGroupInfo`.
+
+## Recovery kit
+
+`RecoveryKitFunctions` (GIMClientKit) has two implementations:
+
+- `FakeRecoveryKitFunctions` (GIMClientKit, `Fake/`): a pure-Swift copy of gim-client-sdk
+  `crates/gim-sdk/src/recovery_kit.rs` for Linux tests and previews. GIMClientKit cannot import GIMFeatures, so it
+  keeps its own copy. Like the Rust code it counts Unicode scalars, not grapheme clusters.
+- `CoreRecoveryKitFunctions` (GIMPlatform, `Bridge/CoreRecoveryKit.swift`): calls the generated free functions and
+  maps `RecoveryKitLabels` / `ParsedRecoveryKit` in `CoreMapping`.
+
+`CoreMappingTests.testFakeRecoveryKitFunctionsMatchGimCore` runs the same vectors through both, so drift between the
+copy and gim-core fails the macOS tests.
+
+## Changes since `16a5efa`
+
+`b86283e` (gim-client-sdk main, vendored with `GIM_CORE_REPO=gimhq/gim-client-sdk scripts/sync-gim-core.sh
+40038617133`; the artifact's `Package.swift` is unchanged). Breaking rename: the server for settings backups and
+reports is now the gim meta server (gim-meta), and `ClientConfig`'s URL field is `metaServerUrl: String? = nil`; the
+mirror has used that name from the start and `CoreMapping` now passes it through. Otherwise only doc comments ("meta
+server") and the UniFFI checksums of `reportUser` and `deleteAccount` changed; no signature, enum case or error
+changed.
+
+## Changes since `c1b7503`
+
+`16a5efa` (gim-client-sdk, vendored with `scripts/sync-gim-core.sh 40023818869`; the vendored `Package.swift` adds
+macOS 15 and links SystemConfiguration, CoreFoundation, c++ and resolv). Diff of the generated `GIMCore.swift`, not
+yet mirrored: `ClientConfig` gained the optional meta server URL (renamed in `b86283e`, see above); `UserProfile` gained
+`hasAvatar`; `ChatSummary` gained `peer`, `mutedUntilMs`, `pinned`, `archived` and `blocked`; `MessagePreview` gained
+`sendState`; new records `PrivacySettings`, `RecoveryRotation`, `RecoveryKitLabels`, `ParsedRecoveryKit`, a new enum
+`ReportReason`; new `GimClient` methods `blockUser`, `unblockUser`, `privacy`, `setReadReceipts`,
+`setTypingIndicators`, `setChatMuted`, `setChatPinned`, `setChatArchived`, `reportUser`, `rotateRecoveryCode`,
+`deleteAccount`, `ownProfile`, `setAvatar`, `removeAvatar`, `fetchUserAvatar`, `fetchChatAvatar`; new functions
+`mutedForever`, `formatRecoveryKit`, `parseRecoveryKit`, `recoveryKeyEnding`, `matchesRecoveryKeyEnding`. No enum
+case and no callback interface changed. All of it is now mirrored, with the field renamed `metaServerUrl` in the
+mirror (see "GimClient methods"). `FakeGimClient` implements the new methods in memory (see its doc comment):
+blocking drops the blocked user's messages and typing, refuses chats with them and marks their direct chat; sends to
+a blocked chat are allowed (gim-core specifies no error); read receipts off stops own messages at `delivered`;
+typing indicators off hides peer typing; pinned chats come first; `rotateRecoveryCode` replaces the code
+`restoreFromRecovery` accepts; `deleteAccount` wipes like `signOut`, forgets the account and returns `[]`.
 
 ## Changes since `fa6f7e9`
 

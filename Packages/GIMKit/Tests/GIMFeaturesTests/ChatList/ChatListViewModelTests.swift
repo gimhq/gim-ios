@@ -465,6 +465,36 @@ private final class TimelineCountingClient: GimClientAPI, @unchecked Sendable {
     func processPush(payload: String) async throws -> NotificationContent {
         try await fake.processPush(payload: payload)
     }
+    func ownProfile() async throws -> UserProfile? { try await fake.ownProfile() }
+    func setAvatar(filePath: String, mime: String) async throws {
+        try await fake.setAvatar(filePath: filePath, mime: mime)
+    }
+    func removeAvatar() async throws { try await fake.removeAvatar() }
+    func fetchUserAvatar(userId: String, destPath: String) async throws -> String {
+        try await fake.fetchUserAvatar(userId: userId, destPath: destPath)
+    }
+    func fetchChatAvatar(chatId: String, destPath: String) async throws -> String {
+        try await fake.fetchChatAvatar(chatId: chatId, destPath: destPath)
+    }
+    func privacy() async throws -> PrivacySettings { try await fake.privacy() }
+    func setReadReceipts(enabled: Bool) async throws { try await fake.setReadReceipts(enabled: enabled) }
+    func setTypingIndicators(enabled: Bool) async throws { try await fake.setTypingIndicators(enabled: enabled) }
+    func blockUser(userId: String) async throws { try await fake.blockUser(userId: userId) }
+    func unblockUser(userId: String) async throws { try await fake.unblockUser(userId: userId) }
+    func setChatMuted(chatId: String, mutedUntilMs: UInt64) async throws {
+        try await fake.setChatMuted(chatId: chatId, mutedUntilMs: mutedUntilMs)
+    }
+    func setChatPinned(chatId: String, pinned: Bool) async throws {
+        try await fake.setChatPinned(chatId: chatId, pinned: pinned)
+    }
+    func setChatArchived(chatId: String, archived: Bool) async throws {
+        try await fake.setChatArchived(chatId: chatId, archived: archived)
+    }
+    func reportUser(userId: String, reason: ReportReason, note: String?, messageIds: [String]) async throws -> String {
+        try await fake.reportUser(userId: userId, reason: reason, note: note, messageIds: messageIds)
+    }
+    func rotateRecoveryCode() async throws -> RecoveryRotation { try await fake.rotateRecoveryCode() }
+    func deleteAccount() async throws -> [String] { try await fake.deleteAccount() }
 }
 
 /// Timeline whose subscriptions are counted by `TimelineCountingClient`.
@@ -589,6 +619,70 @@ private final class FailingChatListClient: GimClientAPI {
     }
 
     func processPush(payload: String) async throws -> NotificationContent {
+        throw GimError.NotRegistered
+    }
+
+    func ownProfile() async throws -> UserProfile? {
+        throw GimError.NotRegistered
+    }
+
+    func setAvatar(filePath: String, mime: String) async throws {
+        throw GimError.NotRegistered
+    }
+
+    func removeAvatar() async throws {
+        throw GimError.NotRegistered
+    }
+
+    func fetchUserAvatar(userId: String, destPath: String) async throws -> String {
+        throw GimError.NotRegistered
+    }
+
+    func fetchChatAvatar(chatId: String, destPath: String) async throws -> String {
+        throw GimError.NotRegistered
+    }
+
+    func privacy() async throws -> PrivacySettings {
+        throw GimError.NotRegistered
+    }
+
+    func setReadReceipts(enabled: Bool) async throws {
+        throw GimError.NotRegistered
+    }
+
+    func setTypingIndicators(enabled: Bool) async throws {
+        throw GimError.NotRegistered
+    }
+
+    func blockUser(userId: String) async throws {
+        throw GimError.NotRegistered
+    }
+
+    func unblockUser(userId: String) async throws {
+        throw GimError.NotRegistered
+    }
+
+    func setChatMuted(chatId: String, mutedUntilMs: UInt64) async throws {
+        throw GimError.NotRegistered
+    }
+
+    func setChatPinned(chatId: String, pinned: Bool) async throws {
+        throw GimError.NotRegistered
+    }
+
+    func setChatArchived(chatId: String, archived: Bool) async throws {
+        throw GimError.NotRegistered
+    }
+
+    func reportUser(userId: String, reason: ReportReason, note: String?, messageIds: [String]) async throws -> String {
+        throw GimError.NotRegistered
+    }
+
+    func rotateRecoveryCode() async throws -> RecoveryRotation {
+        throw GimError.NotRegistered
+    }
+
+    func deleteAccount() async throws -> [String] {
         throw GimError.NotRegistered
     }
 }

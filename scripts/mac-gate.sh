@@ -204,7 +204,7 @@ package_test() {
         fi
         # shellcheck disable=SC2086
         run "$1-test" xcodebuild test -scheme "$scheme" -destination "$destination" -derivedDataPath "$derived" \
-            -resultBundlePath "$results/$1-test.xcresult" $signing
+            -resultBundlePath "$results/$1-test.xcresult" -testLanguage en -testRegion US $signing
     )
 }
 
