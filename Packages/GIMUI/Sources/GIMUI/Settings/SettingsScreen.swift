@@ -4,7 +4,7 @@ import PhotosUI
 import SwiftUI
 import UIKit
 
-/// The root of the Settings stack: profile, devices, notifications, appearance, language, servers, help and sign-out.
+/// The root of the Settings stack: profile, devices, privacy, notifications, appearance, language, servers, help and sign-out.
 struct SettingsScreen: View {
     let client: any GimClientAPI
     let session: Session?
@@ -49,6 +49,7 @@ struct SettingsScreen: View {
             if let session {
                 profileSection(session)
                 accountSection
+                privacySection
             }
             Section {
                 Button {
@@ -318,6 +319,19 @@ struct SettingsScreen: View {
             .accessibilityIdentifier("settings.linkDevice")
         } header: {
             Text("Account and devices", tableName: "Settings", bundle: .module)
+        }
+    }
+
+    private var privacySection: some View {
+        Section {
+            NavigationLink {
+                PrivacyScreen(client: client)
+            } label: {
+                Text("Privacy settings", tableName: "Settings", bundle: .module)
+            }
+            .accessibilityIdentifier("settings.privacy")
+        } header: {
+            Text("Privacy", tableName: "Settings", bundle: .module)
         }
     }
 
