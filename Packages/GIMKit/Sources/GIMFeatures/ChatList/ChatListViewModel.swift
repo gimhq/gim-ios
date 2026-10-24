@@ -7,40 +7,39 @@ import Observation
 @MainActor
 @Observable
 public final class ChatListViewModel {
-    public private(set) var rows: [ChatRow] = []
+    /// The chats that are not archived, in the client's order: pinned first, then by recent activity.
+    public var rows: [ChatRow] { allRows.filter { !$0.isArchived } }
+    /// The archived chats, in the client's order.
+    public var archivedRows: [ChatRow] { allRows.filter(\.isArchived) }
+    public var hasArchived: Bool { allRows.contains(where: \.isArchived) }
     public private(set) var connectionState: ConnectionState = .offline
     /// True until the first chat list arrives.
     public private(set) var isLoading = true
     /// Set when subscribing failed.
     public private(set) var errorMessage: String?
+    /// Set when pinning, muting or archiving a chat failed.
+    public private(set) var actionErrorMessage: String?
 
+    /// Every chat as the client lists it, archived ones included.
+    private var allRows: [ChatRow] = []
     private let client: any GimClientAPI
     private let dateFormatter: RelativeDateFormatter
+    private let now: () -> Date
     /// How the user left each left chat whose timeline was looked up: the newest own `left` or `removed` change.
     private var exits: [String: MembershipChangeKind] = [:]
     /// Lookups of `exits`, by chat id; kept once finished so each left chat is looked up once.
     @ObservationIgnored private var exitLookups: [String: Task<Void, Never>] = [:]
-    /// How many own-last-message timelines are followed at once; a chat beyond the cap closes the oldest lookup.
-    public static let maxStatusLookups = 20
-    /// Status of the own last message of each active chat whose timeline was looked up, by chat id.
-    private var lastMessageStatuses: [String: MessageStatus] = [:]
-    /// Lookups of `lastMessageStatuses`, by chat id, each with the `lastMessageSentAtMs` it was started for.
-    @ObservationIgnored private var statusLookups: [String: StatusLookup] = [:]
-    /// Start order of the last status lookup; lower is older.
-    @ObservationIgnored private var statusLookupOrder = 0
     @ObservationIgnored private var listTask: Task<Void, Never>?
     @ObservationIgnored private var connectionTask: Task<Void, Never>?
 
-    private struct StatusLookup {
-        var sentAtMs: UInt64?
-        var order: Int
-        /// `nil` once the cap closed the lookup; it reopens when a slot is free.
-        var task: Task<Void, Never>?
-    }
-
-    public init(client: any GimClientAPI, dateFormatter: RelativeDateFormatter = RelativeDateFormatter()) {
+    /// - Parameter now: the clock for mutes: when they end and whether a row is muted.
+    public init(
+        client: any GimClientAPI, dateFormatter: RelativeDateFormatter = RelativeDateFormatter(),
+        now: @escaping () -> Date = Date.init
+    ) {
         self.client = client
         self.dateFormatter = dateFormatter
+        self.now = now
     }
 
     /// The text under the row's title: `subtitleKind(for:)` in the FeaturesChat table.
@@ -63,18 +62,17 @@ public final class ChatListViewModel {
         }
     }
 
-    /// Status ticks of the row's last message: set once the chat is active, its last message is the user's own and
-    /// the lookup in the chat's timeline finished.
+    /// Status ticks of the row's last message: set while the chat is active and its last message is the user's own,
+    /// from the preview's send state.
     public func lastMessageStatus(for row: ChatRow) -> MessageStatus? {
-        guard row.state == .active, row.lastMessageIsOwn else { return nil }
-        return lastMessageStatuses[row.id]
+        guard row.state == .active else { return nil }
+        return row.lastMessageStatus
     }
 
     deinit {
         listTask?.cancel()
         connectionTask?.cancel()
         for lookup in exitLookups.values { lookup.cancel() }
-        for lookup in statusLookups.values { lookup.task?.cancel() }
     }
 
     /// Subscribes to the chat list and the connection state. Does nothing while already subscribed.
@@ -102,14 +100,12 @@ public final class ChatListViewModel {
         }
     }
 
-    /// Cancels both subscriptions and the status lookups.
+    /// Cancels both subscriptions.
     public func stop() {
         listTask?.cancel()
         connectionTask?.cancel()
         listTask = nil
         connectionTask = nil
-        for lookup in statusLookups.values { lookup.task?.cancel() }
-        statusLookups = [:]
     }
 
     /// Subscribes again; the new subscription starts with a full reset.
@@ -121,21 +117,52 @@ public final class ChatListViewModel {
     private func apply(_ diffs: [ChatListDiff]) {
         isLoading = false
         let formatter = dateFormatter
-        let rowDiffs = diffs.map { $0.vectorDiff.map { ChatRow(summary: $0, dateFormatter: formatter) } }
+        let date = now()
+        let rowDiffs = diffs.map { $0.vectorDiff.map { ChatRow(summary: $0, dateFormatter: formatter, now: date) } }
         do {
-            try DiffApplier.apply(rowDiffs, to: &rows)
+            try DiffApplier.apply(rowDiffs, to: &allRows)
         } catch {
             // Out of sync with the core; a new subscription starts with a reset.
             refresh()
             return
         }
         lookUpExits()
-        lookUpLastMessageStatuses()
+    }
+
+    public func setPinned(_ row: ChatRow, _ pinned: Bool) async {
+        await perform { try await $0.setChatPinned(chatId: row.id, pinned: pinned) }
+    }
+
+    public func mute(_ row: ChatRow, _ option: ChatMuteOption) async {
+        let mutedUntilMs = option.mutedUntilMs(now: now())
+        await perform { try await $0.setChatMuted(chatId: row.id, mutedUntilMs: mutedUntilMs) }
+    }
+
+    public func unmute(_ row: ChatRow) async {
+        await perform { try await $0.setChatMuted(chatId: row.id, mutedUntilMs: 0) }
+    }
+
+    public func setArchived(_ row: ChatRow, _ archived: Bool) async {
+        await perform { try await $0.setChatArchived(chatId: row.id, archived: archived) }
+    }
+
+    public func dismissActionError() {
+        actionErrorMessage = nil
+    }
+
+    /// Runs a chat setting change; the list follows through the subscription.
+    private func perform(_ action: (any GimClientAPI) async throws -> Void) async {
+        actionErrorMessage = nil
+        do {
+            try await action(client)
+        } catch {
+            actionErrorMessage = await ErrorPresenter.message(for: error, client: client)
+        }
     }
 
     /// Looks up how the user left each newly left chat; forgets chats that are no longer left.
     private func lookUpExits() {
-        let leftIds = Set(rows.filter { $0.state == .left }.map(\.id))
+        let leftIds = Set(allRows.filter { $0.state == .left }.map(\.id))
         for (chatId, lookup) in exitLookups where !leftIds.contains(chatId) {
             lookup.cancel()
             exitLookups[chatId] = nil
@@ -164,62 +191,6 @@ public final class ChatListViewModel {
         for case .membershipChange(_, let change, _, let userId, _) in items.reversed()
         where userId == ownUserId && change != .added {
             return change
-        }
-        return nil
-    }
-
-    /// Follows the status of the own last message of each active chat; a chat is looked up again when its last
-    /// message changes and forgotten when its last message is someone else's or it is no longer active. At most
-    /// `maxStatusLookups` lookups are open: a chat that newly qualifies closes the oldest, a chat closed by the cap
-    /// reopens only into a free slot.
-    private func lookUpLastMessageStatuses() {
-        let qualifying = rows.filter { $0.state == .active && $0.lastMessageIsOwn }
-        let wanted = Dictionary(
-            qualifying.map { ($0.id, $0.lastMessageSentAtMs) }, uniquingKeysWith: { _, last in last })
-        for (chatId, lookup) in statusLookups where wanted[chatId] != .some(lookup.sentAtMs) {
-            lookup.task?.cancel()
-            statusLookups[chatId] = nil
-            lastMessageStatuses[chatId] = nil
-        }
-        var openCount = statusLookups.values.filter { $0.task != nil }.count
-        for row in qualifying {
-            if let lookup = statusLookups[row.id] {
-                guard lookup.task == nil, openCount < Self.maxStatusLookups else { continue }
-            } else if openCount >= Self.maxStatusLookups,
-                let oldest = statusLookups.filter({ $0.value.task != nil }).min(by: { $0.value.order < $1.value.order })
-            {
-                oldest.value.task?.cancel()
-                statusLookups[oldest.key]?.task = nil
-                lastMessageStatuses[oldest.key] = nil
-                openCount -= 1
-            }
-            statusLookupOrder += 1
-            statusLookups[row.id] = StatusLookup(
-                sentAtMs: row.lastMessageSentAtMs, order: statusLookupOrder, task: followLastMessageStatus(row.id))
-            openCount += 1
-        }
-    }
-
-    /// Subscribes to the chat's timeline and stores the status of its newest own message after each batch. The
-    /// subscription stays open so the ticks follow sent -> delivered -> read; cancelling the task ends it.
-    private func followLastMessageStatus(_ chatId: String) -> Task<Void, Never> {
-        let client = client
-        return Task { [weak self] in
-            guard let stream = try? await ListenerBridge.timeline(client, chatId: chatId) else { return }
-            var items: [TimelineItem] = []
-            for await diffs in stream {
-                _ = try? DiffApplier.apply(diffs, to: &items)
-                guard !Task.isCancelled else { return }
-                self?.lastMessageStatuses[chatId] = Self.newestOwnMessageStatus(items)
-            }
-        }
-    }
-
-    /// Status of the newest message among `items` when it is the user's own; `nil` when it is someone else's or
-    /// there is no message.
-    private static func newestOwnMessageStatus(_ items: [TimelineItem]) -> MessageStatus? {
-        for case .message(let message) in items.reversed() {
-            return message.isOwn ? message.sendState.map(MessageStatus.init) : nil
         }
         return nil
     }

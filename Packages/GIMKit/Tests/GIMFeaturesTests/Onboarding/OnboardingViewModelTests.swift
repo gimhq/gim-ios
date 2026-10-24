@@ -108,12 +108,14 @@ final class OnboardingViewModelTests: XCTestCase {
         factory: RecordingFactory = RecordingFactory { _ in FakeGimClient() },
         serverUrl: String = "",
         client: (any GimClientAPI)? = nil,
-        localStateReset: Bool = false
+        localStateReset: Bool = false,
+        recoveryKit: any RecoveryKitFunctions = FakeRecoveryKitFunctions()
     ) -> (OnboardingViewModel, Registrations) {
         let registrations = Registrations()
         let viewModel = OnboardingViewModel(
-            factory: factory, hooks: TestHooks(dataDir: makeTemporaryDirectory()), serverUrl: serverUrl,
-            client: client, localStateReset: localStateReset
+            factory: factory, hooks: TestHooks(dataDir: makeTemporaryDirectory()),
+            recoveryKit: recoveryKit, serverUrl: serverUrl, client: client,
+            localStateReset: localStateReset
         ) { registrations.results.append($0) }
         return (viewModel, registrations)
     }
@@ -204,6 +206,24 @@ final class OnboardingViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testTheInjectedRecoveryKitFunctionsReachTheContextAndTheKit() async throws {
+        let recording = RecordingRecoveryKitFunctions()
+        let (viewModel, _) = makeViewModel(serverUrl: "https://gim.example.eu", recoveryKit: recording)
+        viewModel.choose(.createIdentity)
+        XCTAssertTrue(try XCTUnwrap(viewModel.context).recoveryKit as? RecordingRecoveryKitFunctions === recording)
+        let create = try XCTUnwrap(viewModel.createIdentity)
+        create.displayName = "Sofia"
+        await create.submit()
+        guard case .recoveryKit(let recovery) = viewModel.stage else { return XCTFail("expected the recovery kit") }
+
+        _ = recovery.kitText
+
+        XCTAssertEqual(
+            recording.calls,
+            [.format(userId: recovery.userId, recoveryCode: try XCTUnwrap(recovery.code), labels: .localized)])
+    }
+
+    @MainActor
     func testCreateFlowShowsTheKitChecksTheEndingClaimsTheHandleAndRegisters() async throws {
         let client = FakeGimClient()
         let factory = RecordingFactory { _ in client }
@@ -222,7 +242,7 @@ final class OnboardingViewModelTests: XCTestCase {
         XCTAssertEqual(recovery.groupedCode.split(separator: "-").count, 10)
         recovery.continueToCheck()
         // The last four symbols, typed in lowercase with a dash.
-        let ending = RecoveryKit.ending(of: recovery.groupedCode).lowercased()
+        let ending = FakeRecoveryKitFunctions().recoveryKeyEnding(recoveryCode: recovery.groupedCode).lowercased()
         recovery.endingInput = "\(ending.prefix(1))-\(ending.dropFirst())"
         recovery.confirm()
 
@@ -251,7 +271,7 @@ final class OnboardingViewModelTests: XCTestCase {
         await create.submit()
         guard case .recoveryKit(let recovery) = viewModel.stage else { return XCTFail("expected the recovery kit") }
         recovery.continueToCheck()
-        recovery.endingInput = RecoveryKit.ending(of: recovery.groupedCode)
+        recovery.endingInput = FakeRecoveryKitFunctions().recoveryKeyEnding(recoveryCode: recovery.groupedCode)
         recovery.confirm()
         guard case .claimHandle(let claim) = viewModel.stage else { return XCTFail("expected the handle step") }
 

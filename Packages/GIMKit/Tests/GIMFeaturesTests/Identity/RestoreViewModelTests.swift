@@ -6,9 +6,10 @@ import XCTest
 final class RestoreViewModelTests: XCTestCase {
     private let validUserId = "u" + String(repeating: "abcdefghijklmnopqrstuvwxyz234567", count: 2).prefix(54) + "q"
     private let validCode = "7BQ2-K9MX-4TVA-0HZR-PC63-W8NE-1SJD-5GFY-QK2M-V7R"
-    private let english = RecoveryKit.Labels(
+    private let kit = FakeRecoveryKitFunctions()
+    private let english = RecoveryKitLabels(
         title: "gim recovery kit", accountId: "Account ID", recoveryKey: "Recovery key", note: "Keep this secret.")
-    private let chinese = RecoveryKit.Labels(title: "恢复工具包", accountId: "账户 ID", recoveryKey: "恢复密钥", note: "请妥善保管。")
+    private let chinese = RecoveryKitLabels(title: "恢复工具包", accountId: "账户 ID", recoveryKey: "恢复密钥", note: "请妥善保管。")
 
     @MainActor
     private final class Registered {
@@ -17,12 +18,13 @@ final class RestoreViewModelTests: XCTestCase {
 
     @MainActor
     private func makeViewModel(
+        recoveryKit: any RecoveryKitFunctions = FakeRecoveryKitFunctions(),
         client: @escaping @MainActor () async throws -> any GimClientAPI
     ) -> (RestoreViewModel, Registered) {
         let registered = Registered()
         let context = OnboardingContext(
             config: ClientConfig(serverUrl: "https://gim.example.eu"), client: client, discardClient: {},
-            onRegistered: { registered.registrations.append($0) })
+            recoveryKit: recoveryKit, onRegistered: { registered.registrations.append($0) })
         return (RestoreViewModel(context: context), registered)
     }
 
@@ -63,15 +65,14 @@ final class RestoreViewModelTests: XCTestCase {
             let (viewModel, _) = makeViewModel { FakeGimClient() }
             XCTAssertFalse(viewModel.showsFields)
 
-            viewModel.kitText = RecoveryKit.format(
+            viewModel.kitText = kit.formatRecoveryKit(
                 userId: validUserId.uppercased(), recoveryCode: validCode.lowercased(), labels: labels)
 
             XCTAssertEqual(viewModel.userId, validUserId)
             XCTAssertEqual(viewModel.recoveryCode, validCode)
             XCTAssertEqual(
                 viewModel.parsed,
-                RecoveryKit.Parsed(userId: validUserId, recoveryCode: validCode.replacingOccurrences(of: "-", with: ""))
-            )
+                ParsedRecoveryKit(userId: validUserId, recoveryCode: validCode.replacingOccurrences(of: "-", with: "")))
             XCTAssertNil(viewModel.kitError)
             XCTAssertTrue(viewModel.showsFields)
         }
@@ -96,11 +97,60 @@ final class RestoreViewModelTests: XCTestCase {
 
         viewModel.kitText = "Hello, I lost my phone. Can you help?"
 
-        XCTAssertEqual(viewModel.parsed, RecoveryKit.Parsed(userId: nil, recoveryCode: nil))
+        XCTAssertEqual(viewModel.parsed, ParsedRecoveryKit(userId: nil, recoveryCode: nil))
         XCTAssertEqual(viewModel.kitError, RestoreViewModel.kitNotRecognizedMessage)
         XCTAssertFalse(viewModel.showsFields)
         XCTAssertEqual(viewModel.userId, "")
         XCTAssertEqual(viewModel.recoveryCode, "")
+    }
+
+    @MainActor
+    func testPastingUsesTheInjectedParser() async {
+        let recording = RecordingRecoveryKitFunctions()
+        let (viewModel, _) = makeViewModel(recoveryKit: recording) { FakeGimClient() }
+        let text = "Account ID: \(validUserId)\nRecovery key: \(validCode)\n"
+
+        viewModel.kitText = text
+        viewModel.kitText = " \n"
+
+        XCTAssertEqual(recording.calls, [.parse(text: text)], "blank text is not parsed")
+        XCTAssertEqual(viewModel.userId, validUserId)
+        XCTAssertEqual(viewModel.recoveryCode, validCode)
+    }
+
+    /// gim-core counts Unicode Nl/No characters ("²", "①") as numeric, so they belong to the token they touch, as in
+    /// gim-client-sdk `parse_recovery_kit` (`char::is_numeric`).
+    @MainActor
+    func testNumericSymbolsBelongToTheirTokenLikeTheSdk() async {
+        let symbols = validCode.replacingOccurrences(of: "-", with: "")
+        let cases: [(text: String, parsed: ParsedRecoveryKit)] = [
+            // "²" lengthens the last group to "V7R²", so no run of tokens has exactly 39 characters.
+            (
+                "Account ID: \(validUserId)\nRecovery key: \(validCode)²\n",
+                ParsedRecoveryKit(userId: validUserId, recoveryCode: nil)
+            ),
+            // "①" glued to the key makes a 40-character token.
+            (
+                "Account ID: \(validUserId)\nRecovery key: ①\(symbols)\n",
+                ParsedRecoveryKit(userId: validUserId, recoveryCode: nil)
+            ),
+            // Joined by a space, "①" is a token of its own before the key, which is still found.
+            (
+                "Account ID: \(validUserId)\nRecovery key: ① \(symbols)\n",
+                ParsedRecoveryKit(userId: validUserId, recoveryCode: symbols)
+            ),
+            // In the key the symbol is kept, so the 39 characters are not a valid key.
+            ("Recovery key: \(symbols.dropLast())²", ParsedRecoveryKit(userId: nil, recoveryCode: nil)),
+        ]
+        for (text, parsed) in cases {
+            let (viewModel, _) = makeViewModel { FakeGimClient() }
+
+            viewModel.kitText = text
+
+            XCTAssertEqual(viewModel.parsed, parsed, text)
+            XCTAssertEqual(viewModel.parsed, kit.parseRecoveryKit(text: text), text)
+            XCTAssertEqual(viewModel.userId, parsed.userId ?? "", text)
+        }
     }
 
     @MainActor
@@ -131,7 +181,7 @@ final class RestoreViewModelTests: XCTestCase {
         let (client, userId, code) = try await restorableClient()
         let (viewModel, registered) = makeViewModel { client }
         // The fake's user IDs are not real ones, so the kit yields only the code and the ID is typed.
-        viewModel.kitText = RecoveryKit.format(userId: userId, recoveryCode: code.lowercased(), labels: english)
+        viewModel.kitText = kit.formatRecoveryKit(userId: userId, recoveryCode: code.lowercased(), labels: english)
         XCTAssertEqual(
             viewModel.recoveryCode, RecoveryKit.groupedRecoveryCode(RecoveryKit.normalizedRecoveryCode(code)))
         viewModel.userId = "  \(userId.uppercased())\n"
@@ -148,7 +198,7 @@ final class RestoreViewModelTests: XCTestCase {
     func testSubmitAfterAFullPasteUsesTheParsedAccountId() async throws {
         let (client, _, _) = try await restorableClient()
         let (viewModel, registered) = makeViewModel { client }
-        viewModel.kitText = RecoveryKit.format(userId: validUserId, recoveryCode: validCode, labels: chinese)
+        viewModel.kitText = kit.formatRecoveryKit(userId: validUserId, recoveryCode: validCode, labels: chinese)
 
         await viewModel.submit()
 
