@@ -312,7 +312,7 @@ public protocol GimClientAPI: AnyObject, Sendable {
     /// `NotFound` for an unknown chat.
     func setChatArchived(chatId: String, archived: Bool) async throws
 
-    // Meta server (gim-core docs/API.md, "App server"; renamed the meta server, gim-meta). Not deployed yet.
+    // Meta server (gim-core docs/API.md, "Meta server"): gim-meta, not deployed yet.
 
     /// Reports a user to the meta server's moderators with the messages `messageIds` (at most 50, from the local
     /// history) in plaintext, and an optional `note` (at most 1000 characters). Returns the report id. Does not block:

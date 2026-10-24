@@ -8,7 +8,7 @@ final class CoreMappingTests: XCTestCase {
     func testClientConfigKeepsTheMode() {
         XCTAssertEqual(
             GIMCore.ClientConfig(GIMClientKit.ClientConfig(serverUrl: "https://gim.example.eu")),
-            GIMCore.ClientConfig(serverUrl: "https://gim.example.eu", mode: nil, appServerUrl: nil))
+            GIMCore.ClientConfig(serverUrl: "https://gim.example.eu", mode: nil, metaServerUrl: nil))
         XCTAssertEqual(
             GIMCore.ClientConfig(GIMClientKit.ClientConfig(serverUrl: "https://gim.example.eu", mode: .app)).mode,
             .app)
@@ -23,7 +23,7 @@ final class CoreMappingTests: XCTestCase {
                 GIMClientKit.ClientConfig(serverUrl: "https://gim.example.eu", metaServerUrl: "https://meta.example.eu")
             ),
             GIMCore.ClientConfig(
-                serverUrl: "https://gim.example.eu", mode: nil, appServerUrl: "https://meta.example.eu"))
+                serverUrl: "https://gim.example.eu", mode: nil, metaServerUrl: "https://meta.example.eu"))
     }
 
     func testChatSummaryMapsTheAccountSafetyFields() {

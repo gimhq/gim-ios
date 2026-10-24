@@ -5,8 +5,8 @@
 
 - Mirrored commit: gim-core `c1b7503` (`bindings/gim-ffi/src/`, generated
   `bindings/gim-ffi/generated/swift/GIMCore.swift`, contract in `docs/API.md`).
-- Vendored commit: gim-client-sdk `16a5efa` (CI run 40023818869), GIMCore `0.1.0+16a5efa`; the mirror catches up in
-  the following changes (see "Changes since `c1b7503`").
+- Vendored commit: gim-client-sdk `b86283e` (CI run 40038617133), GIMCore `0.1.0+b86283e`; the mirror covers it
+  (see "Changes since `16a5efa`" and "Changes since `c1b7503`").
 - Mirror sources: `GimClientAPI.swift` (objects, callback interfaces, hooks, `createClient`) and `Models.swift`
   (records, enums, diffs, errors).
 - Everything else in GIMClientKit (`Fake/`, `GimClientFactory`, `CoreGimClientFactory`) is app-level and stays after
@@ -179,9 +179,7 @@ listener parameter spelling above.
 The meta server (gim-meta, `ClientConfig.metaServerUrl`) is not deployed: the app passes `nil`. Without it
 `reportUser` fails with `InvalidInput` and the privacy settings (blocked users included) are not backed up, so they
 do not survive the loss of every device; per-chat settings are never backed up. `FakeGimClient.reportUser` needs no
-meta server and records the report in `reports`. The vendored `16a5efa` still names the generated field
-`ClientConfig.appServerUrl` (gim-client-sdk `b86283e` renames it `metaServerUrl`); until the re-vendor the bridge maps
-the mirror's `metaServerUrl` to it.
+meta server and records the report in `reports`. The bridge maps `ClientConfig.metaServerUrl` 1:1.
 
 `chatMembers` has no listener in M1. `GroupInfoViewModel` queries it again when a `ChatListDiff` changes that chat or
 a `TimelineItem.membershipChange` arrives. When a query fails before any list has loaded it shows the error with
@@ -202,11 +200,20 @@ Renaming a group goes `GroupInfoViewModel.saveName()` → `GimClientAPI.setGroup
 `CoreMappingTests.testFakeRecoveryKitFunctionsMatchGimCore` runs the same vectors through both, so drift between the
 copy and gim-core fails the macOS tests.
 
+## Changes since `16a5efa`
+
+`b86283e` (gim-client-sdk main, vendored with `GIM_CORE_REPO=gimhq/gim-client-sdk scripts/sync-gim-core.sh
+40038617133`; the artifact's `Package.swift` is unchanged). Breaking rename: the server for settings backups and
+reports is now the gim meta server (gim-meta), and `ClientConfig`'s URL field is `metaServerUrl: String? = nil`; the
+mirror has used that name from the start and `CoreMapping` now passes it through. Otherwise only doc comments ("meta
+server") and the UniFFI checksums of `reportUser` and `deleteAccount` changed; no signature, enum case or error
+changed.
+
 ## Changes since `c1b7503`
 
 `16a5efa` (gim-client-sdk, vendored with `scripts/sync-gim-core.sh 40023818869`; the vendored `Package.swift` adds
 macOS 15 and links SystemConfiguration, CoreFoundation, c++ and resolv). Diff of the generated `GIMCore.swift`, not
-yet mirrored: `ClientConfig` gained `appServerUrl: String? = nil` (the bridge passes `nil`); `UserProfile` gained
+yet mirrored: `ClientConfig` gained the optional meta server URL (renamed in `b86283e`, see above); `UserProfile` gained
 `hasAvatar`; `ChatSummary` gained `peer`, `mutedUntilMs`, `pinned`, `archived` and `blocked`; `MessagePreview` gained
 `sendState`; new records `PrivacySettings`, `RecoveryRotation`, `RecoveryKitLabels`, `ParsedRecoveryKit`, a new enum
 `ReportReason`; new `GimClient` methods `blockUser`, `unblockUser`, `privacy`, `setReadReceipts`,
