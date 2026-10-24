@@ -1,8 +1,8 @@
 import GIMFeatures
 import SwiftUI
 
-/// One chat list row: avatar, title, time and status ticks, then the subtitle and the unread badge. VoiceOver reads
-/// it as one element.
+/// One chat list row: avatar, title with the muted and pinned marks, time and status ticks, then the subtitle and the
+/// unread badge. VoiceOver reads it as one element.
 struct ChatRowView: View {
     let row: ChatRow
     let subtitle: String
@@ -31,6 +31,7 @@ struct ChatRowView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     titleText.lineLimit(1)
+                    marks
                     Spacer(minLength: 8)
                     ticks
                     timeText
@@ -52,6 +53,7 @@ struct ChatRowView: View {
                 titleText.lineLimit(2)
                 subtitleText
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    marks
                     ticks
                     timeText
                     Spacer(minLength: 8)
@@ -85,6 +87,23 @@ struct ChatRowView: View {
         }
     }
 
+    /// Bell-slash for a muted chat, pin for a pinned one; the row label reads both.
+    @ViewBuilder
+    private var marks: some View {
+        if row.isMuted {
+            Image(systemName: "bell.slash.fill")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel(Text("Muted", tableName: "Chat", bundle: .module))
+        }
+        if row.isPinned {
+            Image(systemName: "pin.fill")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel(Text("Pinned", tableName: "Chat", bundle: .module))
+        }
+    }
+
     /// Same symbols as `StatusTicksView`; the row label reads the status.
     private var ticks: some View {
         Group {
@@ -114,9 +133,15 @@ struct ChatRowView: View {
         }
     }
 
-    /// Name, status of the own last message, subtitle, time and unread count, joined with ", ".
+    /// Name, pinned and muted, status of the own last message, subtitle, time and unread count, joined with ", ".
     nonisolated static func accessibilityLabel(row: ChatRow, subtitle: String, status: MessageStatus?) -> String {
         var parts = [row.title]
+        if row.isPinned {
+            parts.append(String(localized: "Pinned", table: "Chat", bundle: .module))
+        }
+        if row.isMuted {
+            parts.append(String(localized: "Muted", table: "Chat", bundle: .module))
+        }
         if let status {
             parts.append(statusText(status))
         }
