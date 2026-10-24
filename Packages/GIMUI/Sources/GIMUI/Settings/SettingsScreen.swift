@@ -1,5 +1,6 @@
 import GIMClientKit
 import GIMFeatures
+import PhotosUI
 import SwiftUI
 import UIKit
 
@@ -14,6 +15,11 @@ struct SettingsScreen: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage(AppearanceSetting.defaultsKey) private var appearanceRaw = AppearanceSetting.system.rawValue
     @State private var profile: ProfileViewModel
+    @State private var profilePhoto: ProfilePhotoViewModel
+    @State private var showsPhotoPicker = false
+    @State private var pickedPhoto: PhotosPickerItem?
+    @State private var isPreparingPhoto = false
+    @State private var confirmsRemovePhoto = false
     @State private var isSigningOut = false
     @State private var confirmsSignOut = false
     @State private var errorMessage: String?
@@ -32,6 +38,10 @@ struct SettingsScreen: View {
         self.refreshSession = refreshSession
         self.signOut = signOut
         _profile = State(initialValue: ProfileViewModel(client: client, onChanged: refreshSession))
+        _profilePhoto = State(
+            initialValue: ProfilePhotoViewModel(
+                client: client, cacheDirectory: URL.cachesDirectory.appendingPathComponent("profile-photo"),
+                onChanged: refreshSession))
     }
 
     var body: some View {
@@ -96,6 +106,7 @@ struct SettingsScreen: View {
         }
         .navigationTitle(Text("Settings", tableName: "Settings", bundle: .module))
         .navigationBarTitleDisplayMode(.inline)
+        .task { await profilePhoto.load() }
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button {
@@ -132,7 +143,8 @@ struct SettingsScreen: View {
                 EditNameScreen(client: client, refreshSession: refreshSession)
             } label: {
                 HStack(spacing: 12) {
-                    AvatarView(id: session.userId, name: session.displayName, avatarPath: nil, size: 56)
+                    AvatarView(
+                        id: session.userId, name: session.displayName, avatarPath: profilePhoto.photoPath, size: 56)
                     VStack(alignment: .leading) {
                         Text(session.displayName).font(.headline)
                         if session.handle.isEmpty {
@@ -145,6 +157,7 @@ struct SettingsScreen: View {
                 }
             }
             .accessibilityIdentifier("settings.profile")
+            profilePhotoRow
             usernameRow(session)
             Button {
                 copy(session.userId)
@@ -174,9 +187,55 @@ struct SettingsScreen: View {
         } header: {
             Text("Profile", tableName: "Settings", bundle: .module)
         } footer: {
-            if let error = profile.errorMessage {
+            if let error = profile.errorMessage ?? profilePhoto.errorMessage {
                 Text(error).foregroundStyle(.red)
             }
+        }
+    }
+
+    private var profilePhotoRow: some View {
+        Menu {
+            Button {
+                showsPhotoPicker = true
+            } label: {
+                Text("Choose photo", tableName: "Settings", bundle: .module)
+            }
+            .accessibilityIdentifier("settings.profilePhoto.choose")
+            if profilePhoto.hasPhoto {
+                Button(role: .destructive) {
+                    confirmsRemovePhoto = true
+                } label: {
+                    Text("Remove photo", tableName: "Settings", bundle: .module)
+                }
+                .accessibilityIdentifier("settings.profilePhoto.remove")
+            }
+        } label: {
+            HStack {
+                Text("Profile photo", tableName: "Settings", bundle: .module)
+                Spacer()
+                if profilePhoto.isSaving || isPreparingPhoto { ProgressView() }
+            }
+        }
+        .foregroundStyle(.primary)
+        .disabled(profilePhoto.isSaving || isPreparingPhoto)
+        .accessibilityIdentifier("settings.profilePhoto")
+        .photosPicker(isPresented: $showsPhotoPicker, selection: $pickedPhoto, matching: .images)
+        .onChange(of: pickedPhoto) { _, item in
+            guard let item else { return }
+            pickedPhoto = nil
+            Task { await setPhoto(from: item) }
+        }
+        .confirmationDialog(
+            Text("Remove your profile photo?", tableName: "Settings", bundle: .module),
+            isPresented: $confirmsRemovePhoto, titleVisibility: .visible
+        ) {
+            Button(role: .destructive) {
+                Task { await profilePhoto.removePhoto() }
+            } label: {
+                Text("Remove", tableName: "Common", bundle: .module)
+            }
+        } message: {
+            Text("People in your chats will see your initials instead.", tableName: "Settings", bundle: .module)
         }
     }
 
@@ -328,6 +387,22 @@ struct SettingsScreen: View {
             showsClaimHandle = false
         }
         showsClaimHandle = true
+    }
+
+    /// Prepares the picked image off the main thread and sets it as the profile photo.
+    private func setPhoto(from item: PhotosPickerItem) async {
+        isPreparingPhoto = true
+        defer { isPreparingPhoto = false }
+        do {
+            guard let data = try await item.loadTransferable(type: Data.self) else {
+                throw MediaPreparationError.unreadable
+            }
+            let url = try await Task.detached(priority: .userInitiated) { try ProfilePhotoEncoder.encode(data) }.value
+            await profilePhoto.setPhoto(filePath: url.path)
+            TemporaryAttachment.remove(url)
+        } catch {
+            profilePhoto.photoFailed(error)
+        }
     }
 
     private func performSignOut() async {
