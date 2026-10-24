@@ -24,8 +24,15 @@ public struct ChatRow: Sendable, Hashable, Identifiable {
     /// Status ticks of the own last message, from the preview's send state; `nil` when the last message is someone
     /// else's or has no send state.
     public let lastMessageStatus: MessageStatus?
+    /// Pinned chats come first in the list.
+    public let isPinned: Bool
+    /// True while notifications are muted at `now` (`ChatSummary.mutedUntilMs`).
+    public let isMuted: Bool
+    /// Archived chats are listed apart from the others.
+    public let isArchived: Bool
 
-    public init(summary: ChatSummary, dateFormatter: RelativeDateFormatter) {
+    /// - Parameter now: the time `isMuted` is checked against.
+    public init(summary: ChatSummary, dateFormatter: RelativeDateFormatter, now: Date = Date()) {
         id = summary.chatId
         kind = summary.kind
         title = UserLabel.name(summary.name)
@@ -38,6 +45,9 @@ public struct ChatRow: Sendable, Hashable, Identifiable {
         lastMessageIsOwn = summary.lastMessage?.isOwn ?? false
         lastMessageSentAtMs = summary.lastMessage?.sentAtMs
         lastMessageStatus = summary.lastMessage.flatMap { $0.isOwn ? $0.sendState.map(MessageStatus.init) : nil }
+        isPinned = summary.pinned
+        isMuted = summary.mutedUntilMs == mutedForever() || summary.mutedUntilMs > now.epochMilliseconds
+        isArchived = summary.archived
     }
 
     /// gim-core already renders the last message as text ("Photo", "File: report.pdf", "Message deleted", …).

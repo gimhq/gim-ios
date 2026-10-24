@@ -2,7 +2,8 @@ import GIMClientKit
 import GIMFeatures
 import SwiftUI
 
-/// The signed-in home screen: every chat, newest activity first, served by gim-core from its local database.
+/// The signed-in home screen: every chat that is not archived, pinned first, then newest activity first, served by
+/// gim-core from its local database. Archived chats sit behind a row at the end.
 public struct ChatListScreen: View {
     private let client: any GimClientAPI
     private let session: Session?
@@ -11,6 +12,7 @@ public struct ChatListScreen: View {
 
     @State private var viewModel: ChatListViewModel
     @State private var showsNewChat = false
+    @State private var showsArchived = false
 
     /// - Parameters:
     ///   - onOpenSettings: shows a settings button in the toolbar when set.
@@ -26,15 +28,13 @@ public struct ChatListScreen: View {
     }
 
     public var body: some View {
-        List(viewModel.rows) { row in
-            Button {
-                onOpen(row.id)
-            } label: {
-                ChatRowView(
-                    row: row, subtitle: viewModel.subtitle(for: row), status: viewModel.lastMessageStatus(for: row))
+        List {
+            ForEach(viewModel.rows) { row in
+                ChatListRow(row: row, viewModel: viewModel, onOpen: onOpen)
             }
-            .accessibilityIdentifier("chatList.row")
-            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+            if viewModel.hasArchived {
+                archivedRow
+            }
         }
         .listStyle(.plain)
         .overlay { emptyState }
@@ -69,6 +69,15 @@ public struct ChatListScreen: View {
                 .accessibilityIdentifier("chatList.newChat")
             }
         }
+        .chatActionErrorAlert(viewModel, isActive: !showsArchived)
+        .sheet(isPresented: $showsArchived) {
+            NavigationStack {
+                ArchivedChatsScreen(viewModel: viewModel) { chatId in
+                    showsArchived = false
+                    onOpen(chatId)
+                }
+            }
+        }
         .sheet(isPresented: $showsNewChat) {
             NavigationStack {
                 NewChatScreen(client: client) { chatId in
@@ -78,6 +87,24 @@ public struct ChatListScreen: View {
             }
         }
         .task { viewModel.start() }
+    }
+
+    private var archivedRow: some View {
+        Button {
+            showsArchived = true
+        } label: {
+            HStack {
+                Label(String(localized: "Archived chats", table: "Chat", bundle: .module), systemImage: "archivebox")
+                    .foregroundStyle(.primary)
+                Spacer(minLength: 8)
+                Text(viewModel.archivedRows.count, format: .number)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("chatList.archived")
     }
 
     @ViewBuilder
@@ -94,7 +121,7 @@ public struct ChatListScreen: View {
             }
         } else if viewModel.isLoading {
             ProgressView()
-        } else if viewModel.rows.isEmpty {
+        } else if viewModel.rows.isEmpty, !viewModel.hasArchived {
             ContentUnavailableView {
                 Label(
                     String(localized: "No chats yet", table: "Chat", bundle: .module),

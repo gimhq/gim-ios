@@ -11,18 +11,20 @@ final class ChatRowTests: XCTestCase {
 
     private func summary(
         kind: ChatKind, preview: String? = "Hello", sender: String = "Sofia Marin", unread: UInt32 = 0,
-        isOwn: Bool = false, sendState: SendState? = nil
+        isOwn: Bool = false, sendState: SendState? = nil, mutedUntilMs: UInt64 = 0, pinned: Bool = false,
+        archived: Bool = false
     ) -> ChatSummary {
         ChatSummary(
             chatId: "chat-1", kind: kind, name: "Title", avatar: avatar,
             lastMessage: preview.map {
                 MessagePreview(senderName: sender, text: $0, sentAtMs: sentAtMs, isOwn: isOwn, sendState: sendState)
             },
-            unreadCount: unread, updatedAtMs: sentAtMs, memberCount: kind == .group ? 4 : 2, state: .active)
+            unreadCount: unread, updatedAtMs: sentAtMs, memberCount: kind == .group ? 4 : 2, state: .active,
+            mutedUntilMs: mutedUntilMs, pinned: pinned, archived: archived)
     }
 
     private func row(_ summary: ChatSummary) -> ChatRow {
-        ChatRow(summary: summary, dateFormatter: makeFormatter())
+        ChatRow(summary: summary, dateFormatter: makeFormatter(), now: fixedNow)
     }
 
     func testLastMessageStatusMapsTheOwnPreviewSendState() {
@@ -40,6 +42,24 @@ final class ChatRowTests: XCTestCase {
         XCTAssertNil(row(summary(kind: .direct, isOwn: false, sendState: .read)).lastMessageStatus)
         XCTAssertNil(row(summary(kind: .direct, isOwn: true, sendState: nil)).lastMessageStatus)
         XCTAssertNil(row(summary(kind: .direct, preview: nil)).lastMessageStatus)
+    }
+
+    func testPinnedAndArchivedFollowTheSummary() {
+        let plain = row(summary(kind: .group))
+        XCTAssertFalse(plain.isPinned)
+        XCTAssertFalse(plain.isArchived)
+        let flagged = row(summary(kind: .group, pinned: true, archived: true))
+        XCTAssertTrue(flagged.isPinned)
+        XCTAssertTrue(flagged.isArchived)
+    }
+
+    func testMutedWhileTheMuteLasts() {
+        let nowMs = UInt64(fixedNow.timeIntervalSince1970 * 1000)
+        XCTAssertFalse(row(summary(kind: .group, mutedUntilMs: 0)).isMuted)
+        XCTAssertFalse(row(summary(kind: .group, mutedUntilMs: nowMs)).isMuted, "expired at now")
+        XCTAssertFalse(row(summary(kind: .group, mutedUntilMs: nowMs - 1)).isMuted)
+        XCTAssertTrue(row(summary(kind: .group, mutedUntilMs: nowMs + 1)).isMuted)
+        XCTAssertTrue(row(summary(kind: .group, mutedUntilMs: mutedForever())).isMuted)
     }
 
     func testOwnLastMessageIsFlaggedWithItsTime() {

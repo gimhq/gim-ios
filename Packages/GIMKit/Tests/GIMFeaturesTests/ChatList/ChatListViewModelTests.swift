@@ -6,7 +6,7 @@ import XCTest
 final class ChatListViewModelTests: XCTestCase {
     @MainActor
     private func startedViewModel(_ client: any GimClientAPI) async -> ChatListViewModel {
-        let viewModel = ChatListViewModel(client: client, dateFormatter: makeFormatter())
+        let viewModel = ChatListViewModel(client: client, dateFormatter: makeFormatter(), now: { fixedNow })
         XCTAssertTrue(viewModel.isLoading)
         viewModel.start()
         await eventually { viewModel.rows.count == 2 }
@@ -266,6 +266,113 @@ final class ChatListViewModelTests: XCTestCase {
 
         await eventually { (try? self.row(chatId, viewModel).state) == .leaving }
         XCTAssertNil(lastMessageStatus(chatId, viewModel))
+    }
+
+    @MainActor
+    func testPinnedChatComesFirstUntilUnpinned() async throws {
+        let (client, _) = await connected(makeDemoClient())
+        let viewModel = await startedViewModel(client)
+        let direct = try row(FakeGimClient.demoDirectChatId, viewModel)
+        XCTAssertFalse(direct.isPinned)
+
+        await viewModel.setPinned(direct, true)
+
+        await eventually { viewModel.rows.first?.id == FakeGimClient.demoDirectChatId }
+        XCTAssertTrue(viewModel.rows[0].isPinned)
+        XCTAssertFalse(viewModel.rows[1].isPinned)
+
+        await viewModel.setPinned(viewModel.rows[0], false)
+
+        await eventually { viewModel.rows.first?.id == FakeGimClient.demoGroupChatId }
+        XCTAssertFalse(try row(FakeGimClient.demoDirectChatId, viewModel).isPinned)
+        XCTAssertNil(viewModel.actionErrorMessage)
+    }
+
+    @MainActor
+    func testMuteAndUnmute() async throws {
+        let (client, _) = await connected(makeDemoClient())
+        let viewModel = await startedViewModel(client)
+        let groupId = FakeGimClient.demoGroupChatId
+        XCTAssertFalse(try row(groupId, viewModel).isMuted)
+
+        await viewModel.mute(try row(groupId, viewModel), .oneHour)
+        await eventually { (try? self.row(groupId, viewModel).isMuted) == true }
+        XCTAssertFalse(try row(FakeGimClient.demoDirectChatId, viewModel).isMuted)
+
+        await viewModel.unmute(try row(groupId, viewModel))
+        await eventually { (try? self.row(groupId, viewModel).isMuted) == false }
+
+        await viewModel.mute(try row(groupId, viewModel), .always)
+        await eventually { (try? self.row(groupId, viewModel).isMuted) == true }
+        XCTAssertNil(viewModel.actionErrorMessage)
+    }
+
+    @MainActor
+    func testArchivedChatsLeaveTheMainList() async throws {
+        let (client, _) = await connected(makeDemoClient())
+        let viewModel = await startedViewModel(client)
+        XCTAssertFalse(viewModel.hasArchived)
+        XCTAssertEqual(viewModel.archivedRows, [])
+
+        await viewModel.setArchived(try row(FakeGimClient.demoGroupChatId, viewModel), true)
+
+        await eventually { viewModel.hasArchived }
+        XCTAssertEqual(viewModel.rows.map(\.id), [FakeGimClient.demoDirectChatId])
+        XCTAssertEqual(viewModel.archivedRows.map(\.id), [FakeGimClient.demoGroupChatId])
+        XCTAssertTrue(viewModel.archivedRows[0].isArchived)
+
+        // A new message does not unarchive the chat.
+        try await client.receiveText(chatId: FakeGimClient.demoGroupChatId, from: "user-luca", body: "Anchor's up")
+        await eventually { viewModel.archivedRows.first?.preview == "Luca Bianchi: Anchor's up" }
+        XCTAssertEqual(viewModel.rows.map(\.id), [FakeGimClient.demoDirectChatId])
+
+        await viewModel.setArchived(viewModel.archivedRows[0], false)
+
+        await eventually { !viewModel.hasArchived }
+        XCTAssertEqual(viewModel.rows.map(\.id), [FakeGimClient.demoGroupChatId, FakeGimClient.demoDirectChatId])
+        XCTAssertEqual(viewModel.archivedRows, [])
+    }
+
+    @MainActor
+    func testArchivedRowsKeepTheClientOrder() async throws {
+        let (client, _) = await connected(makeDemoClient())
+        let viewModel = await startedViewModel(client)
+
+        await viewModel.setArchived(try row(FakeGimClient.demoDirectChatId, viewModel), true)
+        await viewModel.setArchived(try row(FakeGimClient.demoGroupChatId, viewModel), true)
+
+        await eventually { viewModel.archivedRows.count == 2 }
+        XCTAssertEqual(
+            viewModel.archivedRows.map(\.id), [FakeGimClient.demoGroupChatId, FakeGimClient.demoDirectChatId])
+        XCTAssertEqual(viewModel.rows, [])
+        XCTAssertTrue(viewModel.hasArchived)
+    }
+
+    @MainActor
+    func testActionErrorIsShownAndDismissed() async throws {
+        let (client, _) = await connected(makeDemoClient())
+        let viewModel = await startedViewModel(client)
+        let summary = ChatSummary(
+            chatId: "chat-gone", kind: .group, name: "Gone", avatar: nil, lastMessage: nil, unreadCount: 0,
+            updatedAtMs: 0, memberCount: 2, state: .active)
+        let gone = ChatRow(summary: summary, dateFormatter: makeFormatter())
+
+        await viewModel.setPinned(gone, true)
+
+        let expected = await ErrorPresenter.message(for: GimError.NotFound(reason: "chat chat-gone"), client: client)
+        XCTAssertEqual(viewModel.actionErrorMessage, expected)
+        XCTAssertNil(viewModel.errorMessage, "the list itself still loads")
+        viewModel.dismissActionError()
+        XCTAssertNil(viewModel.actionErrorMessage)
+
+        await viewModel.mute(gone, .eightHours)
+        XCTAssertNotNil(viewModel.actionErrorMessage)
+        viewModel.dismissActionError()
+        await viewModel.unmute(gone)
+        XCTAssertNotNil(viewModel.actionErrorMessage)
+        viewModel.dismissActionError()
+        await viewModel.setArchived(gone, true)
+        XCTAssertNotNil(viewModel.actionErrorMessage)
     }
 
     @MainActor
