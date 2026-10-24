@@ -8,6 +8,24 @@
             "state" : "translated",
             "value" : "Paste the link code shown on your new device."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pega el código de vinculación que aparece en tu nuevo dispositivo."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "粘贴新设备上显示的关联码。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "貼上新裝置上顯示的連結碼。"
+          }
         }
       }
     }
