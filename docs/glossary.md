@@ -17,6 +17,32 @@ screen.
 
 Plurals follow the same mapping (hubs → servers, handles → usernames).
 
+## Account safety and chat actions
+
+These words name the chat actions and the account safety settings. The code names already match them (`blockUser`,
+`setChatMuted`, `setChatPinned`, `setChatArchived`, `setAvatar`, `setReadReceipts`, `setTypingIndicators`,
+`rotateRecoveryCode`, `deleteAccount`, ...), so there is no old term to map.
+
+| User-facing word | What it means |
+|---|---|
+| Pin / Unpin | Keep a chat at the top of the list, or stop keeping it there. |
+| Pinned | This chat stays at the top of the list. |
+| Mute / Unmute | Stop or restart notifications for a chat. |
+| Muted | You don't get notifications for this chat. |
+| For 1 hour / For 8 hours / For 1 week / Always | How long a chat stays muted. |
+| Archive / Unarchive | Move a chat out of the main list, or bring it back. |
+| Archived chats | The chats you moved out of the main list. |
+| Block / Unblock | Stop or allow messages from a person. |
+| Blocked people | The people you blocked. |
+| More | The menu with the rest of a chat's actions. |
+| Profile photo | The picture friends see next to your name. |
+| Privacy | Settings for what others can see about you. |
+| Read receipts | Let others see when you read their messages. |
+| Typing indicators | Let others see when you're typing. |
+| Create a new recovery key | Replace your recovery key; the old one stops working. |
+| Delete account | Remove your account from your servers for good. |
+| DELETE | The word you type to confirm that you delete your account. |
+
 ## Writing rules
 
 Write for a 12-year-old. Signal and Telegram are the benchmark.
@@ -83,5 +109,20 @@ usage, Spanish uses neutral informal tú, and the product name is never translat
 | Copy | 复制 | 複製 | Copiar |
 | Cancel / Done / OK | 取消 / 完成 / 好 | 取消 / 完成 / 好 | Cancelar / Listo / Aceptar |
 | Encrypted (end-to-end) | 端到端加密 | 端對端加密 | cifrado de extremo a extremo |
+| Block / Unblock | 屏蔽 / 取消屏蔽 | 封鎖 / 解除封鎖 | Bloquear / Desbloquear |
+| Blocked people | 已屏蔽的人 | 已封鎖的人 | Personas bloqueadas |
+| Mute / Unmute / Muted | 静音 / 取消静音 / 已静音 | 靜音 / 取消靜音 / 已靜音 | Silenciar / Activar sonido / Silenciado |
+| For 1 hour / 8 hours / 1 week / Always (mute) | 1 小时 / 8 小时 / 1 周 / 永久 | 1 小時 / 8 小時 / 1 週 / 永久 | Durante 1 hora / 8 horas / 1 semana / Siempre |
+| Pin / Unpin / Pinned | 置顶 / 取消置顶 / 已置顶 | 置頂 / 取消置頂 / 已置頂 | Fijar / Dejar de fijar / Fijado |
+| Archive / Unarchive | 归档 / 取消归档 | 封存 / 取消封存 | Archivar / Desarchivar |
+| Archived chats | 已归档的聊天 | 已封存的聊天 | Chats archivados |
+| More (menu) | 更多 | 更多 | Más |
+| Read receipts | 已读回执 | 已讀回條 | Confirmaciones de lectura |
+| Typing indicators | 输入状态 | 輸入狀態 | Indicadores de escritura |
+| Profile photo | 头像 | 大頭貼照 | foto de perfil |
+| Privacy | 隐私 | 隱私權 | Privacidad |
+| Create a new recovery key / Create new key | 创建新的恢复密钥 / 创建新密钥 | 建立新的復原金鑰 / 建立新金鑰 | Crear una nueva clave de recuperación / Crear nueva clave |
+| Delete account | 删除账号 | 刪除帳號 | Eliminar cuenta |
+| DELETE (typed to confirm) | 删除 | 刪除 | ELIMINAR |
 
 New strings get all four languages in the same change; the catalog completeness tests fail otherwise.
