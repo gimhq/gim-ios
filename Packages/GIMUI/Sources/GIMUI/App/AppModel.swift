@@ -204,7 +204,8 @@ public final class AppModel {
         hooks: any PlatformHooks, serverUrl: String, client: (any GimClientAPI)?, localStateReset: Bool = false
     ) {
         onboarding = OnboardingViewModel(
-            factory: factory, hooks: hooks, serverUrl: serverUrl, client: client, localStateReset: localStateReset
+            factory: factory, hooks: hooks, recoveryKit: CoreRecoveryKitFunctions(), serverUrl: serverUrl,
+            client: client, localStateReset: localStateReset
         ) { [weak self] registration in
             self?.showReady(registration.client, config: registration.config, session: registration.session)
         }

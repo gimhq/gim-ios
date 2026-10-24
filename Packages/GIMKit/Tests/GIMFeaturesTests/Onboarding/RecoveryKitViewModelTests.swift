@@ -1,4 +1,5 @@
 import Foundation
+import GIMClientKit
 import GIMFeatures
 import XCTest
 
@@ -10,13 +11,18 @@ final class RecoveryKitViewModelTests: XCTestCase {
 
     private let userId = "u" + String(repeating: "abcdefghijklmnopqrstuvwxyz234567", count: 2).prefix(54) + "q"
     private let code = "7BQ2-K9MX-4TVA-0HZR-PC63-W8NE-1SJD-5GFY-QK2M-V7R"
-    private let labels = RecoveryKit.Labels(
+    private let kit = FakeRecoveryKitFunctions()
+    private let labels = RecoveryKitLabels(
         title: "Recovery kit", accountId: "Account ID", recoveryKey: "Recovery key", note: "Keep this safe.")
 
     @MainActor
-    private func makeViewModel(code: String? = nil) -> (RecoveryKitViewModel, Confirmations) {
+    private func makeViewModel(
+        code: String? = nil, recoveryKit: any RecoveryKitFunctions = FakeRecoveryKitFunctions()
+    ) -> (RecoveryKitViewModel, Confirmations) {
         let confirmations = Confirmations()
-        let viewModel = RecoveryKitViewModel(userId: userId, code: code ?? self.code, labels: labels) {
+        let viewModel = RecoveryKitViewModel(
+            userId: userId, code: code ?? self.code, labels: labels, recoveryKit: recoveryKit
+        ) {
             confirmations.count += 1
         }
         return (viewModel, confirmations)
@@ -28,9 +34,9 @@ final class RecoveryKitViewModelTests: XCTestCase {
 
         XCTAssertEqual(viewModel.userId, userId)
         XCTAssertEqual(viewModel.groupedCode, code)
-        XCTAssertEqual(viewModel.kitText, RecoveryKit.format(userId: userId, recoveryCode: code, labels: labels))
+        XCTAssertEqual(viewModel.kitText, kit.formatRecoveryKit(userId: userId, recoveryCode: code, labels: labels))
         XCTAssertEqual(viewModel.labels, labels)
-        XCTAssertEqual(viewModel.endingLength, RecoveryKit.endingSymbols)
+        XCTAssertEqual(viewModel.endingLength, kit.recoveryKeyEnding(recoveryCode: code).count)
         XCTAssertFalse(viewModel.isChecking)
         XCTAssertFalse(viewModel.isConfirmed)
     }
@@ -105,8 +111,28 @@ final class RecoveryKitViewModelTests: XCTestCase {
         XCTAssertEqual(confirmations.count, 0)
     }
 
+    @MainActor
+    func testUsesTheInjectedFunctionsToFormatAndMatch() async {
+        let recording = RecordingRecoveryKitFunctions()
+        let (viewModel, confirmations) = makeViewModel(recoveryKit: recording)
+
+        XCTAssertEqual(
+            viewModel.kitText, kit.formatRecoveryKit(userId: userId, recoveryCode: code, labels: labels))
+        viewModel.continueToCheck()
+        viewModel.endingInput = "m-v7r"
+        viewModel.confirm()
+
+        XCTAssertEqual(
+            recording.calls,
+            [
+                .format(userId: userId, recoveryCode: code, labels: labels),
+                .matches(recoveryCode: code, typed: "m-v7r"),
+            ])
+        XCTAssertEqual(confirmations.count, 1)
+    }
+
     func testLocalizedLabelsHaveTheEnglishWords() {
-        let labels = RecoveryKit.Labels.localized
+        let labels = RecoveryKitLabels.localized
         XCTAssertEqual(labels.title, "gim recovery kit")
         XCTAssertEqual(labels.accountId, "Account ID")
         XCTAssertEqual(labels.recoveryKey, "Recovery key")
