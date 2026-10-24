@@ -5,9 +5,9 @@
 - **approvedAt**: 2026-10-23 09:58 (user, through the gimhq workspace coordinator: auto mode for campaign `l1-0xhhlawj-20261023095300`)
 - **relatedTask**: 20261023-1002-product-ui-i18n-settings
 
-## Paused
+## Paused (resumed 2026-10-24)
 
-Paused 2026-10-24 02:35Z on user instruction. No session is running, and every worktree is clean.
+Paused 2026-10-24 02:35Z on user instruction; resumed 2026-10-24 on user instruction (crons resumed, next steps below in progress). No session is running, and every worktree is clean.
 
 Merged on main (origin/main `fc4371a`):
 
