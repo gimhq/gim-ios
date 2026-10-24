@@ -47,7 +47,10 @@ public struct RootView: View {
             }
             .overlay(alignment: .bottom) {
                 if model.isSyncHeld {
-                    Text("Sync held").font(.caption2).accessibilityIdentifier("debug.sync.held")
+                    VStack {
+                        Text("Sync held").font(.caption2).accessibilityIdentifier("debug.sync.held")
+                        DebugProcessID()
+                    }
                 }
             }
             .sheet(

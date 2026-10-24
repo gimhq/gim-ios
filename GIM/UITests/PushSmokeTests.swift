@@ -25,6 +25,8 @@ import XCTest
 /// `gim-debug://hold-sync` (`DebugPushURL.holdSyncURL`, waiting for `debug.sync.held`): the app stops sync and keeps
 /// it stopped until the next push has been processed, so the extension-mode client joins the group as the extension
 /// would while the app is suspended. gim-core's store lock is not involved: the app's client simply does not sync.
+/// The hold is persisted, so it survives when opening the push URL relaunches the app; the step compares `debug.pid`
+/// before and after and reports such a relaunch as `g=pass_relaunched`.
 final class PushSmokeTests: E2ETestCase {
     private let summary = StepSummary("PushSmokeTests", steps: ["a", "b", "c", "d", "e", "f", "g", "h"])
     /// The push mock's own wait, plus the hub's dispatch and the helper's poll.
@@ -165,6 +167,7 @@ final class PushSmokeTests: E2ETestCase {
 
         summary.start("g")
         let groupName = "Invite \(suffix)"
+        var relaunched = false
         try XCTContext.runActivity(named: "step g: peer adds the app to \(groupName), the push shows the invitation") {
             _ in
             let bystander = try waitForPeer("step g: bystander registers as bystander_\(suffix)", app) {
@@ -177,6 +180,7 @@ final class PushSmokeTests: E2ETestCase {
             app.open(URL(string: "gim-debug://hold-sync")!)
             try require(
                 app.staticTexts["debug.sync.held"].waitForExistence(timeout: 10), "step g: the app holds its sync", app)
+            let heldPid = app.staticTexts.matching(identifier: "debug.pid").firstMatch.label
             XCUIDevice.shared.press(.home)
             let since = try waitForPeer("step g: push mock deliveries", app) {
                 try await Self.deliveries(pushMockUrl, since: nil).next
@@ -194,6 +198,12 @@ final class PushSmokeTests: E2ETestCase {
             app.open(Self.debugPushURL(payload: String(decoding: delivery.gim ?? Data(), as: UTF8.self)))
             let kind = app.staticTexts["debug.push.kind"]
             try require(kind.waitForExistence(timeout: networkTimeout), "step g: the processed push is shown", app)
+            // The persisted hold covers a relaunch; record it so a regression shows up in the summary.
+            let pushPid = app.staticTexts.matching(identifier: "debug.pid").firstMatch.label
+            if pushPid != heldPid {
+                relaunched = true
+                print("[e2e] app relaunched pid \(heldPid) -> \(pushPid)")
+            }
             try require(kind.label == "invite", "step g: debug.push.kind invite (found \"\(kind.label)\")", app)
             try require(
                 app.staticTexts["debug.push.shouldDisplay"].label == "true", "step g: debug.push.shouldDisplay true",
@@ -215,7 +225,7 @@ final class PushSmokeTests: E2ETestCase {
                 springboardText(containing: body).waitForExistence(timeout: 20),
                 "step g: Springboard shows \"\(body)\"", app)
         }
-        summary.finish("g")
+        summary.finish("g", relaunched ? "pass relaunched" : "pass")
 
         summary.start("h")
         try XCTContext.runActivity(named: "step h: app signs out, a later push gets the generic content") { _ in

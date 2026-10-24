@@ -519,6 +519,49 @@ final class AppModelTests: XCTestCase {
     }
 
     @MainActor
+    func testHeldSyncSurvivesARelaunch() async throws {
+        let session = session
+        let defaults = makeDefaults()
+        defaults.set("https://gim.example.eu", forKey: AppModel.serverUrlKey)
+        let first = makeModel(factory: ClientFactory(FakeGimClient(session: session)), defaults: defaults)
+        await first.start()
+        await first.holdSync(true)
+
+        // A relaunched process: a new model and client on the same defaults.
+        let scheduler = ManualFakeScheduler()
+        let client = FakeGimClient(scheduler: scheduler, session: session)
+        let model = makeModel(factory: ClientFactory(client), defaults: defaults)
+        XCTAssertTrue(model.isSyncHeld)
+        await model.start()
+        let scheduled = scheduler.pendingCount
+        await model.scenePhaseChanged(.active)
+        await Task.yield()
+        XCTAssertEqual(scheduler.pendingCount, scheduled, "no sync started on activation while held")
+    }
+
+    @MainActor
+    func testReleasedSyncStaysReleasedAfterARelaunch() async throws {
+        let session = session
+        let defaults = makeDefaults()
+        defaults.set("https://gim.example.eu", forKey: AppModel.serverUrlKey)
+        let first = makeModel(factory: ClientFactory(FakeGimClient(session: session)), defaults: defaults)
+        await first.start()
+        await first.holdSync(true)
+        await first.holdSync(false)
+
+        let scheduler = ManualFakeScheduler()
+        let client = FakeGimClient(scheduler: scheduler, session: session)
+        let model = makeModel(factory: ClientFactory(client), defaults: defaults)
+        XCTAssertFalse(model.isSyncHeld)
+        await model.start()
+        var states = try await ListenerBridge.connectionState(client).makeAsyncIterator()
+        _ = await states.next()
+        await model.scenePhaseChanged(.active)
+        let connecting = await states.next()
+        XCTAssertEqual(connecting, .connecting)
+    }
+
+    @MainActor
     func testSignedInHookRunsAtLaunchAndAfterEachSignIn() async throws {
         let launched = FakeGimClient(session: session)
         let factory = ClientFactory(launched, FakeGimClient())

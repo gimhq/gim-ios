@@ -15,6 +15,7 @@
     /// iOS 27 simulator; the UI tests use this instead. `DebugPushURL.holdSyncURL` holds the app's sync
     /// (`AppModel.holdSync`) until the next push has been processed, so the extension-mode client sees the push as the
     /// extension would while the app is not running (e.g. it joins an invited chat itself and shows the invitation).
+    /// The hold is persisted, so it also applies when opening the push URL relaunches the app.
     @MainActor
     @Observable
     final class DebugPushProcessor {
@@ -63,6 +64,15 @@
         }
     }
 
+    /// The app's process ID, accessibility identifier `debug.pid`, so the UI tests can tell whether opening a debug push
+    /// URL relaunched the app.
+    struct DebugProcessID: View {
+        var body: some View {
+            Text(verbatim: String(ProcessInfo.processInfo.processIdentifier)).font(.caption2)
+                .foregroundStyle(.secondary).accessibilityIdentifier("debug.pid")
+        }
+    }
+
     /// The mapped push, with accessibility identifiers `debug.push.*` for the UI tests.
     struct DebugPushSheet: View {
         let presentation: NotificationPresentation
@@ -89,6 +99,7 @@
                     field(
                         String(localized: "Kind", table: "Common", bundle: .module),
                         String(describing: presentation.kind), id: "debug.push.kind")
+                    DebugProcessID()
                     Spacer()
                 }
                 .padding()

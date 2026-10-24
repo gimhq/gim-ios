@@ -74,6 +74,9 @@ public final class AppModel {
         self.bundledServerUrl = bundledServerUrl
         self.makeHooks = makeHooks
         self.signedIn = signedIn
+        #if DEBUG
+            isSyncHeld = defaults.bool(forKey: Self.syncHeldKey)
+        #endif
     }
 
     /// gim-core (`RealGimClientFactory`); in debug builds the `useFakeCoreKey` launch argument selects the demo
@@ -139,10 +142,18 @@ public final class AppModel {
     }
 
     #if DEBUG
-        /// Debug builds: stops sync and keeps it stopped while `held`, even when the scene becomes active; releasing
-        /// starts it again if the scene is active. For `DebugPushURL.holdSyncURL`.
+        /// Persisted hold, so a process relaunched by the next debug push URL starts held too.
+        private static let syncHeldKey = "debug.syncHeld"
+
+        /// Debug builds: stops sync and keeps it stopped while `held`, even when the scene becomes active and across
+        /// app relaunches; releasing starts it again if the scene is active. For `DebugPushURL.holdSyncURL`.
         public func holdSync(_ held: Bool) async {
             isSyncHeld = held
+            if held {
+                defaults.set(true, forKey: Self.syncHeldKey)
+            } else {
+                defaults.removeObject(forKey: Self.syncHeldKey)
+            }
             await updateSync()
         }
     #endif
