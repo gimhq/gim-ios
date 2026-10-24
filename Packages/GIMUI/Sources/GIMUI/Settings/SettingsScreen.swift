@@ -5,13 +5,15 @@ import PhotosUI
 import SwiftUI
 import UIKit
 
-/// The root of the Settings stack: profile, devices, privacy, notifications, appearance, language, servers, help and sign-out.
+/// The root of the Settings stack: profile, devices, privacy, notifications, appearance, language, servers, help,
+/// sign-out and account deletion.
 struct SettingsScreen: View {
     let client: any GimClientAPI
     let session: Session?
     /// Re-reads the session after the name or the handle changed.
     let refreshSession: @MainActor () async -> Void
     let signOut: () async -> String?
+    let deleteAccount: () async -> String?
 
     @Environment(\.dismiss) private var dismiss
     @AppStorage(AppearanceSetting.defaultsKey) private var appearanceRaw = AppearanceSetting.system.rawValue
@@ -33,12 +35,13 @@ struct SettingsScreen: View {
 
     init(
         client: any GimClientAPI, session: Session?, refreshSession: @escaping @MainActor () async -> Void,
-        signOut: @escaping () async -> String?
+        signOut: @escaping () async -> String?, deleteAccount: @escaping () async -> String?
     ) {
         self.client = client
         self.session = session
         self.refreshSession = refreshSession
         self.signOut = signOut
+        self.deleteAccount = deleteAccount
         _profile = State(initialValue: ProfileViewModel(client: client, onChanged: refreshSession))
         _profilePhoto = State(
             initialValue: ProfilePhotoViewModel(
@@ -109,6 +112,9 @@ struct SettingsScreen: View {
             }
             helpSection
             signOutSection
+            if session != nil {
+                deleteAccountSection
+            }
         }
         .navigationTitle(Text("Settings", tableName: "Settings", bundle: .module))
         .navigationBarTitleDisplayMode(.inline)
@@ -440,6 +446,17 @@ struct SettingsScreen: View {
         }
     }
 
+    private var deleteAccountSection: some View {
+        Section {
+            NavigationLink {
+                DeleteAccountScreen { await performDeleteAccount() }
+            } label: {
+                Text("Delete account", tableName: "Settings", bundle: .module).foregroundStyle(.red)
+            }
+            .accessibilityIdentifier("settings.deleteAccount")
+        }
+    }
+
     private func copy(_ userId: String) {
         UIPasteboard.general.string = userId
         copiedUserId = true
@@ -483,5 +500,11 @@ struct SettingsScreen: View {
         errorMessage = await signOut()
         isSigningOut = false
         if errorMessage == nil { dismiss() }
+    }
+
+    private func performDeleteAccount() async -> String? {
+        let error = await deleteAccount()
+        if error == nil { dismiss() }
+        return error
     }
 }

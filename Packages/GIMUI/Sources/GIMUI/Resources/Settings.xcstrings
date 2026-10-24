@@ -421,6 +421,34 @@
         }
       }
     },
+    "DELETE" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DELETE"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ELIMINAR"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "刪除"
+          }
+        }
+      }
+    },
     "Dark" : {
       "localizations" : {
         "en" : {
@@ -449,6 +477,34 @@
         }
       }
     },
+    "Delete account" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete account"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminar cuenta"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除账号"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "刪除帳號"
+          }
+        }
+      }
+    },
     "Enter a name." : {
       "localizations" : {
         "en" : {
@@ -473,6 +529,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "請輸入名字。"
+          }
+        }
+      }
+    },
+    "Everything on this device is removed, including your messages." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Everything on this device is removed, including your messages."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se borra todo lo que hay en este dispositivo, incluidos tus mensajes."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此设备上的所有内容都会被移除，包括你的消息。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此裝置上的所有內容都會被移除，包括你的訊息。"
           }
         }
       }
@@ -1373,6 +1457,62 @@
         }
       }
     },
+    "This can't be undone, and your recovery key stops working. Servers that can't be reached now remove your account later on their own." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This can't be undone, and your recovery key stops working. Servers that can't be reached now remove your account later on their own."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se puede deshacer y tu clave de recuperación dejará de funcionar. Los servidores a los que no se pueda conectar ahora eliminarán tu cuenta más tarde por su cuenta."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此操作无法撤销，你的恢复密钥也将失效。目前无法连接的服务器稍后会自行删除你的账号。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此操作無法復原，你的復原金鑰也將失效。目前無法連線的伺服器稍後會自行刪除你的帳號。"
+          }
+        }
+      }
+    },
+    "Type %@ to confirm" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Type %@ to confirm"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escribe %@ para confirmar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "输入“%@”以确认"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "輸入「%@」以確認"
+          }
+        }
+      }
+    },
     "Typing indicators" : {
       "localizations" : {
         "en" : {
@@ -1485,6 +1625,34 @@
         }
       }
     },
+    "What gets deleted" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What gets deleted"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Qué se elimina"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "将删除的内容"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "將刪除的內容"
+          }
+        }
+      }
+    },
     "When this is off, others don't see when you're typing, and you don't see when they are." : {
       "localizations" : {
         "en" : {
@@ -1537,6 +1705,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "關閉後，其他人看不到你是否已讀他們的訊息，你也看不到他們是否已讀你的訊息。"
+          }
+        }
+      }
+    },
+    "You leave all your chats. Other members see that you left." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You leave all your chats. Other members see that you left."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sales de todos tus chats. Los demás miembros ven que saliste."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你会退出所有聊天，其他成员会看到你已退出。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你會退出所有聊天，其他成員會看到你已退出。"
           }
         }
       }
@@ -1597,6 +1793,34 @@
         }
       }
     },
+    "Your account is deleted from every server this device can reach." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your account is deleted from every server this device can reach."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu cuenta se elimina de todos los servidores a los que este dispositivo puede conectarse."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的账号会从此设备能连接到的所有服务器上删除。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的帳號會從此裝置能連線到的所有伺服器上刪除。"
+          }
+        }
+      }
+    },
     "Your current recovery key stops working. The new recovery kit replaces the old one, so save it again." : {
       "localizations" : {
         "en" : {
@@ -1621,6 +1845,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "你目前的復原金鑰將會失效。新的復原資料會取代舊的，請重新儲存。"
+          }
+        }
+      }
+    },
+    "Your other devices are signed out." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your other devices are signed out."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se cierra la sesión en tus otros dispositivos."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的其他设备会退出登录。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的其他裝置會登出。"
           }
         }
       }
