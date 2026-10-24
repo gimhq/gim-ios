@@ -50,7 +50,8 @@ final class OnboardingValidationKindTests: XCTestCase {
     @MainActor
     func testOnboardingViewModelServerUrlErrorKind() async {
         let viewModel = OnboardingViewModel(
-            factory: RecordingFactory { _ in FakeGimClient() }, hooks: TestHooks(dataDir: makeTemporaryDirectory())
+            factory: RecordingFactory { _ in FakeGimClient() }, hooks: TestHooks(dataDir: makeTemporaryDirectory()),
+            recoveryKit: FakeRecoveryKitFunctions()
         ) { _ in }
         XCTAssertNil(viewModel.serverUrlErrorKind, "untouched field")
 
@@ -132,7 +133,8 @@ final class RecoveryKitKindTests: XCTestCase {
     @MainActor
     func testWrongEndingSelectsMismatch() async {
         let viewModel = RecoveryKitViewModel(
-            userId: "user-sofia", code: "7BQ2-K9MX-4TVA-0HZR-PC63-W8NE-1SJD-5GFY-QK2M-V7R"
+            userId: "user-sofia", code: "7BQ2-K9MX-4TVA-0HZR-PC63-W8NE-1SJD-5GFY-QK2M-V7R",
+            recoveryKit: FakeRecoveryKitFunctions()
         ) {}
         viewModel.continueToCheck()
         XCTAssertNil(viewModel.endingErrorKind)

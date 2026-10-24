@@ -26,6 +26,7 @@ final class LinkThisDeviceViewModelTests: XCTestCase {
                 return try await client()
             },
             discardClient: { outcome.discards += 1 },
+            recoveryKit: FakeRecoveryKitFunctions(),
             onRegistered: { outcome.registrations.append($0) })
         return (LinkThisDeviceViewModel(context: context), outcome)
     }

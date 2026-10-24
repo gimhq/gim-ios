@@ -30,20 +30,25 @@ final class AppModelTests: XCTestCase {
         }
     }
 
-    /// Forwards to a `FakeGimClient`, except that `signOut` can fail and `localStateReset` is configurable; records
-    /// the zones passed to `setLocalTimeZone`.
+    /// Forwards to a `FakeGimClient`, except that `signOut` and `deleteAccount` can fail and `localStateReset` is
+    /// configurable; records the zones passed to `setLocalTimeZone`.
     private actor StubClient: GimClientAPI {
         let fake: FakeGimClient
         let signOutError: GimError?
+        let deleteAccountError: GimError?
         let reportsLocalStateReset: Bool
         private nonisolated let zoneLock = NSLock()
         private nonisolated(unsafe) var zones: [(any LocalTimeZone)?] = []
 
         nonisolated var timeZones: [(any LocalTimeZone)?] { zoneLock.withLock { zones } }
 
-        init(_ fake: FakeGimClient, signOutError: GimError? = nil, localStateReset: Bool = false) {
+        init(
+            _ fake: FakeGimClient, signOutError: GimError? = nil, deleteAccountError: GimError? = nil,
+            localStateReset: Bool = false
+        ) {
             self.fake = fake
             self.signOutError = signOutError
+            self.deleteAccountError = deleteAccountError
             reportsLocalStateReset = localStateReset
         }
 
@@ -245,7 +250,8 @@ final class AppModelTests: XCTestCase {
         }
 
         func deleteAccount() async throws -> [String] {
-            try await fake.deleteAccount()
+            if let deleteAccountError { throw deleteAccountError }
+            return try await fake.deleteAccount()
         }
     }
 
@@ -305,7 +311,7 @@ final class AppModelTests: XCTestCase {
             return XCTFail("expected the recovery kit, got \(String(describing: onboarding.stage))")
         }
         recovery.continueToCheck()
-        recovery.endingInput = RecoveryKit.ending(of: recovery.groupedCode)
+        recovery.endingInput = CoreRecoveryKitFunctions().recoveryKeyEnding(recoveryCode: recovery.groupedCode)
         recovery.confirm()
         guard case .claimHandle(let claim) = onboarding.stage else {
             return XCTFail("expected the handle step, got \(String(describing: onboarding.stage))")
@@ -681,6 +687,47 @@ final class AppModelTests: XCTestCase {
         XCTAssertNotNil(error)
         guard case .onboarding = model.phase else { return XCTFail("expected onboarding, got \(model.phase)") }
         XCTAssertEqual(model.onboarding?.serverUrl, "https://gim.example.eu")
+    }
+
+    @MainActor
+    func testDeleteAccountWipesAndReturnsToOnboarding() async throws {
+        let hooks = MemoryHooks()
+        let fake = FakeGimClient(session: session)
+        let factory = ClientFactory(fake, FakeGimClient())
+        let defaults = makeDefaults()
+        defaults.set("https://gim.example.eu", forKey: AppModel.serverUrlKey)
+        let model = makeModel(factory: factory, defaults: defaults, hooks: hooks)
+        await model.start()
+
+        let error = await model.deleteAccount()
+
+        XCTAssertNil(error)
+        let remaining = try await fake.session()
+        XCTAssertNil(remaining, "the client deleted the account")
+        XCTAssertEqual(hooks.wipeCount, 1)
+        XCTAssertNil(model.session)
+        guard case .onboarding = model.phase else { return XCTFail("expected onboarding, got \(model.phase)") }
+        let onboarding = try XCTUnwrap(model.onboarding)
+        XCTAssertEqual(onboarding.serverUrl, "https://gim.example.eu")
+        try await register(onboarding)
+        XCTAssertEqual(factory.configs.count, 2, "a new client is created after deleting the account")
+    }
+
+    @MainActor
+    func testFailedDeleteAccountStaysSignedInWithoutWiping() async {
+        let hooks = MemoryHooks()
+        let defaults = makeDefaults()
+        defaults.set("https://gim.example.eu", forKey: AppModel.serverUrlKey)
+        let client = StubClient(FakeGimClient(session: session), deleteAccountError: .Network(reason: "offline"))
+        let model = makeModel(factory: ClientFactory(client), defaults: defaults, hooks: hooks)
+        await model.start()
+
+        let error = await model.deleteAccount()
+
+        XCTAssertNotNil(error)
+        XCTAssertEqual(hooks.wipeCount, 0)
+        XCTAssertNotNil(model.session)
+        guard case .ready = model.phase else { return XCTFail("expected ready, got \(model.phase)") }
     }
 
     @MainActor

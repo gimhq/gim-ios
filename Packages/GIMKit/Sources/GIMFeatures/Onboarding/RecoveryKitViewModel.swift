@@ -1,4 +1,5 @@
 import Foundation
+import GIMClientKit
 import Observation
 
 /// Shows the recovery kit once and makes the user type the last symbols of the recovery code before continuing. The
@@ -24,7 +25,7 @@ public final class RecoveryKitViewModel {
     public let userId: String
     /// The code as returned by `createIdentity`; `nil` once confirmed.
     public private(set) var code: String?
-    public let labels: RecoveryKit.Labels
+    public let labels: RecoveryKitLabels
     /// Whether the check step is showing instead of the kit.
     public private(set) var isChecking = false
     public var endingInput = ""
@@ -33,15 +34,17 @@ public final class RecoveryKitViewModel {
     /// The kind behind `endingError`.
     public private(set) var endingErrorKind: EndingErrorKind?
 
+    private let recoveryKit: any RecoveryKitFunctions
     private let onConfirmed: @MainActor () -> Void
 
     public init(
-        userId: String, code: String, labels: RecoveryKit.Labels = .localized,
+        userId: String, code: String, labels: RecoveryKitLabels = .localized, recoveryKit: any RecoveryKitFunctions,
         onConfirmed: @escaping @MainActor () -> Void
     ) {
         self.userId = userId
         self.code = code
         self.labels = labels
+        self.recoveryKit = recoveryKit
         self.onConfirmed = onConfirmed
     }
 
@@ -52,7 +55,7 @@ public final class RecoveryKitViewModel {
 
     /// The kit text to copy, share or save; empty once confirmed.
     public var kitText: String {
-        code.map { RecoveryKit.format(userId: userId, recoveryCode: $0, labels: labels) } ?? ""
+        code.map { recoveryKit.formatRecoveryKit(userId: userId, recoveryCode: $0, labels: labels) } ?? ""
     }
 
     /// The number of symbols the check asks for.
@@ -77,7 +80,7 @@ public final class RecoveryKitViewModel {
     /// Compares the typed ending with the code's last symbols, ignoring case, `-` and whitespace.
     public func confirm() {
         guard isChecking, let code else { return }
-        guard RecoveryKit.matchesEnding(code, typed: endingInput) else {
+        guard recoveryKit.matchesRecoveryKeyEnding(recoveryCode: code, typed: endingInput) else {
             endingErrorKind = .mismatch
             return
         }
@@ -88,7 +91,7 @@ public final class RecoveryKitViewModel {
     }
 }
 
-extension RecoveryKit.Labels {
+extension RecoveryKitLabels {
     /// The kit words in the user's language.
     public static var localized: Self {
         Self(

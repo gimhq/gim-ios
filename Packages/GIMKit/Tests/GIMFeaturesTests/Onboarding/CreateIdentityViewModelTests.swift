@@ -16,7 +16,7 @@ final class CreateIdentityViewModelTests: XCTestCase {
         let created = Created()
         let context = OnboardingContext(
             config: ClientConfig(serverUrl: "https://gim.example.eu"), client: client, discardClient: {},
-            onRegistered: { _ in })
+            recoveryKit: FakeRecoveryKitFunctions(), onRegistered: { _ in })
         let viewModel = CreateIdentityViewModel(context: context) { created.results.append(($0, $1, $2)) }
         return (viewModel, created)
     }
