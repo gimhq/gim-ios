@@ -8,6 +8,24 @@
             "state" : "translated",
             "value" : "Account ID"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ID de cuenta"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "账号 ID"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "帳號 ID"
+          }
         }
       }
     },
@@ -17,6 +35,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Choose a username."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige un nombre de usuario."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请选择一个用户名。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請選擇一個使用者名稱。"
           }
         }
       }
@@ -28,6 +64,24 @@
             "state" : "translated",
             "value" : "Enter a full address, like https://example.com"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escribe una dirección completa, como https://example.com"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请输入完整地址，例如 https://example.com"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請輸入完整網址，例如 https://example.com"
+          }
         }
       }
     },
@@ -37,6 +91,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Enter the server address."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escribe la dirección del servidor."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请输入服务器地址。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請輸入伺服器網址。"
           }
         }
       }
@@ -48,6 +120,24 @@
             "state" : "translated",
             "value" : "Enter your Account ID."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escribe tu ID de cuenta."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请输入你的账号 ID。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請輸入你的帳號 ID。"
+          }
         }
       }
     },
@@ -57,6 +147,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Enter your name."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escribe tu nombre."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请输入你的名字。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請輸入你的名字。"
           }
         }
       }
@@ -68,6 +176,24 @@
             "state" : "translated",
             "value" : "Enter your recovery key."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escribe tu clave de recuperación."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请输入你的恢复密钥。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請輸入你的復原金鑰。"
+          }
         }
       }
     },
@@ -77,6 +203,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Keep this secret. Anyone who has it can get into your account. Lost all your devices? Open gim, tap Restore and paste this text."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se lo enseñes a nadie. Quien lo tenga puede entrar en tu cuenta. ¿Perdiste todos tus dispositivos? Abre gim, toca Restaurar y pega este texto."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请保密。拿到它的人都能进入你的账号。所有设备都丢了？打开 gim，点按“恢复”，然后粘贴这段文字。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請保密。拿到它的人都能進入你的帳號。所有裝置都遺失了？打開 gim，點一下「復原」，然後貼上這段文字。"
           }
         }
       }
@@ -88,6 +232,24 @@
             "state" : "translated",
             "value" : "Part of the kit is missing. Fill in the empty field below."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Falta una parte del kit. Completa el campo vacío de abajo."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "恢复资料缺了一部分。请填写下面的空白栏。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "復原資料少了一部分。請填寫下方的空白欄位。"
+          }
         }
       }
     },
@@ -97,6 +259,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Recovery key"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clave de recuperación"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "恢复密钥"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "復原金鑰"
           }
         }
       }
@@ -108,6 +288,24 @@
             "state" : "translated",
             "value" : "Someone already has this username. Try another one."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alguien ya tiene este nombre de usuario. Prueba con otro."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这个用户名已经有人用了。换一个试试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這個使用者名稱已經有人使用。換一個試試。"
+          }
         }
       }
     },
@@ -117,6 +315,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "That doesn't match. Look at your recovery key and try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No coincide. Revisa tu clave de recuperación e inténtalo de nuevo."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不匹配。请看看你的恢复密钥，然后再试一次。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不相符。請看看你的復原金鑰，然後再試一次。"
           }
         }
       }
@@ -128,6 +344,24 @@
             "state" : "translated",
             "value" : "This recovery key doesn't fit this account. Check the key and the Account ID."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta clave de recuperación no es de esta cuenta. Revisa la clave y el ID de cuenta."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这个恢复密钥和这个账号对不上。请检查密钥和账号 ID。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這個復原金鑰和這個帳號對不上。請檢查金鑰和帳號 ID。"
+          }
         }
       }
     },
@@ -137,6 +371,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "This server has no account with this Account ID. Check the ID and the server."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este servidor no tiene ninguna cuenta con este ID de cuenta. Revisa el ID y el servidor."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这个服务器上没有这个账号 ID 的账号。请检查 ID 和服务器。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這個伺服器上沒有這個帳號 ID 的帳號。請檢查 ID 和伺服器。"
           }
         }
       }
@@ -148,6 +400,24 @@
             "state" : "translated",
             "value" : "Use only letters, digits, underscores and dots."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usa solo letras, números, guiones bajos y puntos."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只能使用字母、数字、下划线和点。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只能使用字母、數字、底線和句點。"
+          }
         }
       }
     },
@@ -157,6 +427,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Usernames are 3 to 32 characters long."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los nombres de usuario tienen de 3 a 32 caracteres."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用户名长度为 3 到 32 个字符。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用者名稱長度為 3 到 32 個字元。"
           }
         }
       }
@@ -168,6 +456,24 @@
             "state" : "translated",
             "value" : "We couldn't find an Account ID or recovery key here. Paste the whole kit, or type them below."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No encontramos ningún ID de cuenta ni clave de recuperación aquí. Pega el kit completo o escríbelos abajo."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这里找不到账号 ID 或恢复密钥。请粘贴完整的恢复资料，或在下面手动输入。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這裡找不到帳號 ID 或復原金鑰。請貼上完整的復原資料，或在下方手動輸入。"
+          }
         }
       }
     },
@@ -178,6 +484,24 @@
             "state" : "translated",
             "value" : "Your name can be 1 to 64 characters long."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu nombre puede tener de 1 a 64 caracteres."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "名字长度为 1 到 64 个字符。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "名字長度為 1 到 64 個字元。"
+          }
         }
       }
     },
@@ -187,6 +511,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "gim recovery kit"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kit de recuperación de gim"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "gim 恢复资料"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "gim 復原資料"
           }
         }
       }

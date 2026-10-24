@@ -47,7 +47,7 @@ public struct RootView: View {
             }
             .overlay(alignment: .bottom) {
                 if model.isSyncHeld {
-                    Text("Sync held").font(.caption2).accessibilityIdentifier("debug.sync.held")
+                    Text(verbatim: "Sync held").font(.caption2).accessibilityIdentifier("debug.sync.held")
                 }
             }
             .sheet(

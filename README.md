@@ -23,7 +23,10 @@ Code reads them with `String(localized: "Try again", table: "Common", bundle: .m
 `Text("Chats", tableName: "Chat", bundle: .module)`, also for accessibility labels and UIKit; GIMFeatures, which also
 builds on Linux, uses `NSLocalizedString(_:tableName:bundle:value:comment:)`. The app declares en,
 zh-Hans, zh-Hant and es in `project.yml`; the usage descriptions are in `GIM/Resources/InfoPlist.xcstrings`. The words
-to use are in `docs/glossary.md`. Translations are a later step.
+to use are in `docs/glossary.md`. en, zh-Hans, zh-Hant and es are complete, and the catalog completeness tests
+(`Packages/GIMKit/Tests/GIMFeaturesTests/Common/CatalogCompletenessTests.swift` and
+`Packages/GIMUI/Tests/GIMUITests/CatalogCompletenessTests.swift`) fail on a missing, unreviewed or mismatched
+translation or on a user-visible literal outside the catalogs.
 
 ## Build
 

@@ -45,4 +45,35 @@ final class RelativeDateFormatterTests: XCTestCase {
         let date = calendar.date(from: DateComponents(year: 2026, month: 10, day: 12, hour: 10))!
         XCTAssertEqual(formatter.string(from: date), "Montag")
     }
+
+    func testWeekdayAndDateFollowChineseAndSpanishLocales() {
+        let now = now
+        let weekday = calendar.date(from: DateComponents(year: 2026, month: 10, day: 12, hour: 10))!
+        let older = calendar.date(from: DateComponents(year: 2025, month: 12, day: 24, hour: 12))!
+        let english = RelativeDateFormatter(calendar: calendar, locale: Locale(identifier: "en_US"), now: { now })
+        for identifier in ["zh_Hans", "es"] {
+            let locale = Locale(identifier: identifier)
+            let formatter = RelativeDateFormatter(calendar: calendar, locale: locale, now: { now })
+            XCTAssertEqual(formatter.string(from: weekday), reference(locale: locale, template: "EEEE", date: weekday))
+            XCTAssertEqual(formatter.string(from: older), reference(locale: locale, dateStyle: .short, date: older))
+            XCTAssertNotEqual(formatter.string(from: weekday), english.string(from: weekday), identifier)
+            XCTAssertNotEqual(formatter.string(from: older), english.string(from: older), identifier)
+        }
+    }
+
+    private func reference(
+        locale: Locale, template: String? = nil, dateStyle: DateFormatter.Style = .none, date: Date
+    ) -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.locale = locale
+        formatter.timeZone = calendar.timeZone
+        if let template {
+            formatter.setLocalizedDateFormatFromTemplate(template)
+        } else {
+            formatter.dateStyle = dateStyle
+            formatter.timeStyle = .none
+        }
+        return formatter.string(from: date)
+    }
 }
