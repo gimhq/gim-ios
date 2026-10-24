@@ -8,6 +8,8 @@ public struct NewChatScreen: View {
     private let onOpen: (String) -> Void
 
     @State private var viewModel: NewChatViewModel
+    @State private var isScanning = false
+    @State private var scanError: String?
     @Environment(\.dismiss) private var dismiss
 
     /// - Parameter onOpen: called with the direct or group chat that was created.
@@ -23,9 +25,24 @@ public struct NewChatScreen: View {
                 NavigationLink {
                     NewGroupScreen(client: client, onCreated: onOpen)
                 } label: {
-                    Label("New Group", systemImage: "person.3")
+                    Label {
+                        Text("New group", tableName: "Contacts", bundle: .module)
+                    } icon: {
+                        Image(systemName: "person.3")
+                    }
                 }
                 .accessibilityIdentifier("newChat.newGroup")
+                Button {
+                    scanError = nil
+                    isScanning = true
+                } label: {
+                    Label {
+                        Text("Scan QR code", tableName: "Contacts", bundle: .module)
+                    } icon: {
+                        Image(systemName: "qrcode.viewfinder")
+                    }
+                }
+                .accessibilityIdentifier("newChat.scan")
             }
             Section {
                 result
@@ -36,15 +53,35 @@ public struct NewChatScreen: View {
             }
         }
         .searchable(
-            text: $viewModel.query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Handle"
+            text: $viewModel.query, placement: .navigationBarDrawer(displayMode: .always),
+            prompt: Text("Username", tableName: "Contacts", bundle: .module)
         )
         .textInputAutocapitalization(.never)
         .autocorrectionDisabled()
-        .navigationTitle("New Chat")
+        .navigationTitle(Text("New chat", tableName: "Contacts", bundle: .module))
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $isScanning) {
+            ScanAccountIDScreen(error: $scanError, isWorking: viewModel.isStarting, onScanned: startChat(scanned:))
+        }
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("Cancel") { dismiss() }
+                Button(String(localized: "Cancel", table: "Common", bundle: .module)) { dismiss() }
+            }
+        }
+    }
+
+    private func startChat(scanned text: String) {
+        guard !viewModel.isStarting else { return }
+        scanError = nil
+        Task {
+            switch await viewModel.startChat(scanned: text) {
+            case .started(let chatId):
+                isScanning = false
+                onOpen(chatId)
+            case .noUserId:
+                scanError = String(localized: "This code is not a gim Account ID.", table: "Contacts", bundle: .module)
+            case .failed(let message):
+                scanError = message
             }
         }
     }
@@ -53,12 +90,12 @@ public struct NewChatScreen: View {
     private var result: some View {
         switch viewModel.state {
         case .idle:
-            Text("Enter the exact handle of the person you want to message.")
+            Text("Type your friend's exact username.", tableName: "Contacts", bundle: .module)
                 .foregroundStyle(.secondary)
         case .searching:
             HStack {
                 ProgressView()
-                Text("Searching…").foregroundStyle(.secondary)
+                Text("Searching…", tableName: "Contacts", bundle: .module).foregroundStyle(.secondary)
             }
         case .found(let user):
             Button {
@@ -74,8 +111,12 @@ public struct NewChatScreen: View {
             }
             .disabled(viewModel.isStarting)
         case .notFound:
-            Label("No one uses this handle.", systemImage: "person.crop.circle.badge.questionmark")
-                .foregroundStyle(.secondary)
+            Label {
+                Text("No one has this username.", tableName: "Contacts", bundle: .module)
+            } icon: {
+                Image(systemName: "person.crop.circle.badge.questionmark")
+            }
+            .foregroundStyle(.secondary)
         case .error(let message):
             Label(message, systemImage: "exclamationmark.triangle")
                 .foregroundStyle(.red)

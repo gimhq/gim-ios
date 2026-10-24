@@ -15,6 +15,7 @@ public struct ComposerView: View {
     @State private var showsPhotoPicker = false
     @State private var showsDocumentPicker = false
     @State private var isPreparingAttachment = false
+    @Environment(\.displayScale) private var displayScale
 
     /// - Parameter timeline: the chat's timeline, which knows the chat's state; the composer is disabled unless the
     ///   chat is active.
@@ -69,12 +70,12 @@ public struct ComposerView: View {
             .ignoresSafeArea()
         }
         .alert(
-            "Can't Send",
+            Text("Couldn't send", tableName: "Chat", bundle: .module),
             isPresented: Binding(
                 get: { viewModel.errorMessage != nil },
                 set: { if !$0 { viewModel.dismissError() } })
         ) {
-            Button("OK", role: .cancel) {}
+            Button(String(localized: "OK", table: "Common", bundle: .module), role: .cancel) {}
         } message: {
             Text(viewModel.errorMessage ?? "")
         }
@@ -84,15 +85,21 @@ public struct ComposerView: View {
     private var input: some View {
         if let message = viewModel.editTarget {
             TargetBar(
-                systemImage: "pencil", title: "Edit Message", text: ComposerViewModel.previewText(for: message)
+                systemImage: "pencil", title: String(localized: "Edit message", table: "Chat", bundle: .module),
+                text: ComposerViewModel.previewText(for: message),
+                cancelHint: String(localized: "Stops editing", table: "Chat", bundle: .module)
             ) {
                 viewModel.cancelEdit()
             }
         } else if let message = viewModel.replyTarget {
             TargetBar(
                 systemImage: "arrowshape.turn.up.left",
-                title: message.isOwn ? "Reply to Yourself" : "Reply to \(UserLabel.name(for: message.sender))",
-                text: ComposerViewModel.previewText(for: message)
+                title: message.isOwn
+                    ? String(localized: "Reply to yourself", table: "Chat", bundle: .module)
+                    : String(
+                        localized: "Reply to \(UserLabel.name(for: message.sender))", table: "Chat", bundle: .module),
+                text: ComposerViewModel.previewText(for: message),
+                cancelHint: String(localized: "Stops replying", table: "Chat", bundle: .module)
             ) {
                 viewModel.setReplyTarget(nil)
             }
@@ -102,7 +109,7 @@ public struct ComposerView: View {
             ZStack(alignment: .topLeading) {
                 GrowingTextView(text: viewModel.text) { viewModel.textChanged($0) }
                 if viewModel.text.isEmpty {
-                    Text("Message")
+                    Text("Message", tableName: "Chat", bundle: .module)
                         .foregroundStyle(.tertiary)
                         .padding(.horizontal, 9)
                         .padding(.vertical, 8)
@@ -110,11 +117,18 @@ public struct ComposerView: View {
                         .accessibilityHidden(true)
                 }
             }
-            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 18))
+            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 20))
+            .overlay {
+                RoundedRectangle(cornerRadius: 20)
+                    .strokeBorder(Color(.separator), lineWidth: 1 / displayScale)
+            }
+            // Centers a one-line field on the 44 pt buttons; taller text grows upwards, the buttons stay at the bottom.
+            .padding(.vertical, 3)
             sendButton
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .contain)
     }
 
     /// "Leaving…" with a spinner, or that the chat was left.
@@ -125,7 +139,7 @@ public struct ComposerView: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
-        .frame(maxWidth: .infinity, minHeight: 36)
+        .frame(maxWidth: .infinity, minHeight: 44)
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .accessibilityElement(children: .combine)
@@ -136,18 +150,27 @@ public struct ComposerView: View {
     private var attachButton: some View {
         if isPreparingAttachment {
             ProgressView()
-                .frame(width: 36, height: 36)
+                .frame(width: 44, height: 44)
         } else {
             Menu {
-                Button("Photo Library", systemImage: "photo.on.rectangle") { showsPhotoPicker = true }
-                Button("Files", systemImage: "folder") { showsDocumentPicker = true }
+                Button(
+                    String(localized: "Photo Library", table: "Chat", bundle: .module),
+                    systemImage: "photo.on.rectangle"
+                ) {
+                    showsPhotoPicker = true
+                }
+                Button(String(localized: "Files", table: "Chat", bundle: .module), systemImage: "folder") {
+                    showsDocumentPicker = true
+                }
             } label: {
                 Image(systemName: "paperclip")
                     .font(.title3)
-                    .frame(width: 36, height: 36)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .disabled(!viewModel.canAttach)
-            .accessibilityLabel("Attach")
+            .accessibilityLabel(Text("Attach a photo or file", tableName: "Chat", bundle: .module))
+            .accessibilityHint(Text("Choose a photo or a file to send", tableName: "Chat", bundle: .module))
             .accessibilityIdentifier("composer.attach")
         }
     }
@@ -158,10 +181,15 @@ public struct ComposerView: View {
         } label: {
             Image(systemName: viewModel.editTarget == nil ? "arrow.up.circle.fill" : "checkmark.circle.fill")
                 .font(.system(size: 30))
-                .frame(width: 36, height: 36)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
         .disabled(!viewModel.canSend)
-        .accessibilityLabel(viewModel.editTarget == nil ? "Send" : "Save Edit")
+        .accessibilityLabel(
+            viewModel.editTarget == nil
+                ? Text("Send message", tableName: "Chat", bundle: .module)
+                : Text("Save edit", tableName: "Chat", bundle: .module)
+        )
         .accessibilityIdentifier("composer.send")
     }
 
@@ -185,6 +213,7 @@ private struct TargetBar: View {
     let systemImage: String
     let title: String
     let text: String
+    let cancelHint: String
     let onCancel: () -> Void
 
     var body: some View {
@@ -211,8 +240,11 @@ private struct TargetBar: View {
                 Image(systemName: "xmark.circle.fill")
                     .font(.title3)
                     .foregroundStyle(.secondary)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
-            .accessibilityLabel("Cancel")
+            .accessibilityLabel(Text("Cancel", tableName: "Common", bundle: .module))
+            .accessibilityHint(cancelHint)
         }
         .fixedSize(horizontal: false, vertical: true)
         .padding(.horizontal, 12)

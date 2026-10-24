@@ -33,7 +33,7 @@ struct TimelineFonts: @unchecked Sendable {
         footer = font(.caption2)
         reaction = font(.footnote)
         fileName = font(.subheadline, .medium)
-        separator = font(.footnote, .medium)
+        separator = font(.footnote, .semibold)
         sizeCategory = traits.preferredContentSizeCategory.rawValue
     }
 }
@@ -130,7 +130,7 @@ actor TimelineLayoutEngine {
     }
 
     static func footerText(_ row: TimelineMessageRow) -> String {
-        row.isEdited ? "edited  \(row.timeText)" : row.timeText
+        row.isEdited ? "\(String(localized: "edited", table: "Chat", bundle: .module))  \(row.timeText)" : row.timeText
     }
 
     /// Display size of an image: the media size clamped to `maxImageSize`, keeping the aspect ratio.

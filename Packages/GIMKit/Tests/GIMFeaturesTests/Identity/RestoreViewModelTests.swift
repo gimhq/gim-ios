@@ -4,6 +4,12 @@ import GIMFeatures
 import XCTest
 
 final class RestoreViewModelTests: XCTestCase {
+    private let validUserId = "u" + String(repeating: "abcdefghijklmnopqrstuvwxyz234567", count: 2).prefix(54) + "q"
+    private let validCode = "7BQ2-K9MX-4TVA-0HZR-PC63-W8NE-1SJD-5GFY-QK2M-V7R"
+    private let english = RecoveryKit.Labels(
+        title: "gim recovery kit", accountId: "Account ID", recoveryKey: "Recovery key", note: "Keep this secret.")
+    private let chinese = RecoveryKit.Labels(title: "恢复工具包", accountId: "账户 ID", recoveryKey: "恢复密钥", note: "请妥善保管。")
+
     @MainActor
     private final class Registered {
         var registrations: [Registration] = []
@@ -48,6 +54,106 @@ final class RestoreViewModelTests: XCTestCase {
         XCTAssertNotNil(viewModel.userIdError)
         XCTAssertNotNil(viewModel.recoveryCodeError)
         XCTAssertEqual(clientRequests, 0)
+        XCTAssertTrue(registered.registrations.isEmpty)
+    }
+
+    @MainActor
+    func testPastingAFullKitFillsBothFields() async {
+        for labels in [english, chinese] {
+            let (viewModel, _) = makeViewModel { FakeGimClient() }
+            XCTAssertFalse(viewModel.showsFields)
+
+            viewModel.kitText = RecoveryKit.format(
+                userId: validUserId.uppercased(), recoveryCode: validCode.lowercased(), labels: labels)
+
+            XCTAssertEqual(viewModel.userId, validUserId)
+            XCTAssertEqual(viewModel.recoveryCode, validCode)
+            XCTAssertEqual(
+                viewModel.parsed,
+                RecoveryKit.Parsed(userId: validUserId, recoveryCode: validCode.replacingOccurrences(of: "-", with: ""))
+            )
+            XCTAssertNil(viewModel.kitError)
+            XCTAssertTrue(viewModel.showsFields)
+        }
+    }
+
+    @MainActor
+    func testPastingOnlyTheKeyFillsTheCodeAndReportsTheMissingPart() async {
+        let (viewModel, _) = makeViewModel { FakeGimClient() }
+        viewModel.userId = "typed before"
+
+        viewModel.kitText = "Recovery key: \(validCode.replacingOccurrences(of: "-", with: ""))"
+
+        XCTAssertEqual(viewModel.recoveryCode, validCode)
+        XCTAssertEqual(viewModel.userId, "typed before", "a part that is not found leaves its field as it is")
+        XCTAssertEqual(viewModel.kitError, RestoreViewModel.kitPartMissingMessage)
+        XCTAssertTrue(viewModel.showsFields)
+    }
+
+    @MainActor
+    func testPastingProseReportsThatNothingWasRecognized() async {
+        let (viewModel, _) = makeViewModel { FakeGimClient() }
+
+        viewModel.kitText = "Hello, I lost my phone. Can you help?"
+
+        XCTAssertEqual(viewModel.parsed, RecoveryKit.Parsed(userId: nil, recoveryCode: nil))
+        XCTAssertEqual(viewModel.kitError, RestoreViewModel.kitNotRecognizedMessage)
+        XCTAssertFalse(viewModel.showsFields)
+        XCTAssertEqual(viewModel.userId, "")
+        XCTAssertEqual(viewModel.recoveryCode, "")
+    }
+
+    @MainActor
+    func testBlankKitTextClearsTheParseAndTheError() async {
+        let (viewModel, _) = makeViewModel { FakeGimClient() }
+        viewModel.kitText = "not a kit"
+        XCTAssertNotNil(viewModel.kitError)
+
+        viewModel.kitText = "  \n "
+
+        XCTAssertNil(viewModel.parsed)
+        XCTAssertNil(viewModel.kitError)
+        XCTAssertFalse(viewModel.showsFields)
+    }
+
+    @MainActor
+    func testEnteringSeparatelyShowsTheFields() async {
+        let (viewModel, _) = makeViewModel { FakeGimClient() }
+
+        viewModel.enterSeparately()
+
+        XCTAssertTrue(viewModel.showsFields)
+        XCTAssertNil(viewModel.kitError)
+    }
+
+    @MainActor
+    func testSubmitAfterAPasteRestoresWithTheParsedNormalizedValues() async throws {
+        let (client, userId, code) = try await restorableClient()
+        let (viewModel, registered) = makeViewModel { client }
+        // The fake's user IDs are not real ones, so the kit yields only the code and the ID is typed.
+        viewModel.kitText = RecoveryKit.format(userId: userId, recoveryCode: code.lowercased(), labels: english)
+        XCTAssertEqual(
+            viewModel.recoveryCode, RecoveryKit.groupedRecoveryCode(RecoveryKit.normalizedRecoveryCode(code)))
+        viewModel.userId = "  \(userId.uppercased())\n"
+
+        await viewModel.submit()
+        viewModel.finish()
+
+        XCTAssertNil(viewModel.errorMessage)
+        let registration = try XCTUnwrap(registered.registrations.first)
+        XCTAssertEqual(registration.session.userId, userId)
+    }
+
+    @MainActor
+    func testSubmitAfterAFullPasteUsesTheParsedAccountId() async throws {
+        let (client, _, _) = try await restorableClient()
+        let (viewModel, registered) = makeViewModel { client }
+        viewModel.kitText = RecoveryKit.format(userId: validUserId, recoveryCode: validCode, labels: chinese)
+
+        await viewModel.submit()
+
+        XCTAssertEqual(viewModel.errorMessage, RestoreViewModel.notFoundMessage, "the fake has no such user")
+        XCTAssertEqual(viewModel.recoveryCode, validCode, "kept for correction")
         XCTAssertTrue(registered.registrations.isEmpty)
     }
 
@@ -114,7 +220,7 @@ final class RestoreViewModelTests: XCTestCase {
 
         await viewModel.submit()
 
-        XCTAssertEqual(viewModel.errorMessage, "No identity with this user ID.")
+        XCTAssertEqual(viewModel.errorMessage, RestoreViewModel.notFoundMessage)
         XCTAssertFalse(viewModel.showsRejoinNotice)
         XCTAssertTrue(registered.registrations.isEmpty)
         XCTAssertFalse(viewModel.isSubmitting)
@@ -145,7 +251,7 @@ final class RestoreViewModelTests: XCTestCase {
 
         await viewModel.submit()
 
-        XCTAssertEqual(viewModel.errorMessage, "This recovery code doesn't match this user ID.")
+        XCTAssertEqual(viewModel.errorMessage, RestoreViewModel.wrongCodeMessage)
 
         viewModel.recoveryCode = code
         await viewModel.submit()
@@ -205,7 +311,7 @@ final class RestoreViewModelTests: XCTestCase {
 
         await viewModel.submit()
 
-        XCTAssertEqual(viewModel.errorMessage, "This hub does not admit your account.")
+        XCTAssertEqual(viewModel.errorMessage, "This server doesn't accept your account.")
         XCTAssertFalse(viewModel.showsRejoinNotice)
         XCTAssertTrue(registered.registrations.isEmpty)
     }

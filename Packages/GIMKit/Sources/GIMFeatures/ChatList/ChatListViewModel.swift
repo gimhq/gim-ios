@@ -20,33 +20,61 @@ public final class ChatListViewModel {
     private var exits: [String: MembershipChangeKind] = [:]
     /// Lookups of `exits`, by chat id; kept once finished so each left chat is looked up once.
     @ObservationIgnored private var exitLookups: [String: Task<Void, Never>] = [:]
+    /// How many own-last-message timelines are followed at once; a chat beyond the cap closes the oldest lookup.
+    public static let maxStatusLookups = 20
+    /// Status of the own last message of each active chat whose timeline was looked up, by chat id.
+    private var lastMessageStatuses: [String: MessageStatus] = [:]
+    /// Lookups of `lastMessageStatuses`, by chat id, each with the `lastMessageSentAtMs` it was started for.
+    @ObservationIgnored private var statusLookups: [String: StatusLookup] = [:]
+    /// Start order of the last status lookup; lower is older.
+    @ObservationIgnored private var statusLookupOrder = 0
     @ObservationIgnored private var listTask: Task<Void, Never>?
     @ObservationIgnored private var connectionTask: Task<Void, Never>?
+
+    private struct StatusLookup {
+        var sentAtMs: UInt64?
+        var order: Int
+        /// `nil` once the cap closed the lookup; it reopens when a slot is free.
+        var task: Task<Void, Never>?
+    }
 
     public init(client: any GimClientAPI, dateFormatter: RelativeDateFormatter = RelativeDateFormatter()) {
         self.client = client
         self.dateFormatter = dateFormatter
     }
 
-    /// The text under the row's title: the last message while the chat is active, otherwise its `ChatState`.
-    /// A left chat says how the user left when its timeline shows the own `left` or `removed` change.
+    /// The text under the row's title: `subtitleKind(for:)` in the FeaturesChat table.
     public func subtitle(for row: ChatRow) -> String {
+        subtitleKind(for: row).text
+    }
+
+    /// What the text under the row's title says: the last message while the chat is active, otherwise its
+    /// `ChatState`. A left chat says how the user left when its timeline shows the own `left` or `removed` change.
+    public func subtitleKind(for row: ChatRow) -> ChatRowSubtitle {
         switch row.state {
-        case .active: row.preview ?? "No messages yet"
-        case .leaving: "Leaving…"
+        case .active: row.preview.map(ChatRowSubtitle.preview) ?? .noMessages
+        case .leaving: .leaving
         case .left:
             switch exits[row.id] {
-            case .left: "You left"
-            case .removed: "You were removed"
-            case .added, nil: "Left"
+            case .left: .left
+            case .removed: .removed
+            case .added, nil: .leftUnknown
             }
         }
+    }
+
+    /// Status ticks of the row's last message: set once the chat is active, its last message is the user's own and
+    /// the lookup in the chat's timeline finished.
+    public func lastMessageStatus(for row: ChatRow) -> MessageStatus? {
+        guard row.state == .active, row.lastMessageIsOwn else { return nil }
+        return lastMessageStatuses[row.id]
     }
 
     deinit {
         listTask?.cancel()
         connectionTask?.cancel()
         for lookup in exitLookups.values { lookup.cancel() }
+        for lookup in statusLookups.values { lookup.task?.cancel() }
     }
 
     /// Subscribes to the chat list and the connection state. Does nothing while already subscribed.
@@ -74,12 +102,14 @@ public final class ChatListViewModel {
         }
     }
 
-    /// Cancels both subscriptions.
+    /// Cancels both subscriptions and the status lookups.
     public func stop() {
         listTask?.cancel()
         connectionTask?.cancel()
         listTask = nil
         connectionTask = nil
+        for lookup in statusLookups.values { lookup.task?.cancel() }
+        statusLookups = [:]
     }
 
     /// Subscribes again; the new subscription starts with a full reset.
@@ -100,6 +130,7 @@ public final class ChatListViewModel {
             return
         }
         lookUpExits()
+        lookUpLastMessageStatuses()
     }
 
     /// Looks up how the user left each newly left chat; forgets chats that are no longer left.
@@ -137,8 +168,107 @@ public final class ChatListViewModel {
         return nil
     }
 
+    /// Follows the status of the own last message of each active chat; a chat is looked up again when its last
+    /// message changes and forgotten when its last message is someone else's or it is no longer active. At most
+    /// `maxStatusLookups` lookups are open: a chat that newly qualifies closes the oldest, a chat closed by the cap
+    /// reopens only into a free slot.
+    private func lookUpLastMessageStatuses() {
+        let qualifying = rows.filter { $0.state == .active && $0.lastMessageIsOwn }
+        let wanted = Dictionary(
+            qualifying.map { ($0.id, $0.lastMessageSentAtMs) }, uniquingKeysWith: { _, last in last })
+        for (chatId, lookup) in statusLookups where wanted[chatId] != .some(lookup.sentAtMs) {
+            lookup.task?.cancel()
+            statusLookups[chatId] = nil
+            lastMessageStatuses[chatId] = nil
+        }
+        var openCount = statusLookups.values.filter { $0.task != nil }.count
+        for row in qualifying {
+            if let lookup = statusLookups[row.id] {
+                guard lookup.task == nil, openCount < Self.maxStatusLookups else { continue }
+            } else if openCount >= Self.maxStatusLookups,
+                let oldest = statusLookups.filter({ $0.value.task != nil }).min(by: { $0.value.order < $1.value.order })
+            {
+                oldest.value.task?.cancel()
+                statusLookups[oldest.key]?.task = nil
+                lastMessageStatuses[oldest.key] = nil
+                openCount -= 1
+            }
+            statusLookupOrder += 1
+            statusLookups[row.id] = StatusLookup(
+                sentAtMs: row.lastMessageSentAtMs, order: statusLookupOrder, task: followLastMessageStatus(row.id))
+            openCount += 1
+        }
+    }
+
+    /// Subscribes to the chat's timeline and stores the status of its newest own message after each batch. The
+    /// subscription stays open so the ticks follow sent -> delivered -> read; cancelling the task ends it.
+    private func followLastMessageStatus(_ chatId: String) -> Task<Void, Never> {
+        let client = client
+        return Task { [weak self] in
+            guard let stream = try? await ListenerBridge.timeline(client, chatId: chatId) else { return }
+            var items: [TimelineItem] = []
+            for await diffs in stream {
+                _ = try? DiffApplier.apply(diffs, to: &items)
+                guard !Task.isCancelled else { return }
+                self?.lastMessageStatuses[chatId] = Self.newestOwnMessageStatus(items)
+            }
+        }
+    }
+
+    /// Status of the newest message among `items` when it is the user's own; `nil` when it is someone else's or
+    /// there is no message.
+    private static func newestOwnMessageStatus(_ items: [TimelineItem]) -> MessageStatus? {
+        for case .message(let message) in items.reversed() {
+            return message.isOwn ? message.sendState.map(MessageStatus.init) : nil
+        }
+        return nil
+    }
+
     private func fail(_ error: any Error) {
         isLoading = false
         errorMessage = ErrorPresenter.message(for: error)
+    }
+}
+
+/// What the text under a chat row's title says.
+public enum ChatRowSubtitle: Sendable, Hashable {
+    /// The chat is active; the preview of its last message, shown as is.
+    case preview(String)
+    /// The chat is active and has no message yet.
+    case noMessages
+    /// The user's leave is pending.
+    case leaving
+    /// The user left the chat.
+    case left
+    /// The user was removed from the chat.
+    case removed
+    /// The chat is left; how is not known (yet).
+    case leftUnknown
+
+    /// The English text, localized through the FeaturesChat table.
+    public var text: String {
+        switch self {
+        case .preview(let preview): preview
+        case .noMessages:
+            NSLocalizedString(
+                "No messages yet", tableName: "FeaturesChat", bundle: FeaturesLocalization.bundle,
+                value: "No messages yet", comment: "")
+        case .leaving:
+            NSLocalizedString(
+                "Leaving…", tableName: "FeaturesChat", bundle: FeaturesLocalization.bundle, value: "Leaving…",
+                comment: "")
+        case .left:
+            NSLocalizedString(
+                "You left", tableName: "FeaturesChat", bundle: FeaturesLocalization.bundle, value: "You left",
+                comment: "")
+        case .removed:
+            NSLocalizedString(
+                "You were removed", tableName: "FeaturesChat", bundle: FeaturesLocalization.bundle,
+                value: "You were removed", comment: "")
+        case .leftUnknown:
+            NSLocalizedString(
+                "Left", tableName: "FeaturesChat", bundle: FeaturesLocalization.bundle, value: "Left",
+                comment: "")
+        }
     }
 }

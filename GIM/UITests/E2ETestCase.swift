@@ -13,53 +13,94 @@ class E2ETestCase: XCTestCase {
     let serverUrl = ProcessInfo.processInfo.environment["GIM_E2E_SERVER_URL"] ?? "http://127.0.0.1:8080"
     /// For every step that waits on the hub or the other client.
     let networkTimeout: TimeInterval = 30
+    /// UI tests match visible English labels, so the app runs in English whatever the host simulator's language is.
+    static let localeArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
     /// Shows the notification authorization alert, the notifications and the home screen.
     @MainActor
     var springboard: XCUIApplication { XCUIApplication(bundleIdentifier: "com.apple.springboard") }
 
-    /// Launches the app with `serverUrl` as the default server and signs out a leftover session, so onboarding is
-    /// in front.
+    /// Launches the app in English with `serverUrl` as the default server and signs out a leftover session, so
+    /// onboarding is in front. Every UI test launches through here, after setting its own launch arguments.
     @MainActor
     func launchToOnboarding(_ app: XCUIApplication, _ step: String) throws {
-        app.launchArguments += ["-GIMDefaultServerURL", serverUrl]
+        app.launchArguments += ["-GIMDefaultServerURL", serverUrl] + Self.localeArguments
         app.launch()
         try signOutIfNeeded(app)
+        try expectOnboarding(app, step)
+    }
+
+    /// Requires the welcome screen and checks that the server field, revealed with "Use another server", is
+    /// pre-filled with `serverUrl`, which proves that the launch argument reached the app. The other smoke tests may
+    /// reuse it after a sign-out.
+    @MainActor
+    func expectOnboarding(_ app: XCUIApplication, _ step: String) throws {
+        try require(
+            app.buttons["onboarding.create"].waitForExistence(timeout: networkTimeout),
+            "\(step): onboarding Create account button visible", app)
+        // The field is hidden behind the button while a default server exists.
+        let useAnotherServer = app.buttons["onboarding.useAnotherServer"]
         let serverField = app.textFields["onboarding.serverUrl"]
+        // At accessibility text sizes the lazy list has not created the row below the fold yet.
+        for _ in 0..<5 where !useAnotherServer.exists && !serverField.exists {
+            scrollUpFrontmost(app)
+        }
+        if useAnotherServer.exists {
+            try tap(useAnotherServer, "\(step): Use another server button", app)
+        }
+        for _ in 0..<5 where !serverField.waitForExistence(timeout: 1) {
+            scrollUpFrontmost(app)
+        }
         try require(
             serverField.waitForExistence(timeout: networkTimeout), "\(step): onboarding server field visible", app)
         try require(
             serverField.value as? String == serverUrl,
             "\(step): server field pre-filled with \(serverUrl), found \(String(describing: serverField.value))", app)
+        // At accessibility text sizes the focused field's keyboard and the scrolled list cover the Create account
+        // button: Return dismisses the keyboard, then the list scrolls back to the button. `isHittable` is not enough:
+        // a button scrolled under the navigation bar is still "hittable" in the status bar strip, where a tap scrolls
+        // the list to the top instead.
+        let create = app.buttons["onboarding.create"]
+        let createVisible = { () -> Bool in
+            guard create.exists else { return false }
+            let keyboard = app.keyboards.firstMatch
+            let bottom = keyboard.exists ? keyboard.frame.minY : app.windows.firstMatch.frame.maxY
+            return create.frame.minY >= app.navigationBars.firstMatch.frame.maxY && create.frame.maxY <= bottom
+        }
+        guard !createVisible() else { return }
+        if app.keyboards.firstMatch.exists {
+            serverField.typeText("\n")
+        }
+        for _ in 0..<5 where !createVisible() {
+            scrollDownFrontmost(app)
+        }
+        try require(createVisible(), "\(step): Create account button fully visible", app)
     }
 
-    /// Creates an identity from onboarding (display name, recovery code, the requested recovery group, handle) and
-    /// waits for the chat list. Returns the recovery code as shown, groups separated by `-`.
+    /// Creates an account from onboarding (display name, recovery key, its last 4 characters, username) and waits
+    /// for the chat list. Returns the recovery code as shown, groups separated by `-`.
     @MainActor
     @discardableResult
     func createIdentity(displayName: String, handle: String, _ step: String, _ app: XCUIApplication) throws -> String {
-        try tap(app.buttons["onboarding.create"], "\(step): Create New Identity button", app)
-        // Return submits the form, like the Create Identity button that the keyboard may cover.
-        try type("\(displayName)\n", into: app.textFields["identity.displayName"], "\(step): display name", app)
+        try revealAndTap(app.buttons["onboarding.create"], "\(step): Create account button", app)
+        // Return submits the form, like the Create button that the keyboard may cover.
+        try revealAndType(
+            "\(displayName)\n", into: app.textFields["identity.displayName"], "\(step): display name", app)
         let code = app.descendants(matching: .any)["recovery.code"]
         try require(
             code.waitForExistence(timeout: networkTimeout),
             "\(step): recovery code shown (onboarding errors: \(onboardingErrors(app)))", app)
         let recoveryCode = code.label
-        let groups = recoveryCode.split(separator: "-").map(String.init)
-        try tap(app.buttons["recovery.continue"], "\(step): I Wrote It Down button", app)
-        // The field's placeholder names the requested group: "Group 3".
-        let groupField = app.textFields["recovery.confirmField"]
-        try require(groupField.waitForExistence(timeout: networkTimeout), "\(step): group field visible", app)
-        let groupNumber = (groupField.placeholderValue ?? "").split(separator: " ").last.flatMap { Int($0) }
-        guard let groupNumber, groups.indices.contains(groupNumber - 1) else {
-            try require(
-                false, "\(step): group \(String(describing: groupNumber)) of \(groups.count) recovery groups", app)
-            fatalError("unreachable")
-        }
-        try type(groups[groupNumber - 1], into: groupField, "\(step): group field", app)
-        try tap(app.buttons["recovery.confirm"], "\(step): Confirm button", app)
-        try type(handle, into: app.textFields["handle.field"], "\(step): handle field", app)
-        try tap(app.buttons["handle.claim"], "\(step): Claim Handle button", app)
+        let userId = app.descendants(matching: .any)["recovery.userId"].value as? String ?? ""
+        try require(userId.hasPrefix("u"), "\(step): account ID shown, found \(userId)", app)
+        try revealAndTap(app.buttons["recovery.continue"], "\(step): I saved it button", app)
+        let endingField = app.textFields["recovery.ending"]
+        try require(
+            endingField.waitForExistence(timeout: networkTimeout), "\(step): last 4 characters field visible", app)
+        let ending = String(recoveryCode.replacingOccurrences(of: "-", with: "").suffix(4))
+        try revealAndType(ending, into: endingField, "\(step): last 4 characters field", app)
+        try revealAndTap(app.buttons["recovery.confirm"], "\(step): Confirm button", app)
+        try revealAndType(handle, into: app.textFields["handle.field"], "\(step): handle field", app)
+        try revealAndTap(app.buttons["handle.claim"], "\(step): Save username button", app)
         let signedIn = app.buttons["chatList.newChat"].waitForExistence(timeout: networkTimeout)
         try require(
             signedIn,
@@ -245,10 +286,10 @@ class E2ETestCase: XCTestCase {
         for _ in 0..<5 where !(signOut.waitForExistence(timeout: 1) && signOut.isHittable) {
             scrollUpFrontmost(app)
         }
-        try tap(signOut, "sign-out: Sign Out button", app)
+        try tap(signOut, "sign-out: Sign out button", app)
         // The confirmation dialog's button has the same title.
         let confirm = app.buttons
-            .matching(NSPredicate(format: "label == 'Sign Out' AND identifier != 'settings.signOut'"))
+            .matching(NSPredicate(format: "label == 'Sign out' AND identifier != 'settings.signOut'"))
             .firstMatch
         try tap(confirm, "sign-out: confirmation button", app)
     }
@@ -258,6 +299,67 @@ class E2ETestCase: XCTestCase {
     func scrollUpFrontmost(_ app: XCUIApplication) {
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.75))
             .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35)))
+    }
+
+    /// Scrolls the frontmost screen by one swipe down, back towards its top.
+    @MainActor
+    func scrollDownFrontmost(_ app: XCUIApplication) {
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35))
+            .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.75)))
+    }
+
+    /// `tap` after scrolling `element` fully into view: at accessibility text sizes a lazy list has not created the
+    /// rows below the fold, and a row under the navigation bar or the keyboard takes no taps (`isHittable` may still
+    /// say yes). The keyboard stays up, since Return submits some forms; the swipes stay above it instead.
+    @MainActor
+    func revealAndTap(_ element: XCUIElement, _ check: @autoclosure () -> String, _ app: XCUIApplication) throws {
+        reveal(element, app)
+        try tap(element, check(), app)
+    }
+
+    /// `type` after scrolling `element` fully into view, like `revealAndTap`.
+    @MainActor
+    func revealAndType(
+        _ text: String, into element: XCUIElement, _ check: @autoclosure () -> String, _ app: XCUIApplication
+    ) throws {
+        reveal(element, app)
+        try type(text, into: element, check(), app)
+    }
+
+    /// Waits briefly for `element`, then swipes the visible area (between the navigation bar and the keyboard or the
+    /// window's bottom) at most 6 times: up while `element` is missing or below that area, down while it is above.
+    @MainActor
+    private func reveal(_ element: XCUIElement, _ app: XCUIApplication) {
+        _ = element.waitForExistence(timeout: 5)
+        for _ in 0..<6 {
+            let area = visibleArea(app)
+            let swipeUp: Bool
+            if !element.exists || element.frame.maxY > area.maxY {
+                swipeUp = true
+            } else if element.frame.minY < area.minY {
+                swipeUp = false
+            } else {
+                return
+            }
+            let x = app.windows.firstMatch.frame.midX
+            let lower = CGPoint(x: x, y: area.minY + area.height * 0.8)
+            let upper = CGPoint(x: x, y: area.minY + area.height * 0.2)
+            let (from, to) = swipeUp ? (lower, upper) : (upper, lower)
+            let origin = app.coordinate(withNormalizedOffset: .zero)
+            origin.withOffset(CGVector(dx: from.x, dy: from.y))
+                .press(forDuration: 0.05, thenDragTo: origin.withOffset(CGVector(dx: to.x, dy: to.y)))
+        }
+    }
+
+    /// The part of the window where content takes taps: below the navigation bar, above the keyboard.
+    @MainActor
+    private func visibleArea(_ app: XCUIApplication) -> CGRect {
+        let window = app.windows.firstMatch.frame
+        let navigationBar = app.navigationBars.firstMatch
+        let keyboard = app.keyboards.firstMatch
+        let top = navigationBar.exists ? navigationBar.frame.maxY : window.minY
+        let bottom = keyboard.exists ? keyboard.frame.minY : window.maxY
+        return CGRect(x: window.minX, y: top, width: window.width, height: max(bottom - top, 0))
     }
 
     @MainActor

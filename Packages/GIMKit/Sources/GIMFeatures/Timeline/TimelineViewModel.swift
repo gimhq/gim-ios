@@ -19,6 +19,8 @@ public final class TimelineViewModel {
     public private(set) var lastChange = TimelineChangeSet.reset
     /// Who is typing, for the navigation subtitle; the same text is in the typing row.
     public private(set) var typingText: String?
+    /// What `typingText` says; a user without a known name is `nil` ("Someone").
+    public private(set) var typingKind: TimelineTypingKind?
     /// True until the first timeline arrives.
     public private(set) var isLoading = true
     /// Whether gim-core may have older history; false once `paginateBackwards` reports none.
@@ -192,7 +194,7 @@ public final class TimelineViewModel {
     /// Local path of the decrypted attachment, fetched on first use. `fileName` keeps the extension QuickLook needs.
     /// A temporary failure marks the message's row `isMediaUnavailable` until `retryMedia(messageId:)`.
     public func mediaFilePath(for media: MediaRef, fileName: String?) async throws -> String {
-        let destination = try mediaPath(media, name: fileName.map(Self.safeComponent) ?? "media")
+        let destination = try mediaPath(media, name: fileName.map { Self.safeComponent($0) } ?? "media")
         if FileManager.default.fileExists(atPath: destination) { return destination }
         do {
             return try await client.fetchMedia(chatId: media.chatId, messageId: media.messageId, destPath: destination)
@@ -288,7 +290,8 @@ public final class TimelineViewModel {
     }
 
     private func rebuild(isReset: Bool) {
-        typingText = TimelineItemBuilder.typingText(names: typingUserIds.map { names[$0] ?? "Someone" })
+        typingKind = TimelineItemBuilder.typingKind(names: typingUserIds.map { names[$0] })
+        typingText = typingKind?.text
         let newItems = builder.build(
             source, isGroup: isGroup, typingText: typingText, unavailableMedia: unavailableMedia,
             ownUserId: client.userId(), names: names)

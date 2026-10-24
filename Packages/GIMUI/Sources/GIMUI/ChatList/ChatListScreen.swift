@@ -5,6 +5,7 @@ import SwiftUI
 /// The signed-in home screen: every chat, newest activity first, served by gim-core from its local database.
 public struct ChatListScreen: View {
     private let client: any GimClientAPI
+    private let session: Session?
     private let onOpen: (String) -> Void
     private let onOpenSettings: (() -> Void)?
 
@@ -14,10 +15,11 @@ public struct ChatListScreen: View {
     /// - Parameters:
     ///   - onOpenSettings: shows a settings button in the toolbar when set.
     public init(
-        client: any GimClientAPI, onOpen: @escaping (String) -> Void,
+        client: any GimClientAPI, session: Session? = nil, onOpen: @escaping (String) -> Void,
         onOpenSettings: (() -> Void)? = nil
     ) {
         self.client = client
+        self.session = session
         self.onOpen = onOpen
         self.onOpenSettings = onOpenSettings
         _viewModel = State(initialValue: ChatListViewModel(client: client))
@@ -28,9 +30,11 @@ public struct ChatListScreen: View {
             Button {
                 onOpen(row.id)
             } label: {
-                ChatRowView(row: row, subtitle: viewModel.subtitle(for: row))
+                ChatRowView(
+                    row: row, subtitle: viewModel.subtitle(for: row), status: viewModel.lastMessageStatus(for: row))
             }
             .accessibilityIdentifier("chatList.row")
+            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
         }
         .listStyle(.plain)
         .overlay { emptyState }
@@ -39,13 +43,19 @@ public struct ChatListScreen: View {
                 .animation(.default, value: viewModel.connectionState)
         }
         .refreshable { viewModel.refresh() }
-        .navigationTitle("Chats")
+        .navigationTitle(Text("Chats", tableName: "Chat", bundle: .module))
         .toolbar {
             if let onOpenSettings {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(action: onOpenSettings) {
-                        Label("Settings", systemImage: "gearshape")
+                        if let session {
+                            AvatarView(id: session.userId, name: session.displayName, avatarPath: nil, size: 30)
+                        } else {
+                            Label(
+                                String(localized: "Settings", table: "Chat", bundle: .module), systemImage: "gearshape")
+                        }
                     }
+                    .accessibilityLabel(String(localized: "Settings", table: "Chat", bundle: .module))
                     .accessibilityIdentifier("chatList.settings")
                 }
             }
@@ -53,7 +63,8 @@ public struct ChatListScreen: View {
                 Button {
                     showsNewChat = true
                 } label: {
-                    Label("New Chat", systemImage: "square.and.pencil")
+                    Label(
+                        String(localized: "New chat", table: "Chat", bundle: .module), systemImage: "square.and.pencil")
                 }
                 .accessibilityIdentifier("chatList.newChat")
             }
@@ -73,60 +84,30 @@ public struct ChatListScreen: View {
     private var emptyState: some View {
         if let error = viewModel.errorMessage, viewModel.rows.isEmpty {
             ContentUnavailableView {
-                Label("Can't Load Chats", systemImage: "exclamationmark.triangle")
+                Label(
+                    String(localized: "Couldn't load chats", table: "Chat", bundle: .module),
+                    systemImage: "exclamationmark.triangle")
             } description: {
                 Text(error)
             } actions: {
-                Button("Try Again") { viewModel.refresh() }
+                Button(String(localized: "Try again", table: "Common", bundle: .module)) { viewModel.refresh() }
             }
         } else if viewModel.isLoading {
             ProgressView()
         } else if viewModel.rows.isEmpty {
             ContentUnavailableView {
-                Label("No Chats Yet", systemImage: "bubble.left.and.bubble.right")
+                Label(
+                    String(localized: "No chats yet", table: "Chat", bundle: .module),
+                    systemImage: "bubble.left.and.bubble.right")
             } description: {
-                Text("Start a conversation by searching for someone's handle.")
+                Text("Start a chat. Search for a friend's username.", tableName: "Chat", bundle: .module)
             } actions: {
-                Button("New Chat") { showsNewChat = true }
+                Button(String(localized: "Start a chat", table: "Chat", bundle: .module)) { showsNewChat = true }
                     .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .accessibilityIdentifier("chatList.emptyNewChat")
             }
         }
-    }
-}
-
-private struct ChatRowView: View {
-    let row: ChatRow
-    let subtitle: String
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            AvatarView(id: row.id, name: row.title, avatarPath: nil, size: 52)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(row.title)
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                    Spacer(minLength: 8)
-                    if let time = row.time {
-                        Text(time)
-                            .font(.caption)
-                            .foregroundStyle(row.unreadCount > 0 ? Color.accentColor : Color.secondary)
-                    }
-                }
-                HStack(alignment: .top) {
-                    Text(subtitle)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2, reservesSpace: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    UnreadBadge(count: row.unreadCount)
-                }
-            }
-        }
-        .padding(.vertical, 4)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
     }
 }
 

@@ -14,9 +14,19 @@ public final class NewChatViewModel {
         case error(String)
     }
 
+    /// Outcome of `startChat(scanned:)`.
+    public enum ScanResult: Sendable, Hashable {
+        case started(chatId: String)
+        /// The text holds no valid Account ID.
+        case noUserId
+        case failed(String)
+    }
+
     public static let defaultDebounce: Duration = .milliseconds(300)
     /// `createDirectChat` fails with `NotFound` when the user does not exist or has no device.
-    public static let notFoundMessage = "User not found"
+    public static let notFoundMessage = NSLocalizedString(
+        "No one has this username.", tableName: "FeaturesContacts", bundle: FeaturesLocalization.bundle,
+        value: "No one has this username.", comment: "")
 
     /// Typing restarts the debounced search.
     public var query = "" {
@@ -67,6 +77,26 @@ public final class NewChatViewModel {
             startError = await ErrorPresenter.message(for: error, client: client)
             return nil
         }
+    }
+
+    /// Starts (or reopens) the direct chat with the first valid Account ID in scanned or typed `text`.
+    public func startChat(scanned text: String) async -> ScanResult {
+        guard let userId = UserID.firstValid(in: text) else { return .noUserId }
+        isStarting = true
+        startError = nil
+        defer { isStarting = false }
+        let message: String
+        do {
+            return .started(chatId: try await client.createDirectChat(userId: userId))
+        } catch GimError.NotFound {
+            message = Self.notFoundMessage
+        } catch GimError.ContactNotAdmitted(let userIds) {
+            message = ErrorPresenter.contactNotAdmittedMessage(userIds: userIds, profiles: [])
+        } catch {
+            message = await ErrorPresenter.message(for: error, client: client)
+        }
+        startError = message
+        return .failed(message)
     }
 
     private func scheduleSearch() {

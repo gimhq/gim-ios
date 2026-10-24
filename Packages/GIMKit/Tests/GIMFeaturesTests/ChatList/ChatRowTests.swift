@@ -10,14 +10,33 @@ final class ChatRowTests: XCTestCase {
     private let sentAtMs: UInt64 = 1_791_000_000_000 - 600_000
 
     private func summary(
-        kind: ChatKind, preview: String? = "Hello", sender: String = "Sofia Marin", unread: UInt32 = 0
+        kind: ChatKind, preview: String? = "Hello", sender: String = "Sofia Marin", unread: UInt32 = 0,
+        isOwn: Bool = false
     ) -> ChatSummary {
         ChatSummary(
             chatId: "chat-1", kind: kind, name: "Title", avatar: avatar,
             lastMessage: preview.map {
-                MessagePreview(senderName: sender, text: $0, sentAtMs: sentAtMs, isOwn: false)
+                MessagePreview(senderName: sender, text: $0, sentAtMs: sentAtMs, isOwn: isOwn)
             },
             unreadCount: unread, updatedAtMs: sentAtMs, memberCount: kind == .group ? 4 : 2, state: .active)
+    }
+
+    func testOwnLastMessageIsFlaggedWithItsTime() {
+        let row = ChatRow(summary: summary(kind: .direct, isOwn: true), dateFormatter: makeFormatter())
+        XCTAssertTrue(row.lastMessageIsOwn)
+        XCTAssertEqual(row.lastMessageSentAtMs, sentAtMs)
+    }
+
+    func testForeignLastMessageIsNotOwn() {
+        let row = ChatRow(summary: summary(kind: .group), dateFormatter: makeFormatter())
+        XCTAssertFalse(row.lastMessageIsOwn)
+        XCTAssertEqual(row.lastMessageSentAtMs, sentAtMs)
+    }
+
+    func testChatWithoutMessagesHasNoOwnLastMessage() {
+        let row = ChatRow(summary: summary(kind: .group, preview: nil), dateFormatter: makeFormatter())
+        XCTAssertFalse(row.lastMessageIsOwn)
+        XCTAssertNil(row.lastMessageSentAtMs)
     }
 
     func testGroupPreviewIsPrefixedWithSender() {

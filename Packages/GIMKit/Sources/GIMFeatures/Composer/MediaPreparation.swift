@@ -69,11 +69,38 @@ public enum MediaPreparationError: Error, Hashable {
 
     /// User-facing text.
     public var message: String {
+        kind.text
+    }
+
+    /// What the user-facing text says.
+    public var kind: MediaPreparationErrorKind {
         switch self {
-        case .tooLarge:
-            return "This file is larger than 100 MB and can't be sent."
+        case .tooLarge: .tooLarge(limitMegabytes: Int(MediaPreparation.maxFileSize / (1024 * 1024)))
+        case .unreadable: .unreadable
+        }
+    }
+}
+
+/// What the error shown for an attachment that can't be sent says.
+public enum MediaPreparationErrorKind: Sendable, Hashable {
+    /// The file is over the size limit.
+    case tooLarge(limitMegabytes: Int)
+    case unreadable
+
+    /// The English text, localized through the FeaturesChat table.
+    public var text: String {
+        switch self {
+        case .tooLarge(let limitMegabytes):
+            String(
+                format: NSLocalizedString(
+                    "This file is larger than %lld MB and can't be sent.", tableName: "FeaturesChat",
+                    bundle: FeaturesLocalization.bundle, value: "This file is larger than %lld MB and can't be sent.",
+                    comment: ""),
+                Int64(limitMegabytes))
         case .unreadable:
-            return "This file couldn't be read."
+            NSLocalizedString(
+                "This file couldn't be read.", tableName: "FeaturesChat", bundle: FeaturesLocalization.bundle,
+                value: "This file couldn't be read.", comment: "")
         }
     }
 }

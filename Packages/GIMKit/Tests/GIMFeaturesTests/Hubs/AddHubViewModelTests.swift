@@ -11,13 +11,13 @@ final class AddHubViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testTheUrlFollowsTheServerUrlRule() {
+    func testTheUrlFollowsTheServerUrlRule() async {
         let viewModel = AddHubViewModel(client: makeClient())
 
         XCTAssertNil(viewModel.urlError)
         XCTAssertFalse(viewModel.canSubmit)
         viewModel.url = "hub2.example.eu"
-        XCTAssertEqual(viewModel.urlError, "Enter a full address starting with http:// or https://.")
+        XCTAssertEqual(viewModel.urlError, OnboardingValidation.serverUrlError("hub2.example.eu"))
         XCTAssertFalse(viewModel.canSubmit)
         viewModel.url = "ftp://hub2.example.eu"
         XCTAssertNotNil(viewModel.urlError)
@@ -79,7 +79,7 @@ final class AddHubViewModelTests: XCTestCase {
         }
         XCTAssertEqual(
             ErrorPresenter.message(for: GimError.HubNotVerified(reason: "")),
-            "This hub couldn't prove it is reachable at this address. Check the address and try again.")
+            "Couldn't reach a server at this address. Check the address and try again.")
     }
 
     @MainActor
@@ -91,7 +91,7 @@ final class AddHubViewModelTests: XCTestCase {
 
         await viewModel.submit()
 
-        XCTAssertEqual(viewModel.errorMessage, "This hub does not admit your account.")
+        XCTAssertEqual(viewModel.errorMessage, "This server doesn't accept your account.")
         XCTAssertNil(viewModel.addedHub)
         let hubs = try await client.hubs()
         XCTAssertEqual(hubs.count, 1, "the hub is not listed")

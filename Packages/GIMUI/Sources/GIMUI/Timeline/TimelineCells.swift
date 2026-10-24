@@ -1,22 +1,12 @@
 import GIMClientKit
 import GIMFeatures
-import SwiftUI
 import UIKit
-
-enum TimelineColors {
-    static let ownBubble = UIColor { traits in
-        traits.userInterfaceStyle == .dark
-            ? UIColor(red: 0.11, green: 0.29, blue: 0.52, alpha: 1) : UIColor(red: 0.86, green: 0.93, blue: 1, alpha: 1)
-    }
-    static let otherBubble = UIColor.secondarySystemBackground
-    static let readTicks = UIColor.systemBlue
-}
 
 /// Text, image or file message: the bubble with sender name, reply preview, body, footer and reaction chips. Frames
 /// come from the precomputed `MessageLayout`; the cell measures nothing.
 final class MessageCell: UICollectionViewCell {
     /// Shown instead of an attachment that couldn't be downloaded for now; tapping it fetches it again.
-    static let mediaRetryText = "Couldn't load — Tap to retry"
+    static let mediaRetryText = String(localized: "Couldn't load. Tap to try again.", table: "Chat", bundle: .module)
 
     let bubbleView = UIView()
     private let bubbleShape = CAShapeLayer()
@@ -34,6 +24,27 @@ final class MessageCell: UICollectionViewCell {
     var onReplyTap: (() -> Void)?
     var onMediaTap: (() -> Void)?
     var onRetry: (() -> Void)?
+    /// The VoiceOver Reply action; the action is offered only while this is set. The body label, image and file row
+    /// are the elements VoiceOver focuses, so they carry the action and the options hint too.
+    var onReply: (() -> Void)? {
+        didSet {
+            accessibilityCustomActions =
+                onReply == nil
+                ? nil
+                : [
+                    UIAccessibilityCustomAction(name: String(localized: "Reply", table: "Chat", bundle: .module)) {
+                        [weak self] _ in
+                        guard let onReply = self?.onReply else { return false }
+                        onReply()
+                        return true
+                    }
+                ]
+            for view in [bodyLabel, imageView, fileView] as [UIView] {
+                view.accessibilityCustomActions = accessibilityCustomActions
+                view.accessibilityHint = onReply == nil ? nil : accessibilityHint
+            }
+        }
+    }
     /// Loads the image; cancelled on reuse.
     var mediaTask: Task<Void, Never>? {
         didSet { oldValue?.cancel() }
@@ -74,6 +85,7 @@ final class MessageCell: UICollectionViewCell {
         imageView.addSubview(mediaRetryLabel)
         replyView.accessibilityIdentifier = "timeline.message.reply"
         statusView.accessibilityIdentifier = "timeline.message.status"
+        accessibilityHint = String(localized: "Touch and hold for options", table: "Chat", bundle: .module)
         for view in [replyView, imageView, fileView, statusView] as [UIView] {
             bubbleView.addSubview(view)
         }
@@ -98,17 +110,14 @@ final class MessageCell: UICollectionViewCell {
         onReplyTap = nil
         onMediaTap = nil
         onRetry = nil
+        onReply = nil
     }
 
     func configure(_ row: TimelineMessageRow, layout: MessageLayout, fonts: TimelineFonts) {
         bubbleView.frame = layout.bubble
-        var corners = UIRectCorner.allCorners
-        if row.hasTail { corners.remove(row.isOwn ? .bottomRight : .bottomLeft) }
         bubbleShape.path =
-            UIBezierPath(
-                roundedRect: CGRect(origin: .zero, size: layout.bubble.size), byRoundingCorners: corners,
-                cornerRadii: CGSize(
-                    width: TimelineMetrics.bubbleCornerRadius, height: TimelineMetrics.bubbleCornerRadius)
+            Self.bubblePath(
+                size: layout.bubble.size, isOwn: row.isOwn, isFirstInRun: row.isFirstInRun, hasTail: row.hasTail
             ).cgPath
         isOwn = row.isOwn
         updateBubbleColor()
@@ -117,7 +126,7 @@ final class MessageCell: UICollectionViewCell {
         senderLabel.frame = layout.senderName ?? .zero
         senderLabel.text = row.senderName
         senderLabel.font = fonts.senderName
-        senderLabel.textColor = UIColor(AvatarStyle.palette[AvatarStyle.colorIndex(for: row.message.sender.userId)])
+        senderLabel.textColor = AvatarStyle.uiColor(for: row.message.sender.userId)
 
         replyView.isHidden = layout.reply == nil
         replyView.frame = layout.reply ?? .zero
@@ -140,6 +149,41 @@ final class MessageCell: UICollectionViewCell {
         accessibilityLabel = Self.accessibilityText(row)
     }
 
+    /// Outline of a bubble: `bubbleCornerRadius` on the far side; on the sender side (right for own messages) the
+    /// bottom corner is always `tailCornerRadius` and the top one only below the first message of a run, so a run
+    /// reads as one block. `hasTail` keeps the squared bottom corner of the run's last bubble.
+    static func bubblePath(size: CGSize, isOwn: Bool, isFirstInRun: Bool, hasTail: Bool) -> UIBezierPath {
+        let limit = min(size.width, size.height) / 2
+        let big = min(TimelineMetrics.bubbleCornerRadius, limit)
+        let small = min(TimelineMetrics.tailCornerRadius, limit)
+        let senderTop = isFirstInRun ? big : small
+        let topLeft = isOwn ? big : senderTop
+        let topRight = isOwn ? senderTop : big
+        let bottomLeft = isOwn ? big : small
+        let bottomRight = isOwn ? small : big
+        let (width, height) = (size.width, size.height)
+        let path = UIBezierPath()
+        path.move(to: CGPoint(x: topLeft, y: 0))
+        path.addLine(to: CGPoint(x: width - topRight, y: 0))
+        path.addArc(
+            withCenter: CGPoint(x: width - topRight, y: topRight), radius: topRight, startAngle: -.pi / 2,
+            endAngle: 0, clockwise: true)
+        path.addLine(to: CGPoint(x: width, y: height - bottomRight))
+        path.addArc(
+            withCenter: CGPoint(x: width - bottomRight, y: height - bottomRight), radius: bottomRight, startAngle: 0,
+            endAngle: .pi / 2, clockwise: true)
+        path.addLine(to: CGPoint(x: bottomLeft, y: height))
+        path.addArc(
+            withCenter: CGPoint(x: bottomLeft, y: height - bottomLeft), radius: bottomLeft, startAngle: .pi / 2,
+            endAngle: .pi, clockwise: true)
+        path.addLine(to: CGPoint(x: 0, y: topLeft))
+        path.addArc(
+            withCenter: CGPoint(x: topLeft, y: topLeft), radius: topLeft, startAngle: .pi, endAngle: 3 * .pi / 2,
+            clockwise: true)
+        path.close()
+        return path
+    }
+
     func setImage(_ image: UIImage?) {
         imageView.image = image
     }
@@ -155,7 +199,7 @@ final class MessageCell: UICollectionViewCell {
 
     private func updateBubbleColor() {
         bubbleShape.fillColor =
-            (isOwn ? TimelineColors.ownBubble : TimelineColors.otherBubble)
+            (isOwn ? ChatColors.UI.bubbleOwn : ChatColors.UI.bubbleOther)
             .resolvedColor(with: traitCollection).cgColor
     }
 
@@ -176,7 +220,9 @@ final class MessageCell: UICollectionViewCell {
             imageView.frame = layout.media ?? .zero
             mediaRetryLabel.isHidden = !row.isMediaUnavailable
             mediaRetryLabel.frame = imageView.bounds.insetBy(dx: 8, dy: 8)
-            imageView.accessibilityLabel = row.isMediaUnavailable ? Self.mediaRetryText : caption ?? "Photo"
+            imageView.accessibilityLabel =
+                row.isMediaUnavailable
+                ? Self.mediaRetryText : caption ?? String(localized: "Photo", table: "Chat", bundle: .module)
             bodyLabel.font = fonts.body
             bodyLabel.text = caption
         case .file(_, let fileName, let sizeText, let caption):
@@ -212,8 +258,9 @@ final class MessageCell: UICollectionViewCell {
             label.font = fonts.reaction
             label.text = TimelineLayoutEngine.reactionText(reaction)
             label.backgroundColor =
-                reaction.own ? TimelineColors.readTicks.withAlphaComponent(0.2) : .tertiarySystemFill
-            label.accessibilityLabel = "\(reaction.emoji), \(reaction.count)"
+                reaction.own ? ChatColors.UI.readTicks.withAlphaComponent(0.2) : .tertiarySystemFill
+            label.accessibilityLabel = String(
+                localized: "\(reaction.emoji), \(Int(reaction.count))", table: "Chat", bundle: .module)
         }
     }
 
@@ -226,11 +273,15 @@ final class MessageCell: UICollectionViewCell {
         if let name = row.senderName { parts.append(name) }
         switch row.body {
         case .text(let text), .placeholder(let text): parts.append(text)
-        case .image(_, _, _, let caption): parts.append(caption.map { "Photo, \($0)" } ?? "Photo")
-        case .file(_, let name, let size, _): parts.append("File \(name), \(size)")
+        case .image(_, _, _, let caption):
+            parts.append(
+                caption.map { String(localized: "Photo, \($0)", table: "Chat", bundle: .module) }
+                    ?? String(localized: "Photo", table: "Chat", bundle: .module))
+        case .file(_, let name, let size, _):
+            parts.append(String(localized: "File \(name), \(size)", table: "Chat", bundle: .module))
         }
         parts.append(row.timeText)
-        if row.isEdited { parts.append("edited") }
+        if row.isEdited { parts.append(String(localized: "edited", table: "Chat", bundle: .module)) }
         return parts.joined(separator: ", ")
     }
 }
@@ -255,7 +306,7 @@ final class ReplyPreviewView: UIControl {
         }
         isAccessibilityElement = true
         accessibilityTraits = .button
-        accessibilityHint = "Shows the original message"
+        accessibilityHint = String(localized: "Shows the original message", table: "Chat", bundle: .module)
     }
 
     @available(*, unavailable)
@@ -268,7 +319,8 @@ final class ReplyPreviewView: UIControl {
         textLabel.font = fonts.replyText
         nameLabel.text = reply.senderName
         textLabel.text = reply.text
-        accessibilityLabel = "Reply to \(reply.senderName): \(reply.text)"
+        accessibilityLabel = String(
+            localized: "Reply to \(reply.senderName): \(reply.text)", table: "Chat", bundle: .module)
         setNeedsLayout()
     }
 
@@ -314,7 +366,7 @@ final class FileRowView: UIControl {
         sizeLabel.font = fonts.footer
         nameLabel.text = name
         sizeLabel.text = size
-        accessibilityLabel = "File \(name), \(size)"
+        accessibilityLabel = String(localized: "File \(name), \(size)", table: "Chat", bundle: .module)
         setNeedsLayout()
     }
 
@@ -365,28 +417,34 @@ final class StatusTicksView: UIControl {
         case .sending:
             first.image = UIImage(systemName: "clock")
             first.tintColor = .secondaryLabel
-            accessibilityLabel = "Sending"
+            accessibilityLabel = String(localized: "Sending", table: "Chat", bundle: .module)
         case .sent:
             first.image = checkmark
             first.tintColor = .secondaryLabel
-            accessibilityLabel = "Sent"
+            accessibilityLabel = String(localized: "Sent", table: "Chat", bundle: .module)
         case .delivered, .read:
-            let color = status == .read ? TimelineColors.readTicks : .secondaryLabel
+            let color = status == .read ? ChatColors.UI.readTicks : .secondaryLabel
             first.image = checkmark
             second.image = checkmark
             first.tintColor = color
             second.tintColor = color
             second.isHidden = false
-            accessibilityLabel = status == .read ? "Read" : "Delivered"
+            accessibilityLabel =
+                status == .read
+                ? String(localized: "Read", table: "Chat", bundle: .module)
+                : String(localized: "Delivered", table: "Chat", bundle: .module)
         case .failed(_, let cause):
             first.image = UIImage(systemName: "exclamationmark.circle.fill")
             first.tintColor = .systemRed
             isEnabled = true
             accessibilityTraits = .button
-            accessibilityLabel = "Not sent"
+            accessibilityLabel = String(localized: "Not sent", table: "Chat", bundle: .module)
             // `TimelineViewModel.retry` explains a cause that can't be retried instead of resending.
             let canRetry = MessageActionsViewModel.canRetry(cause)
-            accessibilityHint = canRetry ? "Sends the message again" : "Shows why it wasn't sent"
+            accessibilityHint =
+                canRetry
+                ? String(localized: "Sends the message again", table: "Chat", bundle: .module)
+                : String(localized: "Shows why it wasn't sent", table: "Chat", bundle: .module)
         }
         setNeedsLayout()
     }
@@ -399,13 +457,22 @@ final class StatusTicksView: UIControl {
     }
 
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-        // A larger touch target for the retry button.
-        bounds.insetBy(dx: -12, dy: -12).contains(point)
+        // A 44 pt touch target for the retry button.
+        bounds.insetBy(dx: -13, dy: -13).contains(point)
     }
 }
 
-/// Rounded label row: day separators and membership changes (centered) and the typing row.
+/// Centered day chip or membership change, or the typing row.
 final class PillCell: UICollectionViewCell {
+    enum Style {
+        /// A capsule chip, read as a heading.
+        case date
+        /// Plain secondary text, no background.
+        case membership
+        /// A small bubble where incoming messages start.
+        case typing
+    }
+
     private let pill = UIView()
     private let label = UILabel()
 
@@ -423,16 +490,29 @@ final class PillCell: UICollectionViewCell {
         fatalError("init(coder:) is not supported")
     }
 
-    func configure(text: String, isTyping: Bool, frame: CGRect, fonts: TimelineFonts) {
+    func configure(text: String, style: Style, frame: CGRect, fonts: TimelineFonts) {
         pill.frame = frame
-        pill.layer.cornerRadius = min(frame.height / 2, 12)
-        pill.backgroundColor = isTyping ? TimelineColors.otherBubble : .tertiarySystemFill
         label.frame = pill.bounds.inset(by: TimelineMetrics.centeredRowPadding)
-        label.font = isTyping ? fonts.footer : fonts.separator
         label.textColor = .secondaryLabel
         label.text = text
         accessibilityLabel = text
         isAccessibilityElement = true
-        accessibilityTraits = isTyping ? .updatesFrequently : .header
+        switch style {
+        case .date:
+            pill.layer.cornerRadius = frame.height / 2
+            pill.backgroundColor = UIColor.secondarySystemBackground.withAlphaComponent(0.9)
+            label.font = fonts.separator
+            accessibilityTraits = .header
+        case .membership:
+            pill.layer.cornerRadius = 0
+            pill.backgroundColor = .clear
+            label.font = fonts.separator
+            accessibilityTraits = .staticText
+        case .typing:
+            pill.layer.cornerRadius = min(frame.height / 2, 12)
+            pill.backgroundColor = ChatColors.UI.bubbleOther
+            label.font = fonts.footer
+            accessibilityTraits = .updatesFrequently
+        }
     }
 }

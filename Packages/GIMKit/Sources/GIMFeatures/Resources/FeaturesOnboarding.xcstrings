@@ -1,0 +1,196 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Account ID" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Account ID"
+          }
+        }
+      }
+    },
+    "Choose a username." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose a username."
+          }
+        }
+      }
+    },
+    "Enter a full address, like https://example.com" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter a full address, like https://example.com"
+          }
+        }
+      }
+    },
+    "Enter the server address." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter the server address."
+          }
+        }
+      }
+    },
+    "Enter your Account ID." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter your Account ID."
+          }
+        }
+      }
+    },
+    "Enter your name." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter your name."
+          }
+        }
+      }
+    },
+    "Enter your recovery key." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter your recovery key."
+          }
+        }
+      }
+    },
+    "Keep this secret. Anyone who has it can get into your account. Lost all your devices? Open gim, tap Restore and paste this text." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep this secret. Anyone who has it can get into your account. Lost all your devices? Open gim, tap Restore and paste this text."
+          }
+        }
+      }
+    },
+    "Part of the kit is missing. Fill in the empty field below." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Part of the kit is missing. Fill in the empty field below."
+          }
+        }
+      }
+    },
+    "Recovery key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recovery key"
+          }
+        }
+      }
+    },
+    "Someone already has this username. Try another one." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Someone already has this username. Try another one."
+          }
+        }
+      }
+    },
+    "That doesn't match. Look at your recovery key and try again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "That doesn't match. Look at your recovery key and try again."
+          }
+        }
+      }
+    },
+    "This recovery key doesn't fit this account. Check the key and the Account ID." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This recovery key doesn't fit this account. Check the key and the Account ID."
+          }
+        }
+      }
+    },
+    "This server has no account with this Account ID. Check the ID and the server." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This server has no account with this Account ID. Check the ID and the server."
+          }
+        }
+      }
+    },
+    "Use only letters, digits, underscores and dots." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use only letters, digits, underscores and dots."
+          }
+        }
+      }
+    },
+    "Usernames are 3 to 32 characters long." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usernames are 3 to 32 characters long."
+          }
+        }
+      }
+    },
+    "We couldn't find an Account ID or recovery key here. Paste the whole kit, or type them below." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "We couldn't find an Account ID or recovery key here. Paste the whole kit, or type them below."
+          }
+        }
+      }
+    },
+    "Your name can be 1 to 64 characters long." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your name can be 1 to 64 characters long."
+          }
+        }
+      }
+    },
+    "gim recovery kit" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "gim recovery kit"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}
