@@ -114,7 +114,9 @@ extension GIMCore.ChatState {
 
 extension GIMCore.ClientConfig {
     init(_ mirror: GIMClientKit.ClientConfig) {
-        self.init(serverUrl: mirror.serverUrl, mode: mirror.mode.map { GIMCore.ClientMode($0) })
+        self.init(
+            serverUrl: mirror.serverUrl, mode: mirror.mode.map { GIMCore.ClientMode($0) },
+            metaServerUrl: mirror.metaServerUrl)
     }
 }
 
@@ -190,7 +192,33 @@ extension GIMClientKit.HubInfo {
 
 extension GIMClientKit.UserProfile {
     init(_ core: GIMCore.UserProfile) {
-        self.init(userId: core.userId, handle: core.handle, displayName: core.displayName)
+        self.init(userId: core.userId, handle: core.handle, displayName: core.displayName, hasAvatar: core.hasAvatar)
+    }
+}
+
+extension GIMClientKit.PrivacySettings {
+    init(_ core: GIMCore.PrivacySettings) {
+        self.init(
+            readReceipts: core.readReceipts, typingIndicators: core.typingIndicators,
+            blockedUserIds: core.blockedUserIds)
+    }
+}
+
+extension GIMClientKit.RecoveryRotation {
+    init(_ core: GIMCore.RecoveryRotation) {
+        self.init(recoveryCode: core.recoveryCode, unsyncedHubIds: core.unsyncedHubIds)
+    }
+}
+
+extension GIMCore.ReportReason {
+    init(_ mirror: GIMClientKit.ReportReason) {
+        switch mirror {
+        case .spam: self = .spam
+        case .harassment: self = .harassment
+        case .inappropriate: self = .inappropriate
+        case .scam: self = .scam
+        case .other: self = .other
+        }
     }
 }
 
@@ -209,13 +237,29 @@ extension GIMClientKit.ChatSummary {
             chatId: core.chatId, kind: GIMClientKit.ChatKind(core.kind), name: core.name,
             avatar: core.avatar.map { GIMClientKit.MediaRef($0) },
             lastMessage: core.lastMessage.map { GIMClientKit.MessagePreview($0) }, unreadCount: core.unreadCount,
-            updatedAtMs: core.updatedAtMs, memberCount: core.memberCount, state: GIMClientKit.ChatState(core.state))
+            updatedAtMs: core.updatedAtMs, memberCount: core.memberCount, state: GIMClientKit.ChatState(core.state),
+            peer: core.peer.map { GIMClientKit.UserProfile($0) }, mutedUntilMs: core.mutedUntilMs, pinned: core.pinned,
+            archived: core.archived, blocked: core.blocked)
     }
 }
 
 extension GIMClientKit.MessagePreview {
     init(_ core: GIMCore.MessagePreview) {
-        self.init(senderName: core.senderName, text: core.text, sentAtMs: core.sentAtMs, isOwn: core.isOwn)
+        self.init(
+            senderName: core.senderName, text: core.text, sentAtMs: core.sentAtMs, isOwn: core.isOwn,
+            sendState: core.sendState.map { GIMClientKit.SendState($0) })
+    }
+}
+
+extension GIMCore.RecoveryKitLabels {
+    init(_ mirror: GIMClientKit.RecoveryKitLabels) {
+        self.init(title: mirror.title, accountId: mirror.accountId, recoveryKey: mirror.recoveryKey, note: mirror.note)
+    }
+}
+
+extension GIMClientKit.ParsedRecoveryKit {
+    init(_ core: GIMCore.ParsedRecoveryKit) {
+        self.init(userId: core.userId, recoveryCode: core.recoveryCode)
     }
 }
 

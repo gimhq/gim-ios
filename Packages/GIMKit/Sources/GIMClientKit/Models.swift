@@ -9,10 +9,14 @@ public struct ClientConfig: Sendable, Hashable {
     public var serverUrl: String
     /// The process kind; `nil` is `ClientMode.app`.
     public var mode: ClientMode?
+    /// Base URL of the gim meta server (`http://` or `https://`): the encrypted settings backup and abuse reports.
+    /// `nil`: settings are not backed up and `reportUser` fails.
+    public var metaServerUrl: String?
 
-    public init(serverUrl: String, mode: ClientMode? = nil) {
+    public init(serverUrl: String, mode: ClientMode? = nil, metaServerUrl: String? = nil) {
         self.serverUrl = serverUrl
         self.mode = mode
+        self.metaServerUrl = metaServerUrl
     }
 }
 
@@ -119,12 +123,55 @@ public struct UserProfile: Sendable, Hashable {
     public var userId: String
     public var handle: String
     public var displayName: String
+    /// The user has a profile photo; get it with `fetchUserAvatar`.
+    public var hasAvatar: Bool
 
-    public init(userId: String, handle: String, displayName: String) {
+    public init(userId: String, handle: String, displayName: String, hasAvatar: Bool = false) {
         self.userId = userId
         self.handle = handle
         self.displayName = displayName
+        self.hasAvatar = hasAvatar
     }
+}
+
+/// The privacy settings, synced to the user's own devices; all on and empty by default.
+public struct PrivacySettings: Sendable, Hashable {
+    /// Send read receipts; off, the others' are not shown either.
+    public var readReceipts: Bool
+    /// Send typing indicators; off, the others' are not shown either.
+    public var typingIndicators: Bool
+    /// Users whose messages and invites are dropped.
+    public var blockedUserIds: [String]
+
+    public init(readReceipts: Bool, typingIndicators: Bool, blockedUserIds: [String]) {
+        self.readReceipts = readReceipts
+        self.typingIndicators = typingIndicators
+        self.blockedUserIds = blockedUserIds
+    }
+}
+
+/// What `rotateRecoveryCode` returns.
+public struct RecoveryRotation: Sendable, Hashable {
+    /// The new recovery code; not stored, show it to the user once.
+    public var recoveryCode: String
+    /// Listed hubs that did not take the new backup: the previous code still works there until a later rotation
+    /// reaches them.
+    public var unsyncedHubIds: [String]
+
+    public init(recoveryCode: String, unsyncedHubIds: [String]) {
+        self.recoveryCode = recoveryCode
+        self.unsyncedHubIds = unsyncedHubIds
+    }
+}
+
+/// Why a user is reported (`reportUser`).
+public enum ReportReason: Sendable, Hashable {
+    case spam
+    case harassment
+    /// Content not suitable for the user (sexual, violent, ...).
+    case inappropriate
+    case scam
+    case other
 }
 
 /// A device of a user, from the user's signed DeviceList.
@@ -202,10 +249,22 @@ public struct ChatSummary: Sendable, Hashable {
     /// Where this device stands in the chat; read from local state, so it is right from the first callback after a
     /// restart.
     public var state: ChatState
+    /// For a direct chat: the other user. Show their photo (`fetchUserAvatar`) when the chat has no avatar.
+    public var peer: UserProfile?
+    /// Notifications are muted until then (Unix milliseconds; 0: not muted, `mutedForever()`: until unmuted). Compare
+    /// with the current time.
+    public var mutedUntilMs: UInt64
+    /// Pinned chats come first.
+    public var pinned: Bool
+    /// Show archived chats apart from the others.
+    public var archived: Bool
+    /// A direct chat with a blocked user.
+    public var blocked: Bool
 
     public init(
         chatId: String, kind: ChatKind, name: String, avatar: MediaRef?, lastMessage: MessagePreview?,
-        unreadCount: UInt32, updatedAtMs: UInt64, memberCount: UInt32, state: ChatState
+        unreadCount: UInt32, updatedAtMs: UInt64, memberCount: UInt32, state: ChatState, peer: UserProfile? = nil,
+        mutedUntilMs: UInt64 = 0, pinned: Bool = false, archived: Bool = false, blocked: Bool = false
     ) {
         self.chatId = chatId
         self.kind = kind
@@ -216,6 +275,11 @@ public struct ChatSummary: Sendable, Hashable {
         self.updatedAtMs = updatedAtMs
         self.memberCount = memberCount
         self.state = state
+        self.peer = peer
+        self.mutedUntilMs = mutedUntilMs
+        self.pinned = pinned
+        self.archived = archived
+        self.blocked = blocked
     }
 }
 
@@ -239,12 +303,43 @@ public struct MessagePreview: Sendable, Hashable {
     public var text: String
     public var sentAtMs: UInt64
     public var isOwn: Bool
+    /// Delivery state of an own message, for the ticks of the row (as `MessageItem.sendState`); `nil` for messages
+    /// from others.
+    public var sendState: SendState?
 
-    public init(senderName: String, text: String, sentAtMs: UInt64, isOwn: Bool) {
+    public init(senderName: String, text: String, sentAtMs: UInt64, isOwn: Bool, sendState: SendState? = nil) {
         self.senderName = senderName
         self.text = text
         self.sentAtMs = sentAtMs
         self.isOwn = isOwn
+        self.sendState = sendState
+    }
+}
+
+/// The app's localized words of the kit text.
+public struct RecoveryKitLabels: Sendable, Hashable {
+    public var title: String
+    public var accountId: String
+    public var recoveryKey: String
+    public var note: String
+
+    public init(title: String, accountId: String, recoveryKey: String, note: String) {
+        self.title = title
+        self.accountId = accountId
+        self.recoveryKey = recoveryKey
+        self.note = note
+    }
+}
+
+/// What `parseRecoveryKit` found: the normalized, valid user id and recovery code (39 symbols, no separators), each
+/// if present.
+public struct ParsedRecoveryKit: Sendable, Hashable {
+    public var userId: String?
+    public var recoveryCode: String?
+
+    public init(userId: String?, recoveryCode: String?) {
+        self.userId = userId
+        self.recoveryCode = recoveryCode
     }
 }
 
