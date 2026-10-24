@@ -5,6 +5,32 @@
 - **approvedAt**: 2026-10-23 09:58 (user, through the gimhq workspace coordinator: auto mode for campaign `l1-0xhhlawj-20261023095300`)
 - **relatedTask**: 20261023-1002-product-ui-i18n-settings
 
+## Paused
+
+Paused 2026-10-24 02:35Z on user instruction. No session is running, and every worktree is clean.
+
+Merged on main (origin/main `fc4371a`):
+
+- W1 (copy, glossary, catalogs, gim-mac typed kinds), W2 (onboarding, recovery kit) and W4 (polish): `1253db4`
+- W3 (settings behind the avatar): `3b50e2f`
+- W6 stage 1 (SDK b86283e, metaServerUrl, the C9/C2/C7 mirror): `fc4371a`
+
+On branches (pushed, not merged):
+
+- W5 languages: `bkd/if754z3d` at `e9569d5`. This includes all translations for en/es/zh-Hans/zh-Hant, the completeness tests, the gate English-language fix and the screenshots test. Build-test was green on `4e988ef`. The final head after the screenshots L3 is not gated yet, and no "branch ready" report was sent.
+- W6 PushSmoke g fix (persist the debug sync hold): `bkd/shdeqkz2` at `c723567`. Its e2e on that head is invalid because the hub host was not overridden (100.99.1.1), so the hub suites never ran.
+- The L3 branches are subsets of these two branches.
+
+Next steps:
+
+1. Resume the crons `15qih6y2`, `ajpf4w9y` and `fohvj8af`.
+2. W5: run build-test on the final head, then send "branch ready". L1 then merges, runs e2e and pushes.
+3. W6: rerun the P1 e2e with `GIM_E2E_HUB_HOST=192.168.1.20` and `GIM_HUB_REPO=/srv/gimhq/gim-hub`. Expect PushSmoke g to pass, then land it.
+4. After W5 is on main: W6 stage 2 (feature UI, with RecoveryKit delegating to the SDK parser).
+5. Campaign close: final checks, delete the crons, final report.
+
+Open blockers: none. Known tooling debt: the stale hub defaults in `scripts/e2e-hub.sh`.
+
 ## Context
 
 Goal (user, 2026-10-23): the iOS app must align with the approved gim-android
