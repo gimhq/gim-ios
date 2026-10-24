@@ -33,7 +33,8 @@ public struct RootView: View {
             case .ready(let client):
                 SignedInView(
                     client: client, session: model.session,
-                    refreshSession: { await model.refreshSession() }, signOut: { await model.signOut() })
+                    refreshSession: { await model.refreshSession() }, signOut: { await model.signOut() },
+                    deleteAccount: { await model.deleteAccount() })
             }
         }
         .preferredColorScheme(appearance.colorScheme)
@@ -94,6 +95,7 @@ private struct SignedInView: View {
     let session: Session?
     let refreshSession: @MainActor () async -> Void
     let signOut: () async -> String?
+    let deleteAccount: () async -> String?
 
     @State private var path: [String] = []
     @State private var drafts = ComposerDrafts()
@@ -101,12 +103,14 @@ private struct SignedInView: View {
 
     init(
         client: any GimClientAPI, session: Session?,
-        refreshSession: @escaping @MainActor () async -> Void, signOut: @escaping () async -> String?
+        refreshSession: @escaping @MainActor () async -> Void, signOut: @escaping () async -> String?,
+        deleteAccount: @escaping () async -> String?
     ) {
         self.client = client
         self.session = session
         self.refreshSession = refreshSession
         self.signOut = signOut
+        self.deleteAccount = deleteAccount
     }
 
     var body: some View {
@@ -121,7 +125,9 @@ private struct SignedInView: View {
         }
         .fullScreenCover(isPresented: $showsSettings) {
             NavigationStack {
-                SettingsScreen(client: client, session: session, refreshSession: refreshSession, signOut: signOut)
+                SettingsScreen(
+                    client: client, session: session, refreshSession: refreshSession, signOut: signOut,
+                    deleteAccount: deleteAccount)
             }
         }
     }
