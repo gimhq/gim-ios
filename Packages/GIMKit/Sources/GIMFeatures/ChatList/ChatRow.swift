@@ -21,6 +21,9 @@ public struct ChatRow: Sendable, Hashable, Identifiable {
     public let lastMessageIsOwn: Bool
     /// When the last message was sent; `nil` for chats without messages.
     public let lastMessageSentAtMs: UInt64?
+    /// Status ticks of the own last message, from the preview's send state; `nil` when the last message is someone
+    /// else's or has no send state.
+    public let lastMessageStatus: MessageStatus?
 
     public init(summary: ChatSummary, dateFormatter: RelativeDateFormatter) {
         id = summary.chatId
@@ -34,6 +37,7 @@ public struct ChatRow: Sendable, Hashable, Identifiable {
         state = summary.state
         lastMessageIsOwn = summary.lastMessage?.isOwn ?? false
         lastMessageSentAtMs = summary.lastMessage?.sentAtMs
+        lastMessageStatus = summary.lastMessage.flatMap { $0.isOwn ? $0.sendState.map(MessageStatus.init) : nil }
     }
 
     /// gim-core already renders the last message as text ("Photo", "File: report.pdf", "Message deleted", …).

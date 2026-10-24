@@ -11,14 +11,35 @@ final class ChatRowTests: XCTestCase {
 
     private func summary(
         kind: ChatKind, preview: String? = "Hello", sender: String = "Sofia Marin", unread: UInt32 = 0,
-        isOwn: Bool = false
+        isOwn: Bool = false, sendState: SendState? = nil
     ) -> ChatSummary {
         ChatSummary(
             chatId: "chat-1", kind: kind, name: "Title", avatar: avatar,
             lastMessage: preview.map {
-                MessagePreview(senderName: sender, text: $0, sentAtMs: sentAtMs, isOwn: isOwn)
+                MessagePreview(senderName: sender, text: $0, sentAtMs: sentAtMs, isOwn: isOwn, sendState: sendState)
             },
             unreadCount: unread, updatedAtMs: sentAtMs, memberCount: kind == .group ? 4 : 2, state: .active)
+    }
+
+    private func row(_ summary: ChatSummary) -> ChatRow {
+        ChatRow(summary: summary, dateFormatter: makeFormatter())
+    }
+
+    func testLastMessageStatusMapsTheOwnPreviewSendState() {
+        let failure = SendState.failed(reason: "hub refused", cause: .other)
+        let expected: [(SendState, MessageStatus)] = [
+            (.pending, .sending), (.sent, .sent), (.delivered, .delivered), (.read, .read),
+            (failure, .failed(reason: "hub refused", cause: .other)),
+        ]
+        for (state, status) in expected {
+            XCTAssertEqual(row(summary(kind: .direct, isOwn: true, sendState: state)).lastMessageStatus, status)
+        }
+    }
+
+    func testLastMessageStatusIsNilWithoutAnOwnSendState() {
+        XCTAssertNil(row(summary(kind: .direct, isOwn: false, sendState: .read)).lastMessageStatus)
+        XCTAssertNil(row(summary(kind: .direct, isOwn: true, sendState: nil)).lastMessageStatus)
+        XCTAssertNil(row(summary(kind: .direct, preview: nil)).lastMessageStatus)
     }
 
     func testOwnLastMessageIsFlaggedWithItsTime() {
