@@ -8,6 +8,24 @@
             "state" : "translated",
             "value" : "Can't remove your main server"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se puede quitar tu servidor principal"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法移除主服务器"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法移除主要伺服器"
+          }
         }
       }
     },
@@ -17,6 +35,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Can't remove your only server"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se puede quitar tu único servidor"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法移除唯一的服务器"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法移除唯一的伺服器"
           }
         }
       }
@@ -28,6 +64,24 @@
             "state" : "translated",
             "value" : "Connected"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conectado"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已连接"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已連線"
+          }
         }
       }
     },
@@ -37,6 +91,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Not checked"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sin comprobar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未检查"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未檢查"
           }
         }
       }
@@ -48,6 +120,24 @@
             "state" : "translated",
             "value" : "Removed"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quitado"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已移除"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已移除"
+          }
         }
       }
     },
@@ -57,6 +147,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "This server hosts %lld groups you own. Removing it doesn't move them: they keep running there, and you still reach them through your other servers."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este servidor aloja %lld grupos tuyos. Quitarlo no los mueve: siguen funcionando ahí y puedes acceder a ellos desde tus otros servidores."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这台服务器上有 %lld 个你创建的群组。移除它不会迁走这些群组：它们会继续在那里运行，你仍可通过其他服务器访问。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這台伺服器上有 %lld 個你建立的群組。移除它不會搬走這些群組：它們會繼續在那裡運作，你仍可透過其他伺服器存取。"
           }
         }
       }
@@ -68,6 +176,24 @@
             "state" : "translated",
             "value" : "This server hosts 1 group you own. Removing it doesn't move them: they keep running there, and you still reach them through your other servers."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este servidor aloja 1 grupo tuyo. Quitarlo no lo mueve: sigue funcionando ahí y puedes acceder a él desde tus otros servidores."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这台服务器上有 1 个你创建的群组。移除它不会迁走这个群组：它会继续在那里运行，你仍可通过其他服务器访问。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這台伺服器上有 1 個你建立的群組。移除它不會搬走這個群組：它會繼續在那裡運作，你仍可透過其他伺服器存取。"
+          }
         }
       }
     },
@@ -77,6 +203,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Try again later"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vuelve a intentarlo más tarde"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请稍后重试"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請稍後重試"
           }
         }
       }

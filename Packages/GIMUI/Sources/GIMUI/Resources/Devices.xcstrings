@@ -8,6 +8,24 @@
             "state" : "translated",
             "value" : "Account ID"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ID de cuenta"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "账号 ID"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "帳號 ID"
+          }
         }
       }
     },
@@ -17,6 +35,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Active"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activo"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "活跃"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用中"
           }
         }
       }
@@ -28,6 +64,24 @@
             "state" : "translated",
             "value" : "Added %@"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añadido el %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加于 %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新增於 %@"
+          }
         }
       }
     },
@@ -37,6 +91,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Allow camera access to scan the code."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Permite el acceso a la cámara para escanear el código."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "允许使用相机来扫描二维码。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "允許使用相機來掃描 QR 碼。"
           }
         }
       }
@@ -48,6 +120,24 @@
             "state" : "translated",
             "value" : "Camera"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cámara"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "相机"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "相機"
+          }
         }
       }
     },
@@ -57,6 +147,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Check that your new device shows the same code."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comprueba que tu nuevo dispositivo muestra el mismo código."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "确认你的新设备显示的是同一个代码。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "確認你的新裝置顯示的是同一組代碼。"
           }
         }
       }
@@ -68,6 +176,24 @@
             "state" : "translated",
             "value" : "Check that your other device shows the same code."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comprueba que tu otro dispositivo muestra el mismo código."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "确认你的另一台设备显示的是同一个代码。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "確認你的另一台裝置顯示的是同一組代碼。"
+          }
         }
       }
     },
@@ -77,6 +203,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Codes don't match"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los códigos no coinciden"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "代码不一致"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "代碼不一致"
           }
         }
       }
@@ -88,6 +232,24 @@
             "state" : "translated",
             "value" : "Codes match"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los códigos coinciden"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "代码一致"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "代碼一致"
+          }
         }
       }
     },
@@ -97,6 +259,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Copies the code to paste on your other device"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copia el código para pegarlo en tu otro dispositivo"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "复制代码，粘贴到你的另一台设备上"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "複製代碼，貼到你的另一台裝置上"
           }
         }
       }
@@ -108,6 +288,24 @@
             "state" : "translated",
             "value" : "Copies your Account ID"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copia tu ID de cuenta"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "复制你的账号 ID"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "複製你的帳號 ID"
+          }
         }
       }
     },
@@ -117,6 +315,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Copy link code"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copiar código de vinculación"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "复制关联代码"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "複製連結代碼"
           }
         }
       }
@@ -128,6 +344,24 @@
             "state" : "translated",
             "value" : "Couldn't link"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo vincular"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法关联"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法連結"
+          }
         }
       }
     },
@@ -137,6 +371,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Device linked. It will join your chats on its next sync."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dispositivo vinculado. Se unirá a tus chats en la próxima sincronización."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设备已关联。它会在下次同步时加入你的聊天。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "裝置已連結。它會在下次同步時加入你的聊天。"
           }
         }
       }
@@ -148,6 +400,24 @@
             "state" : "translated",
             "value" : "Devices"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dispositivos"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设备"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "裝置"
+          }
         }
       }
     },
@@ -157,6 +427,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "GIM can't use the camera. Allow camera access in Settings or paste the link code below."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GIM no puede usar la cámara. Permite el acceso a la cámara en Ajustes o pega el código de vinculación abajo."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GIM 无法使用相机。请在设置中允许使用相机，或在下方粘贴关联代码。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GIM 無法使用相機。請在設定中允許使用相機，或在下方貼上連結代碼。"
           }
         }
       }
@@ -168,6 +456,24 @@
             "state" : "translated",
             "value" : "It will be signed out and removed from all your chats. This can't be undone."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se cerrará su sesión y se quitará de todos tus chats. No se puede deshacer."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "它会退出登录，并从你所有的聊天中移除。此操作无法撤销。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "它會登出，並從你所有的聊天中移除。這個動作無法復原。"
+          }
         }
       }
     },
@@ -177,6 +483,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Link QR code"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Código QR de vinculación"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关联二维码"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "連結 QR 碼"
           }
         }
       }
@@ -188,6 +512,24 @@
             "state" : "translated",
             "value" : "Link a new device"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vincular un nuevo dispositivo"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关联新设备"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "連結新裝置"
+          }
         }
       }
     },
@@ -197,6 +539,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Link device"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vincular dispositivo"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关联设备"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "連結裝置"
           }
         }
       }
@@ -208,6 +568,24 @@
             "state" : "translated",
             "value" : "New device"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nuevo dispositivo"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新设备"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新裝置"
+          }
         }
       }
     },
@@ -217,6 +595,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "On your new device, choose Link to an existing device and scan the code it shows."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En tu nuevo dispositivo, elige Vincular a un dispositivo existente y escanea el código que muestra."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在新设备上选择“关联到已有设备”，然后扫描它显示的二维码。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在新裝置上選擇「連結到現有裝置」，然後掃描它顯示的 QR 碼。"
           }
         }
       }
@@ -228,6 +624,24 @@
             "state" : "translated",
             "value" : "On your new device, tap Copy link code, then paste it here."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En tu nuevo dispositivo, toca Copiar código de vinculación y pégalo aquí."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在新设备上点按“复制关联代码”，然后粘贴到这里。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在新裝置上點一下「複製連結代碼」，然後貼到這裡。"
+          }
         }
       }
     },
@@ -237,6 +651,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "On your other device, open Settings, choose Link a new device and scan this code."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En tu otro dispositivo, abre Ajustes, elige Vincular un nuevo dispositivo y escanea este código."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在另一台设备上打开设置，选择“关联新设备”，然后扫描这个二维码。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在另一台裝置上打開設定，選擇「連結新裝置」，然後掃描這個 QR 碼。"
           }
         }
       }
@@ -248,6 +680,24 @@
             "state" : "translated",
             "value" : "Open Settings"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abrir Ajustes"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开设置"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打開設定"
+          }
         }
       }
     },
@@ -257,6 +707,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Or paste the code"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O pega el código"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "或粘贴代码"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "或貼上代碼"
           }
         }
       }
@@ -268,6 +736,24 @@
             "state" : "translated",
             "value" : "Paste link code"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pegar código de vinculación"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "粘贴关联代码"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "貼上連結代碼"
+          }
         }
       }
     },
@@ -277,6 +763,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Remove this device?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Quitar este dispositivo?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移除这台设备？"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移除這台裝置？"
           }
         }
       }
@@ -288,6 +792,24 @@
             "state" : "translated",
             "value" : "Removed"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quitado"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已移除"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已移除"
+          }
         }
       }
     },
@@ -297,6 +819,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Scan"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escanear"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "扫描"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "掃描"
           }
         }
       }
@@ -308,6 +848,24 @@
             "state" : "translated",
             "value" : "The new device was removed. Choose Codes don't match on it too."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se quitó el nuevo dispositivo. Elige Los códigos no coinciden también en él."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新设备已移除。请在新设备上也选择“代码不一致”。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新裝置已移除。請在新裝置上也選擇「代碼不一致」。"
+          }
         }
       }
     },
@@ -317,6 +875,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "This device"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este dispositivo"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这台设备"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這台裝置"
           }
         }
       }
@@ -328,6 +904,24 @@
             "state" : "translated",
             "value" : "Waiting for your other device…"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esperando a tu otro dispositivo…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在等待你的另一台设备…"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在等待你的另一台裝置…"
+          }
         }
       }
     },
@@ -337,6 +931,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "You need your Account ID and your recovery key to get your account back on a new phone."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Necesitas tu ID de cuenta y tu clave de recuperación para recuperar tu cuenta en un teléfono nuevo."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在新手机上找回账号，需要你的账号 ID 和恢复密钥。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在新手機上找回帳號，需要你的帳號 ID 和復原金鑰。"
           }
         }
       }

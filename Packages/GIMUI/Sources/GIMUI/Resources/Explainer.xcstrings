@@ -8,6 +8,24 @@
             "state" : "translated",
             "value" : "Share your Account ID so friends can reach you. You can also pick a username to make you easier to find."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comparte tu ID de cuenta para que tus amigos puedan contactarte. También puedes elegir un nombre de usuario para que te encuentren más fácil."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "分享你的账号 ID，朋友就能联系你。你也可以设置一个用户名，让别人更容易找到你。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "分享你的帳號 ID，朋友就能聯絡你。你也可以設定一個使用者名稱，讓別人更容易找到你。"
+          }
         }
       }
     },
@@ -17,6 +35,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Your Account ID is your address"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu ID de cuenta es tu dirección"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "账号 ID 就是你的地址"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "帳號 ID 就是你的地址"
           }
         }
       }
@@ -28,6 +64,24 @@
             "state" : "translated",
             "value" : "gim works a bit differently from other chat apps. Here is what to know."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "gim funciona un poco distinto a otras apps de chat. Esto es lo que debes saber."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "gim 和其他聊天应用有点不一样。你需要了解这些："
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "gim 和其他聊天 App 有點不一樣。你需要了解這些："
+          }
         }
       }
     },
@@ -37,6 +91,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Messages are end-to-end encrypted. Only the people in the chat can read them. Not even the server can."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los mensajes tienen cifrado de extremo a extremo. Solo las personas del chat pueden leerlos. Ni siquiera el servidor puede."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "消息经过端到端加密。只有聊天里的人能看到，连服务器也看不到。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "訊息經過端對端加密。只有聊天裡的人能看到，連伺服器也看不到。"
           }
         }
       }
@@ -48,6 +120,24 @@
             "state" : "translated",
             "value" : "Your messages are locked"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tus mensajes están bajo llave"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的消息是上锁的"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的訊息是上鎖的"
+          }
         }
       }
     },
@@ -57,6 +147,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "You don't need a phone number or email. Just pick a name. gim gives you an Account ID."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No necesitas número de teléfono ni correo. Solo elige un nombre. gim te da un ID de cuenta."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不需要手机号或邮箱。起个名字就行，gim 会给你一个账号 ID。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不需要手機號碼或電子郵件。取個名字就好，gim 會給你一個帳號 ID。"
           }
         }
       }
@@ -68,6 +176,24 @@
             "state" : "translated",
             "value" : "No phone number needed"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No necesitas número de teléfono"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不需要手机号"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不需要手機號碼"
+          }
         }
       }
     },
@@ -77,6 +203,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Your account is kept on your devices, not on a server. Want to use it somewhere else? Link another device."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu cuenta se guarda en tus dispositivos, no en un servidor. ¿Quieres usarla en otro lugar? Vincula otro dispositivo."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的账号保存在你的设备上，而不是服务器上。想在别处使用？关联另一台设备就行。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的帳號儲存在你的裝置上，而不是伺服器上。想在別的地方使用？連結另一台裝置就好。"
           }
         }
       }
@@ -88,6 +232,24 @@
             "state" : "translated",
             "value" : "Your account lives on your devices"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu cuenta vive en tus dispositivos"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的账号在你的设备上"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的帳號在你的裝置上"
+          }
         }
       }
     },
@@ -97,6 +259,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Lost all your devices? Your recovery key and Account ID bring your account back. Old chats don't come back. Keep the key secret and safe. Never show it to anyone."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Perdiste todos tus dispositivos? Tu clave de recuperación y tu ID de cuenta te devuelven tu cuenta. Los chats antiguos no vuelven. Guarda la clave en secreto y en un lugar seguro. Nunca se la muestres a nadie."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设备全丢了？用恢复密钥和账号 ID 就能找回账号，但以前的聊天找不回来。请把密钥保密并妥善保管，绝不要给任何人看。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "裝置全都不見了？用復原金鑰和帳號 ID 就能找回帳號，但以前的聊天找不回來。請把金鑰保密並妥善保管，絕對不要給任何人看。"
           }
         }
       }
@@ -108,6 +288,24 @@
             "state" : "translated",
             "value" : "Your recovery key is a spare key"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu clave de recuperación es una llave de repuesto"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "恢复密钥是你的备用钥匙"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "復原金鑰是你的備用鑰匙"
+          }
         }
       }
     },
@@ -117,6 +315,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "How gim works"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cómo funciona gim"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "gim 是怎么运作的"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "gim 是怎麼運作的"
           }
         }
       }
