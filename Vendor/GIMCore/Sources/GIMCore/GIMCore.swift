@@ -1093,6 +1093,13 @@ public protocol GimClientProtocol: AnyObject, Sendable {
     func approveLink(qrString: String) async throws  -> PendingApproval
     
     /**
+     * Blocks a user: their messages and invites are dropped and no chat
+     * can be created with them or add them (`InvalidInput`). Existing
+     * chats stay; a direct chat shows `blocked`.
+     */
+    func blockUser(userId: String) async throws 
+    
+    /**
      * Removes an unsent message from the outbox and the timeline.
      */
     func cancelSend(chatId: String, messageId: String) async throws 
@@ -1162,6 +1169,16 @@ public protocol GimClientProtocol: AnyObject, Sendable {
      */
     func createIdentity(displayName: String) async throws  -> String
     
+    /**
+     * Deletes the account for good: the meta server's data, every chat
+     * (the user leaves), the account on every hub, then everything on
+     * this device as `sign_out` does. Returns the ids of the user's other
+     * hubs that could not be reached (their records expire on their own).
+     * On an error nothing local is deleted and it can be called again.
+     * Irreversible: confirm with the user first.
+     */
+    func deleteAccount() async throws  -> [String]
+    
     func deleteMessage(chatId: String, messageId: String) async throws 
     
     /**
@@ -1170,6 +1187,12 @@ public protocol GimClientProtocol: AnyObject, Sendable {
     func devices() async throws  -> [DeviceInfo]
     
     func editMessage(chatId: String, messageId: String, newBody: String) async throws 
+    
+    /**
+     * Downloads and decrypts the avatar of a group chat to `dest_path` and
+     * returns the path; `NotFound` if it has none.
+     */
+    func fetchChatAvatar(chatId: String, destPath: String) async throws  -> String
     
     /**
      * Downloads and decrypts an attachment to `dest_path` and returns the
@@ -1181,6 +1204,13 @@ public protocol GimClientProtocol: AnyObject, Sendable {
      * Like `fetch_media` for the thumbnail; `None` if there is none.
      */
     func fetchThumbnail(chatId: String, messageId: String, destPath: String) async throws  -> String?
+    
+    /**
+     * Downloads and decrypts the profile photo of `user_id` (the own user
+     * included) to `dest_path` and returns the path; `NotFound` if they
+     * have none.
+     */
+    func fetchUserAvatar(userId: String, destPath: String) async throws  -> String
     
     /**
      * Looks up a user by handle; `None` if no such user exists.
@@ -1222,6 +1252,16 @@ public protocol GimClientProtocol: AnyObject, Sendable {
     func markRead(chatId: String, upToMessageId: String) async throws 
     
     /**
+     * The signed-in user's own profile; `None` before it is stored.
+     */
+    func ownProfile() async throws  -> UserProfile?
+    
+    /**
+     * The privacy settings.
+     */
+    func privacy() async throws  -> PrivacySettings
+    
+    /**
      * Turns a received push into notification content; for a Notification
      * Service Extension or a background push handler. `payload` is the
      * push server's payload object as JSON (`push.md` §3). Does one
@@ -1255,6 +1295,11 @@ public protocol GimClientProtocol: AnyObject, Sendable {
     func releaseHandle() async throws 
     
     /**
+     * Removes the signed-in user's profile photo.
+     */
+    func removeAvatar() async throws 
+    
+    /**
      * Removes a hub from the hosting record. `HomeHub` for the hub this
      * client was created for, `LastHub` for the only listed hub,
      * `HubOwnsGroups` (with the number of chats) unless
@@ -1264,6 +1309,15 @@ public protocol GimClientProtocol: AnyObject, Sendable {
     func removeHub(hubId: String, confirmOwnedGroups: Bool) async throws 
     
     func removeMember(chatId: String, userId: String) async throws 
+    
+    /**
+     * Reports a user to the meta server's moderators with the messages
+     * `message_ids` (at most 50, from the local history) in plaintext, and
+     * an optional `note` (at most 1000 characters). Returns the report id.
+     * Does not block: call `block_user` too if wanted. `InvalidInput`
+     * without a meta server (`ClientConfig::meta_server_url`).
+     */
+    func reportUser(userId: String, reason: ReportReason, note: String?, messageIds: [String]) async throws  -> String
     
     /**
      * Restores the user on this (fresh) device from its recovery code
@@ -1295,6 +1349,15 @@ public protocol GimClientProtocol: AnyObject, Sendable {
     func revokeDevice(deviceId: String) async throws 
     
     /**
+     * Replaces the recovery code with a new one, for a user who lost it:
+     * the previous code stops working on every hub that takes the new
+     * backup (the home hub always does, or the call fails without any
+     * change). Returns the new code, which is not stored and must be shown
+     * to the user once.
+     */
+    func rotateRecoveryCode() async throws  -> RecoveryRotation
+    
+    /**
      * Encrypts, uploads and sends a file; returns its message id. The file
      * at `file_path` is copied before this returns.
      */
@@ -1310,6 +1373,23 @@ public protocol GimClientProtocol: AnyObject, Sendable {
      * device (`create_identity`, `restore_from_recovery` or a device link).
      */
     func session() async throws  -> Session?
+    
+    /**
+     * Sets the signed-in user's profile photo from an image file (crop and
+     * scale it first: every chat member downloads it); synced and announced
+     * like `set_display_name`.
+     */
+    func setAvatar(filePath: String, mime: String) async throws 
+    
+    func setChatArchived(chatId: String, archived: Bool) async throws 
+    
+    /**
+     * Mutes a chat's notifications until `muted_until_ms` (Unix
+     * milliseconds; `muted_forever()` for good, 0 to unmute).
+     */
+    func setChatMuted(chatId: String, mutedUntilMs: UInt64) async throws 
+    
+    func setChatPinned(chatId: String, pinned: Bool) async throws 
     
     /**
      * Sets the signed-in user's display name; synced to the user's other
@@ -1345,11 +1425,21 @@ public protocol GimClientProtocol: AnyObject, Sendable {
     func setPrimaryHub(hubId: String) async throws 
     
     /**
+     * Turns sending (and showing) read receipts on or off.
+     */
+    func setReadReceipts(enabled: Bool) async throws 
+    
+    /**
      * Reports whether the user is typing. Call it with `true` on every
      * keystroke (notifications are rate-limited) and with `false` when
      * typing stops; see `stop_typing`.
      */
     func setTyping(chatId: String, active: Bool) async throws 
+    
+    /**
+     * Turns sending (and showing) typing indicators on or off.
+     */
+    func setTypingIndicators(enabled: Bool) async throws 
     
     /**
      * Stops sync and the listeners and deletes the session, local data and
@@ -1395,6 +1485,8 @@ public protocol GimClientProtocol: AnyObject, Sendable {
      * Subscribes to typing notifications of one chat.
      */
     func typing(chatId: String, listener: TypingListener) async throws  -> TaskHandle
+    
+    func unblockUser(userId: String) async throws 
     
     func unreact(chatId: String, messageId: String, emoji: String) async throws 
     
@@ -1544,6 +1636,27 @@ open func approveLink(qrString: String)async throws  -> PendingApproval  {
             completeFunc: ffi_gim_core_rust_future_complete_u64,
             freeFunc: ffi_gim_core_rust_future_free_u64,
             liftFunc: FfiConverterTypePendingApproval_lift,
+            errorHandler: FfiConverterTypeGimError_lift
+        )
+}
+    
+    /**
+     * Blocks a user: their messages and invites are dropped and no chat
+     * can be created with them or add them (`InvalidInput`). Existing
+     * chats stay; a direct chat shows `blocked`.
+     */
+open func blockUser(userId: String)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_gim_core_fn_method_gimclient_block_user(
+                        self.uniffiCloneHandle(),FfiConverterString.lower(userId)
+                )
+            },
+            pollFunc: ffi_gim_core_rust_future_poll_void,
+            completeFunc: ffi_gim_core_rust_future_complete_void,
+            freeFunc: ffi_gim_core_rust_future_free_void,
+            liftFunc: { $0 },
             errorHandler: FfiConverterTypeGimError_lift
         )
 }
@@ -1772,6 +1885,30 @@ open func createIdentity(displayName: String)async throws  -> String  {
         )
 }
     
+    /**
+     * Deletes the account for good: the meta server's data, every chat
+     * (the user leaves), the account on every hub, then everything on
+     * this device as `sign_out` does. Returns the ids of the user's other
+     * hubs that could not be reached (their records expire on their own).
+     * On an error nothing local is deleted and it can be called again.
+     * Irreversible: confirm with the user first.
+     */
+open func deleteAccount()async throws  -> [String]  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_gim_core_fn_method_gimclient_delete_account(
+                        self.uniffiCloneHandle()
+                )
+            },
+            pollFunc: ffi_gim_core_rust_future_poll_rust_buffer,
+            completeFunc: ffi_gim_core_rust_future_complete_rust_buffer,
+            freeFunc: ffi_gim_core_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterSequenceString.lift,
+            errorHandler: FfiConverterTypeGimError_lift
+        )
+}
+    
 open func deleteMessage(chatId: String, messageId: String)async throws   {
     return
         try  await uniffiRustCallAsync(
@@ -1824,6 +1961,26 @@ open func editMessage(chatId: String, messageId: String, newBody: String)async t
 }
     
     /**
+     * Downloads and decrypts the avatar of a group chat to `dest_path` and
+     * returns the path; `NotFound` if it has none.
+     */
+open func fetchChatAvatar(chatId: String, destPath: String)async throws  -> String  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_gim_core_fn_method_gimclient_fetch_chat_avatar(
+                        self.uniffiCloneHandle(),FfiConverterString.lower(chatId),FfiConverterString.lower(destPath)
+                )
+            },
+            pollFunc: ffi_gim_core_rust_future_poll_rust_buffer,
+            completeFunc: ffi_gim_core_rust_future_complete_rust_buffer,
+            freeFunc: ffi_gim_core_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterString.lift,
+            errorHandler: FfiConverterTypeGimError_lift
+        )
+}
+    
+    /**
      * Downloads and decrypts an attachment to `dest_path` and returns the
      * path of the decrypted file.
      */
@@ -1858,6 +2015,27 @@ open func fetchThumbnail(chatId: String, messageId: String, destPath: String)asy
             completeFunc: ffi_gim_core_rust_future_complete_rust_buffer,
             freeFunc: ffi_gim_core_rust_future_free_rust_buffer,
             liftFunc: FfiConverterOptionString.lift,
+            errorHandler: FfiConverterTypeGimError_lift
+        )
+}
+    
+    /**
+     * Downloads and decrypts the profile photo of `user_id` (the own user
+     * included) to `dest_path` and returns the path; `NotFound` if they
+     * have none.
+     */
+open func fetchUserAvatar(userId: String, destPath: String)async throws  -> String  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_gim_core_fn_method_gimclient_fetch_user_avatar(
+                        self.uniffiCloneHandle(),FfiConverterString.lower(userId),FfiConverterString.lower(destPath)
+                )
+            },
+            pollFunc: ffi_gim_core_rust_future_poll_rust_buffer,
+            completeFunc: ffi_gim_core_rust_future_complete_rust_buffer,
+            freeFunc: ffi_gim_core_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterString.lift,
             errorHandler: FfiConverterTypeGimError_lift
         )
 }
@@ -1979,6 +2157,44 @@ open func markRead(chatId: String, upToMessageId: String)async throws   {
 }
     
     /**
+     * The signed-in user's own profile; `None` before it is stored.
+     */
+open func ownProfile()async throws  -> UserProfile?  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_gim_core_fn_method_gimclient_own_profile(
+                        self.uniffiCloneHandle()
+                )
+            },
+            pollFunc: ffi_gim_core_rust_future_poll_rust_buffer,
+            completeFunc: ffi_gim_core_rust_future_complete_rust_buffer,
+            freeFunc: ffi_gim_core_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterOptionTypeUserProfile.lift,
+            errorHandler: FfiConverterTypeGimError_lift
+        )
+}
+    
+    /**
+     * The privacy settings.
+     */
+open func privacy()async throws  -> PrivacySettings  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_gim_core_fn_method_gimclient_privacy(
+                        self.uniffiCloneHandle()
+                )
+            },
+            pollFunc: ffi_gim_core_rust_future_poll_rust_buffer,
+            completeFunc: ffi_gim_core_rust_future_complete_rust_buffer,
+            freeFunc: ffi_gim_core_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypePrivacySettings_lift,
+            errorHandler: FfiConverterTypeGimError_lift
+        )
+}
+    
+    /**
      * Turns a received push into notification content; for a Notification
      * Service Extension or a background push handler. `payload` is the
      * push server's payload object as JSON (`push.md` §3). Does one
@@ -2068,6 +2284,25 @@ open func releaseHandle()async throws   {
 }
     
     /**
+     * Removes the signed-in user's profile photo.
+     */
+open func removeAvatar()async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_gim_core_fn_method_gimclient_remove_avatar(
+                        self.uniffiCloneHandle()
+                )
+            },
+            pollFunc: ffi_gim_core_rust_future_poll_void,
+            completeFunc: ffi_gim_core_rust_future_complete_void,
+            freeFunc: ffi_gim_core_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeGimError_lift
+        )
+}
+    
+    /**
      * Removes a hub from the hosting record. `HomeHub` for the hub this
      * client was created for, `LastHub` for the only listed hub,
      * `HubOwnsGroups` (with the number of chats) unless
@@ -2102,6 +2337,29 @@ open func removeMember(chatId: String, userId: String)async throws   {
             completeFunc: ffi_gim_core_rust_future_complete_void,
             freeFunc: ffi_gim_core_rust_future_free_void,
             liftFunc: { $0 },
+            errorHandler: FfiConverterTypeGimError_lift
+        )
+}
+    
+    /**
+     * Reports a user to the meta server's moderators with the messages
+     * `message_ids` (at most 50, from the local history) in plaintext, and
+     * an optional `note` (at most 1000 characters). Returns the report id.
+     * Does not block: call `block_user` too if wanted. `InvalidInput`
+     * without a meta server (`ClientConfig::meta_server_url`).
+     */
+open func reportUser(userId: String, reason: ReportReason, note: String?, messageIds: [String])async throws  -> String  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_gim_core_fn_method_gimclient_report_user(
+                        self.uniffiCloneHandle(),FfiConverterString.lower(userId),FfiConverterTypeReportReason_lower(reason),FfiConverterOptionString.lower(note),FfiConverterSequenceString.lower(messageIds)
+                )
+            },
+            pollFunc: ffi_gim_core_rust_future_poll_rust_buffer,
+            completeFunc: ffi_gim_core_rust_future_complete_rust_buffer,
+            freeFunc: ffi_gim_core_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterString.lift,
             errorHandler: FfiConverterTypeGimError_lift
         )
 }
@@ -2178,6 +2436,29 @@ open func revokeDevice(deviceId: String)async throws   {
 }
     
     /**
+     * Replaces the recovery code with a new one, for a user who lost it:
+     * the previous code stops working on every hub that takes the new
+     * backup (the home hub always does, or the call fails without any
+     * change). Returns the new code, which is not stored and must be shown
+     * to the user once.
+     */
+open func rotateRecoveryCode()async throws  -> RecoveryRotation  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_gim_core_fn_method_gimclient_rotate_recovery_code(
+                        self.uniffiCloneHandle()
+                )
+            },
+            pollFunc: ffi_gim_core_rust_future_poll_rust_buffer,
+            completeFunc: ffi_gim_core_rust_future_complete_rust_buffer,
+            freeFunc: ffi_gim_core_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeRecoveryRotation_lift,
+            errorHandler: FfiConverterTypeGimError_lift
+        )
+}
+    
+    /**
      * Encrypts, uploads and sends a file; returns its message id. The file
      * at `file_path` is copied before this returns.
      */
@@ -2232,6 +2513,79 @@ open func session()async throws  -> Session?  {
             completeFunc: ffi_gim_core_rust_future_complete_rust_buffer,
             freeFunc: ffi_gim_core_rust_future_free_rust_buffer,
             liftFunc: FfiConverterOptionTypeSession.lift,
+            errorHandler: FfiConverterTypeGimError_lift
+        )
+}
+    
+    /**
+     * Sets the signed-in user's profile photo from an image file (crop and
+     * scale it first: every chat member downloads it); synced and announced
+     * like `set_display_name`.
+     */
+open func setAvatar(filePath: String, mime: String)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_gim_core_fn_method_gimclient_set_avatar(
+                        self.uniffiCloneHandle(),FfiConverterString.lower(filePath),FfiConverterString.lower(mime)
+                )
+            },
+            pollFunc: ffi_gim_core_rust_future_poll_void,
+            completeFunc: ffi_gim_core_rust_future_complete_void,
+            freeFunc: ffi_gim_core_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeGimError_lift
+        )
+}
+    
+open func setChatArchived(chatId: String, archived: Bool)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_gim_core_fn_method_gimclient_set_chat_archived(
+                        self.uniffiCloneHandle(),FfiConverterString.lower(chatId),FfiConverterBool.lower(archived)
+                )
+            },
+            pollFunc: ffi_gim_core_rust_future_poll_void,
+            completeFunc: ffi_gim_core_rust_future_complete_void,
+            freeFunc: ffi_gim_core_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeGimError_lift
+        )
+}
+    
+    /**
+     * Mutes a chat's notifications until `muted_until_ms` (Unix
+     * milliseconds; `muted_forever()` for good, 0 to unmute).
+     */
+open func setChatMuted(chatId: String, mutedUntilMs: UInt64)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_gim_core_fn_method_gimclient_set_chat_muted(
+                        self.uniffiCloneHandle(),FfiConverterString.lower(chatId),FfiConverterUInt64.lower(mutedUntilMs)
+                )
+            },
+            pollFunc: ffi_gim_core_rust_future_poll_void,
+            completeFunc: ffi_gim_core_rust_future_complete_void,
+            freeFunc: ffi_gim_core_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeGimError_lift
+        )
+}
+    
+open func setChatPinned(chatId: String, pinned: Bool)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_gim_core_fn_method_gimclient_set_chat_pinned(
+                        self.uniffiCloneHandle(),FfiConverterString.lower(chatId),FfiConverterBool.lower(pinned)
+                )
+            },
+            pollFunc: ffi_gim_core_rust_future_poll_void,
+            completeFunc: ffi_gim_core_rust_future_complete_void,
+            freeFunc: ffi_gim_core_rust_future_free_void,
+            liftFunc: { $0 },
             errorHandler: FfiConverterTypeGimError_lift
         )
 }
@@ -2326,6 +2680,25 @@ open func setPrimaryHub(hubId: String)async throws   {
 }
     
     /**
+     * Turns sending (and showing) read receipts on or off.
+     */
+open func setReadReceipts(enabled: Bool)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_gim_core_fn_method_gimclient_set_read_receipts(
+                        self.uniffiCloneHandle(),FfiConverterBool.lower(enabled)
+                )
+            },
+            pollFunc: ffi_gim_core_rust_future_poll_void,
+            completeFunc: ffi_gim_core_rust_future_complete_void,
+            freeFunc: ffi_gim_core_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeGimError_lift
+        )
+}
+    
+    /**
      * Reports whether the user is typing. Call it with `true` on every
      * keystroke (notifications are rate-limited) and with `false` when
      * typing stops; see `stop_typing`.
@@ -2336,6 +2709,25 @@ open func setTyping(chatId: String, active: Bool)async throws   {
             rustFutureFunc: {
                 uniffi_gim_core_fn_method_gimclient_set_typing(
                         self.uniffiCloneHandle(),FfiConverterString.lower(chatId),FfiConverterBool.lower(active)
+                )
+            },
+            pollFunc: ffi_gim_core_rust_future_poll_void,
+            completeFunc: ffi_gim_core_rust_future_complete_void,
+            freeFunc: ffi_gim_core_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeGimError_lift
+        )
+}
+    
+    /**
+     * Turns sending (and showing) typing indicators on or off.
+     */
+open func setTypingIndicators(enabled: Bool)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_gim_core_fn_method_gimclient_set_typing_indicators(
+                        self.uniffiCloneHandle(),FfiConverterBool.lower(enabled)
                 )
             },
             pollFunc: ffi_gim_core_rust_future_poll_void,
@@ -2479,6 +2871,22 @@ open func typing(chatId: String, listener: TypingListener)async throws  -> TaskH
             completeFunc: ffi_gim_core_rust_future_complete_u64,
             freeFunc: ffi_gim_core_rust_future_free_u64,
             liftFunc: FfiConverterTypeTaskHandle_lift,
+            errorHandler: FfiConverterTypeGimError_lift
+        )
+}
+    
+open func unblockUser(userId: String)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_gim_core_fn_method_gimclient_unblock_user(
+                        self.uniffiCloneHandle(),FfiConverterString.lower(userId)
+                )
+            },
+            pollFunc: ffi_gim_core_rust_future_poll_void,
+            completeFunc: ffi_gim_core_rust_future_complete_void,
+            freeFunc: ffi_gim_core_rust_future_free_void,
+            liftFunc: { $0 },
             errorHandler: FfiConverterTypeGimError_lift
         )
 }
@@ -4506,6 +4914,28 @@ public struct ChatSummary: Equatable, Hashable {
      * right from the first callback after a restart.
      */
     public var state: ChatState
+    /**
+     * For a direct chat: the other user. Show their photo
+     * (`fetch_user_avatar`) when the chat has no avatar.
+     */
+    public var peer: UserProfile?
+    /**
+     * Notifications are muted until then (Unix milliseconds; 0: not muted,
+     * `muted_forever()`: until unmuted). Compare with the current time.
+     */
+    public var mutedUntilMs: UInt64
+    /**
+     * Pinned chats come first.
+     */
+    public var pinned: Bool
+    /**
+     * Show archived chats apart from the others.
+     */
+    public var archived: Bool
+    /**
+     * A direct chat with a blocked user.
+     */
+    public var blocked: Bool
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
@@ -4516,7 +4946,24 @@ public struct ChatSummary: Equatable, Hashable {
         /**
          * Where this device stands in the chat; read from local state, so it is
          * right from the first callback after a restart.
-         */state: ChatState) {
+         */state: ChatState, 
+        /**
+         * For a direct chat: the other user. Show their photo
+         * (`fetch_user_avatar`) when the chat has no avatar.
+         */peer: UserProfile?, 
+        /**
+         * Notifications are muted until then (Unix milliseconds; 0: not muted,
+         * `muted_forever()`: until unmuted). Compare with the current time.
+         */mutedUntilMs: UInt64, 
+        /**
+         * Pinned chats come first.
+         */pinned: Bool, 
+        /**
+         * Show archived chats apart from the others.
+         */archived: Bool, 
+        /**
+         * A direct chat with a blocked user.
+         */blocked: Bool) {
         self.chatId = chatId
         self.kind = kind
         self.name = name
@@ -4526,6 +4973,11 @@ public struct ChatSummary: Equatable, Hashable {
         self.updatedAtMs = updatedAtMs
         self.memberCount = memberCount
         self.state = state
+        self.peer = peer
+        self.mutedUntilMs = mutedUntilMs
+        self.pinned = pinned
+        self.archived = archived
+        self.blocked = blocked
     }
 
     
@@ -4552,7 +5004,12 @@ public struct FfiConverterTypeChatSummary: FfiConverterRustBuffer {
                 unreadCount: FfiConverterUInt32.read(from: &buf), 
                 updatedAtMs: FfiConverterUInt64.read(from: &buf), 
                 memberCount: FfiConverterUInt32.read(from: &buf), 
-                state: FfiConverterTypeChatState.read(from: &buf)
+                state: FfiConverterTypeChatState.read(from: &buf), 
+                peer: FfiConverterOptionTypeUserProfile.read(from: &buf), 
+                mutedUntilMs: FfiConverterUInt64.read(from: &buf), 
+                pinned: FfiConverterBool.read(from: &buf), 
+                archived: FfiConverterBool.read(from: &buf), 
+                blocked: FfiConverterBool.read(from: &buf)
         )
     }
 
@@ -4566,6 +5023,11 @@ public struct FfiConverterTypeChatSummary: FfiConverterRustBuffer {
         FfiConverterUInt64.write(value.updatedAtMs, into: &buf)
         FfiConverterUInt32.write(value.memberCount, into: &buf)
         FfiConverterTypeChatState.write(value.state, into: &buf)
+        FfiConverterOptionTypeUserProfile.write(value.peer, into: &buf)
+        FfiConverterUInt64.write(value.mutedUntilMs, into: &buf)
+        FfiConverterBool.write(value.pinned, into: &buf)
+        FfiConverterBool.write(value.archived, into: &buf)
+        FfiConverterBool.write(value.blocked, into: &buf)
     }
 }
 
@@ -4594,6 +5056,12 @@ public struct ClientConfig: Equatable, Hashable {
      * The process kind; `None` is `ClientMode::App`.
      */
     public var mode: ClientMode?
+    /**
+     * Base URL of the gim meta server (`http://` or `https://`): the
+     * encrypted settings backup and abuse reports. `None`: settings are
+     * not backed up and `report_user` fails.
+     */
+    public var metaServerUrl: String?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
@@ -4603,9 +5071,15 @@ public struct ClientConfig: Equatable, Hashable {
          */serverUrl: String, 
         /**
          * The process kind; `None` is `ClientMode::App`.
-         */mode: ClientMode? = nil) {
+         */mode: ClientMode? = nil, 
+        /**
+         * Base URL of the gim meta server (`http://` or `https://`): the
+         * encrypted settings backup and abuse reports. `None`: settings are
+         * not backed up and `report_user` fails.
+         */metaServerUrl: String? = nil) {
         self.serverUrl = serverUrl
         self.mode = mode
+        self.metaServerUrl = metaServerUrl
     }
 
     
@@ -4625,13 +5099,15 @@ public struct FfiConverterTypeClientConfig: FfiConverterRustBuffer {
         return
             try ClientConfig(
                 serverUrl: FfiConverterString.read(from: &buf), 
-                mode: FfiConverterOptionTypeClientMode.read(from: &buf)
+                mode: FfiConverterOptionTypeClientMode.read(from: &buf), 
+                metaServerUrl: FfiConverterOptionString.read(from: &buf)
         )
     }
 
     public static func write(_ value: ClientConfig, into buf: inout [UInt8]) {
         FfiConverterString.write(value.serverUrl, into: &buf)
         FfiConverterOptionTypeClientMode.write(value.mode, into: &buf)
+        FfiConverterOptionString.write(value.metaServerUrl, into: &buf)
     }
 }
 
@@ -5016,17 +5492,27 @@ public struct MessagePreview: Equatable, Hashable {
     public var text: String
     public var sentAtMs: UInt64
     public var isOwn: Bool
+    /**
+     * Delivery state of an own message, for the ticks of the row (as
+     * `MessageItem.send_state`); `None` for messages from others.
+     */
+    public var sendState: SendState?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
     public init(senderName: String, 
         /**
          * Plain-text rendering ("Photo", "File: report.pdf" for media).
-         */text: String, sentAtMs: UInt64, isOwn: Bool) {
+         */text: String, sentAtMs: UInt64, isOwn: Bool, 
+        /**
+         * Delivery state of an own message, for the ticks of the row (as
+         * `MessageItem.send_state`); `None` for messages from others.
+         */sendState: SendState?) {
         self.senderName = senderName
         self.text = text
         self.sentAtMs = sentAtMs
         self.isOwn = isOwn
+        self.sendState = sendState
     }
 
     
@@ -5048,7 +5534,8 @@ public struct FfiConverterTypeMessagePreview: FfiConverterRustBuffer {
                 senderName: FfiConverterString.read(from: &buf), 
                 text: FfiConverterString.read(from: &buf), 
                 sentAtMs: FfiConverterUInt64.read(from: &buf), 
-                isOwn: FfiConverterBool.read(from: &buf)
+                isOwn: FfiConverterBool.read(from: &buf), 
+                sendState: FfiConverterOptionTypeSendState.read(from: &buf)
         )
     }
 
@@ -5057,6 +5544,7 @@ public struct FfiConverterTypeMessagePreview: FfiConverterRustBuffer {
         FfiConverterString.write(value.text, into: &buf)
         FfiConverterUInt64.write(value.sentAtMs, into: &buf)
         FfiConverterBool.write(value.isOwn, into: &buf)
+        FfiConverterOptionTypeSendState.write(value.sendState, into: &buf)
     }
 }
 
@@ -5200,6 +5688,143 @@ public func FfiConverterTypeNotificationContent_lift(_ buf: RustBuffer) throws -
 #endif
 public func FfiConverterTypeNotificationContent_lower(_ value: NotificationContent) -> RustBuffer {
     return FfiConverterTypeNotificationContent.lower(value)
+}
+
+
+/**
+ * What `parse_recovery_kit` found: the normalized, valid user id and
+ * recovery code (39 symbols, no separators), each if present.
+ */
+public struct ParsedRecoveryKit: Equatable, Hashable {
+    public var userId: String?
+    public var recoveryCode: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(userId: String?, recoveryCode: String?) {
+        self.userId = userId
+        self.recoveryCode = recoveryCode
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension ParsedRecoveryKit: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeParsedRecoveryKit: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ParsedRecoveryKit {
+        return
+            try ParsedRecoveryKit(
+                userId: FfiConverterOptionString.read(from: &buf), 
+                recoveryCode: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ParsedRecoveryKit, into buf: inout [UInt8]) {
+        FfiConverterOptionString.write(value.userId, into: &buf)
+        FfiConverterOptionString.write(value.recoveryCode, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeParsedRecoveryKit_lift(_ buf: RustBuffer) throws -> ParsedRecoveryKit {
+    return try FfiConverterTypeParsedRecoveryKit.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeParsedRecoveryKit_lower(_ value: ParsedRecoveryKit) -> RustBuffer {
+    return FfiConverterTypeParsedRecoveryKit.lower(value)
+}
+
+
+/**
+ * The privacy settings, synced across the user's devices.
+ */
+public struct PrivacySettings: Equatable, Hashable {
+    /**
+     * Send read receipts; off, the others' are not shown either.
+     */
+    public var readReceipts: Bool
+    /**
+     * Send typing indicators; off, the others' are not shown either.
+     */
+    public var typingIndicators: Bool
+    /**
+     * Users whose messages and invites are dropped.
+     */
+    public var blockedUserIds: [String]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Send read receipts; off, the others' are not shown either.
+         */readReceipts: Bool, 
+        /**
+         * Send typing indicators; off, the others' are not shown either.
+         */typingIndicators: Bool, 
+        /**
+         * Users whose messages and invites are dropped.
+         */blockedUserIds: [String]) {
+        self.readReceipts = readReceipts
+        self.typingIndicators = typingIndicators
+        self.blockedUserIds = blockedUserIds
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension PrivacySettings: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePrivacySettings: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PrivacySettings {
+        return
+            try PrivacySettings(
+                readReceipts: FfiConverterBool.read(from: &buf), 
+                typingIndicators: FfiConverterBool.read(from: &buf), 
+                blockedUserIds: FfiConverterSequenceString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: PrivacySettings, into buf: inout [UInt8]) {
+        FfiConverterBool.write(value.readReceipts, into: &buf)
+        FfiConverterBool.write(value.typingIndicators, into: &buf)
+        FfiConverterSequenceString.write(value.blockedUserIds, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePrivacySettings_lift(_ buf: RustBuffer) throws -> PrivacySettings {
+    return try FfiConverterTypePrivacySettings.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePrivacySettings_lower(_ value: PrivacySettings) -> RustBuffer {
+    return FfiConverterTypePrivacySettings.lower(value)
 }
 
 
@@ -5382,6 +6007,142 @@ public func FfiConverterTypeReactionGroup_lower(_ value: ReactionGroup) -> RustB
 
 
 /**
+ * The app's localized words of the kit text.
+ */
+public struct RecoveryKitLabels: Equatable, Hashable {
+    public var title: String
+    public var accountId: String
+    public var recoveryKey: String
+    public var note: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(title: String, accountId: String, recoveryKey: String, note: String) {
+        self.title = title
+        self.accountId = accountId
+        self.recoveryKey = recoveryKey
+        self.note = note
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension RecoveryKitLabels: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRecoveryKitLabels: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RecoveryKitLabels {
+        return
+            try RecoveryKitLabels(
+                title: FfiConverterString.read(from: &buf), 
+                accountId: FfiConverterString.read(from: &buf), 
+                recoveryKey: FfiConverterString.read(from: &buf), 
+                note: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RecoveryKitLabels, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.title, into: &buf)
+        FfiConverterString.write(value.accountId, into: &buf)
+        FfiConverterString.write(value.recoveryKey, into: &buf)
+        FfiConverterString.write(value.note, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRecoveryKitLabels_lift(_ buf: RustBuffer) throws -> RecoveryKitLabels {
+    return try FfiConverterTypeRecoveryKitLabels.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRecoveryKitLabels_lower(_ value: RecoveryKitLabels) -> RustBuffer {
+    return FfiConverterTypeRecoveryKitLabels.lower(value)
+}
+
+
+/**
+ * Result of `rotate_recovery_code`.
+ */
+public struct RecoveryRotation: Equatable, Hashable {
+    /**
+     * The new recovery code; not stored, show it to the user once.
+     */
+    public var recoveryCode: String
+    /**
+     * Listed hubs that did not take the new backup: the previous code still
+     * works there until a later rotation reaches them.
+     */
+    public var unsyncedHubIds: [String]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * The new recovery code; not stored, show it to the user once.
+         */recoveryCode: String, 
+        /**
+         * Listed hubs that did not take the new backup: the previous code still
+         * works there until a later rotation reaches them.
+         */unsyncedHubIds: [String]) {
+        self.recoveryCode = recoveryCode
+        self.unsyncedHubIds = unsyncedHubIds
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension RecoveryRotation: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRecoveryRotation: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RecoveryRotation {
+        return
+            try RecoveryRotation(
+                recoveryCode: FfiConverterString.read(from: &buf), 
+                unsyncedHubIds: FfiConverterSequenceString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RecoveryRotation, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.recoveryCode, into: &buf)
+        FfiConverterSequenceString.write(value.unsyncedHubIds, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRecoveryRotation_lift(_ buf: RustBuffer) throws -> RecoveryRotation {
+    return try FfiConverterTypeRecoveryRotation.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRecoveryRotation_lower(_ value: RecoveryRotation) -> RustBuffer {
+    return FfiConverterTypeRecoveryRotation.lower(value)
+}
+
+
+/**
  * Quoted message shown above a reply.
  */
 public struct ReplyPreview: Equatable, Hashable {
@@ -5520,13 +6281,21 @@ public struct UserProfile: Equatable, Hashable {
     public var userId: String
     public var handle: String
     public var displayName: String
+    /**
+     * The user has a profile photo; get it with `fetch_user_avatar`.
+     */
+    public var hasAvatar: Bool
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(userId: String, handle: String, displayName: String) {
+    public init(userId: String, handle: String, displayName: String, 
+        /**
+         * The user has a profile photo; get it with `fetch_user_avatar`.
+         */hasAvatar: Bool) {
         self.userId = userId
         self.handle = handle
         self.displayName = displayName
+        self.hasAvatar = hasAvatar
     }
 
     
@@ -5547,7 +6316,8 @@ public struct FfiConverterTypeUserProfile: FfiConverterRustBuffer {
             try UserProfile(
                 userId: FfiConverterString.read(from: &buf), 
                 handle: FfiConverterString.read(from: &buf), 
-                displayName: FfiConverterString.read(from: &buf)
+                displayName: FfiConverterString.read(from: &buf), 
+                hasAvatar: FfiConverterBool.read(from: &buf)
         )
     }
 
@@ -5555,6 +6325,7 @@ public struct FfiConverterTypeUserProfile: FfiConverterRustBuffer {
         FfiConverterString.write(value.userId, into: &buf)
         FfiConverterString.write(value.handle, into: &buf)
         FfiConverterString.write(value.displayName, into: &buf)
+        FfiConverterBool.write(value.hasAvatar, into: &buf)
     }
 }
 
@@ -6795,6 +7566,99 @@ public func FfiConverterTypeNotificationKind_lower(_ value: NotificationKind) ->
 
 
 /**
+ * Why a user is reported (`report_user`).
+ */
+
+public enum ReportReason: Equatable, Hashable {
+    
+    case spam
+    case harassment
+    /**
+     * Content not suitable for the user (sexual, violent, ...).
+     */
+    case inappropriate
+    case scam
+    case other
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension ReportReason: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeReportReason: FfiConverterRustBuffer {
+    typealias SwiftType = ReportReason
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ReportReason {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .spam
+        
+        case 2: return .harassment
+        
+        case 3: return .inappropriate
+        
+        case 4: return .scam
+        
+        case 5: return .other
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: ReportReason, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .spam:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .harassment:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .inappropriate:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .scam:
+            writeInt(&buf, Int32(4))
+        
+        
+        case .other:
+            writeInt(&buf, Int32(5))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeReportReason_lift(_ buf: RustBuffer) throws -> ReportReason {
+    return try FfiConverterTypeReportReason.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeReportReason_lower(_ value: ReportReason) -> RustBuffer {
+    return FfiConverterTypeReportReason.lower(value)
+}
+
+
+
+/**
  * Why a message is `SendState::Failed`.
  */
 
@@ -7869,6 +8733,17 @@ public func coreVersion() -> String  {
 })
 }
 /**
+ * `muted_until_ms` of a chat muted until it is unmuted
+ * (`set_chat_muted`).
+ */
+public func mutedForever() -> UInt64  {
+    return try!  FfiConverterUInt64.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_gim_core_fn_func_muted_forever(uniffiCallStatus
+    )
+})
+}
+/**
  * Creates the client. Opens (or creates) local state under
  * `hooks.data_dir()`; it does not touch the network.
  */
@@ -7885,6 +8760,55 @@ public func createClient(config: ClientConfig, hooks: PlatformHooks)async throws
             liftFunc: FfiConverterTypeGimClient_lift,
             errorHandler: FfiConverterTypeGimError_lift
         )
+}
+/**
+ * The kit text: title, `"<accountId>: <user id>"`,
+ * `"<recoveryKey>: <code grouped by four>"`, a blank line and the note.
+ */
+public func formatRecoveryKit(userId: String, recoveryCode: String, labels: RecoveryKitLabels) -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_gim_core_fn_func_format_recovery_kit(
+        FfiConverterString.lower(userId),
+        FfiConverterString.lower(recoveryCode),
+        FfiConverterTypeRecoveryKitLabels_lower(labels),uniffiCallStatus
+    )
+})
+}
+/**
+ * `typed` is the code's last four symbols (case, `-` and spaces ignored).
+ */
+public func matchesRecoveryKeyEnding(recoveryCode: String, typed: String) -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_gim_core_fn_func_matches_recovery_key_ending(
+        FfiConverterString.lower(recoveryCode),
+        FfiConverterString.lower(typed),uniffiCallStatus
+    )
+})
+}
+/**
+ * Finds the user id and the recovery code in pasted text, whatever the
+ * labels' language.
+ */
+public func parseRecoveryKit(text: String) -> ParsedRecoveryKit  {
+    return try!  FfiConverterTypeParsedRecoveryKit_lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_gim_core_fn_func_parse_recovery_kit(
+        FfiConverterString.lower(text),uniffiCallStatus
+    )
+})
+}
+/**
+ * The last four symbols of the recovery code.
+ */
+public func recoveryKeyEnding(recoveryCode: String) -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_gim_core_fn_func_recovery_key_ending(
+        FfiConverterString.lower(recoveryCode),uniffiCallStatus
+    )
+})
 }
 
 private enum InitializationResult {
@@ -7908,7 +8832,22 @@ private let initializationResult: InitializationResult = {
     if (uniffi_gim_core_checksum_func_core_version() != 57646) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_gim_core_checksum_func_muted_forever() != 62756) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_gim_core_checksum_func_create_client() != 59196) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_gim_core_checksum_func_format_recovery_kit() != 12801) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_gim_core_checksum_func_matches_recovery_key_ending() != 59755) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_gim_core_checksum_func_parse_recovery_kit() != 33039) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_gim_core_checksum_func_recovery_key_ending() != 19920) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_gim_core_checksum_method_chatlistlistener_on_update() != 37204) {
@@ -7924,6 +8863,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_gim_core_checksum_method_gimclient_approve_link() != 21168) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_gim_core_checksum_method_gimclient_block_user() != 56650) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_gim_core_checksum_method_gimclient_cancel_send() != 2342) {
@@ -7959,6 +8901,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_gim_core_checksum_method_gimclient_create_identity() != 56233) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_gim_core_checksum_method_gimclient_delete_account() != 22928) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_gim_core_checksum_method_gimclient_delete_message() != 40750) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -7968,10 +8913,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_gim_core_checksum_method_gimclient_edit_message() != 16801) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_gim_core_checksum_method_gimclient_fetch_chat_avatar() != 18238) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_gim_core_checksum_method_gimclient_fetch_media() != 36104) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_gim_core_checksum_method_gimclient_fetch_thumbnail() != 17497) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_gim_core_checksum_method_gimclient_fetch_user_avatar() != 26902) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_gim_core_checksum_method_gimclient_find_user() != 25186) {
@@ -7992,6 +8943,12 @@ private let initializationResult: InitializationResult = {
     if (uniffi_gim_core_checksum_method_gimclient_mark_read() != 19929) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_gim_core_checksum_method_gimclient_own_profile() != 38117) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_gim_core_checksum_method_gimclient_privacy() != 52348) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_gim_core_checksum_method_gimclient_process_push() != 42819) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -8004,10 +8961,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_gim_core_checksum_method_gimclient_release_handle() != 61692) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_gim_core_checksum_method_gimclient_remove_avatar() != 37794) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_gim_core_checksum_method_gimclient_remove_hub() != 44259) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_gim_core_checksum_method_gimclient_remove_member() != 31958) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_gim_core_checksum_method_gimclient_report_user() != 50031) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_gim_core_checksum_method_gimclient_restore_from_recovery() != 59727) {
@@ -8019,6 +8982,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_gim_core_checksum_method_gimclient_revoke_device() != 54975) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_gim_core_checksum_method_gimclient_rotate_recovery_code() != 7811) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_gim_core_checksum_method_gimclient_send_media() != 37766) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -8026,6 +8992,18 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_gim_core_checksum_method_gimclient_session() != 243) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_gim_core_checksum_method_gimclient_set_avatar() != 28009) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_gim_core_checksum_method_gimclient_set_chat_archived() != 48068) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_gim_core_checksum_method_gimclient_set_chat_muted() != 9201) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_gim_core_checksum_method_gimclient_set_chat_pinned() != 959) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_gim_core_checksum_method_gimclient_set_display_name() != 26277) {
@@ -8043,7 +9021,13 @@ private let initializationResult: InitializationResult = {
     if (uniffi_gim_core_checksum_method_gimclient_set_primary_hub() != 23675) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_gim_core_checksum_method_gimclient_set_read_receipts() != 58191) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_gim_core_checksum_method_gimclient_set_typing() != 10433) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_gim_core_checksum_method_gimclient_set_typing_indicators() != 63983) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_gim_core_checksum_method_gimclient_sign_out() != 25542) {
@@ -8065,6 +9049,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_gim_core_checksum_method_gimclient_typing() != 41149) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_gim_core_checksum_method_gimclient_unblock_user() != 64924) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_gim_core_checksum_method_gimclient_unreact() != 48531) {

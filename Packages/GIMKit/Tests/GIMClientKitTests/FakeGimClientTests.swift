@@ -331,7 +331,8 @@ final class FakeGimClientTests: XCTestCase {
         await scheduler.runUntilIdle()
         XCTAssertEqual(cancelled.events.count, 1)
         XCTAssertEqual(released.events.count, 1)
-        XCTAssertEqual(kept.events.count, 2)
+        // The reset, the send, then the sent, delivered and read ticks of the preview.
+        XCTAssertEqual(kept.events.count, 5)
     }
 
     // MARK: - Sync and connection
@@ -428,7 +429,8 @@ final class FakeGimClientTests: XCTestCase {
         XCTAssertEqual(summary.chatId, direct)
         XCTAssertEqual(
             summary.lastMessage,
-            MessagePreview(senderName: "Alex Morgan", text: "On my way", sentAtMs: ms(base), isOwn: true))
+            MessagePreview(
+                senderName: "Alex Morgan", text: "On my way", sentAtMs: ms(base), isOwn: true, sendState: .pending))
         XCTAssertEqual(summary.updatedAtMs, ms(base))
 
         await scheduler.runUntilIdle()
@@ -438,7 +440,36 @@ final class FakeGimClientTests: XCTestCase {
             return message.sendState
         }
         XCTAssertEqual(states, [.sent, .delivered, .read])
-        XCTAssertEqual(list.events.count, 1, "send state changes do not change the chat summary")
+        // Each send state change updates the row's preview in place.
+        let previewStates = list.events.dropFirst().map { batch -> SendState? in
+            guard batch.count == 1, case .set(0, let summary) = batch[0], summary.chatId == direct else { return nil }
+            return summary.lastMessage?.sendState
+        }
+        XCTAssertEqual(previewStates, [.sent, .delivered, .read])
+        XCTAssertEqual(list.items[0].lastMessage?.sendState, .read)
+    }
+
+    func testFailedOwnLastMessageShowsTheFailureInThePreview() async throws {
+        let client = try await makeDemo()
+        let list = try await subscribeChatList(client)
+        await client.failNextSends(1)
+
+        _ = try await client.sendText(chatId: direct, body: "Fails", replyTo: nil)
+        XCTAssertEqual(list.items[0].lastMessage?.sendState, .pending)
+        list.clear()
+        await scheduler.runUntilIdle()
+        XCTAssertEqual(list.events, [[.set(index: 0, value: list.items[0])]])
+        XCTAssertEqual(
+            list.items[0].lastMessage?.sendState, .failed(reason: FakeGimClient.failureReason, cause: .other))
+    }
+
+    func testPeerLastMessagePreviewHasNoSendState() async throws {
+        let client = try await makeDemo()
+        let list = try await subscribeChatList(client)
+        try await client.receiveText(chatId: direct, from: "user-sofia", body: "Ahoy")
+        XCTAssertEqual(list.items[0].chatId, direct)
+        XCTAssertEqual(list.items[0].lastMessage?.isOwn, false)
+        XCTAssertNil(list.items[0].lastMessage?.sendState)
     }
 
     func testFailedSendCanBeRetriedOrCancelled() async throws {
