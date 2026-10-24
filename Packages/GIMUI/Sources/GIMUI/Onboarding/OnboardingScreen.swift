@@ -191,6 +191,7 @@ struct ValidationMessage: View {
 #Preview {
     OnboardingScreen(
         viewModel: OnboardingViewModel(
-            factory: CoreGimClientFactory(), hooks: AppPlatformHooks(dataDirectory: NSTemporaryDirectory())
+            factory: CoreGimClientFactory(), hooks: AppPlatformHooks(dataDirectory: NSTemporaryDirectory()),
+            recoveryKit: CoreRecoveryKitFunctions()
         ) { _ in })
 }

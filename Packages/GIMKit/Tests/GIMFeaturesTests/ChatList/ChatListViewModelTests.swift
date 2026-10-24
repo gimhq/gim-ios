@@ -6,7 +6,7 @@ import XCTest
 final class ChatListViewModelTests: XCTestCase {
     @MainActor
     private func startedViewModel(_ client: any GimClientAPI) async -> ChatListViewModel {
-        let viewModel = ChatListViewModel(client: client, dateFormatter: makeFormatter())
+        let viewModel = ChatListViewModel(client: client, dateFormatter: makeFormatter(), now: { fixedNow })
         XCTAssertTrue(viewModel.isLoading)
         viewModel.start()
         await eventually { viewModel.rows.count == 2 }
@@ -228,19 +228,16 @@ final class ChatListViewModelTests: XCTestCase {
             XCTAssertFalse(row.lastMessageIsOwn, row.id)
             XCTAssertNil(viewModel.lastMessageStatus(for: row), row.id)
         }
-        await settle()
-        XCTAssertNil(viewModel.lastMessageStatus(for: try row(FakeGimClient.demoDirectChatId, viewModel)))
     }
 
     @MainActor
-    func testLastMessageStatusFollowsOwnMessageProgression() async throws {
+    func testLastMessageStatusFollowsTheOwnPreview() async throws {
         let (client, scheduler) = await connected(makeDemoClient())
         let viewModel = await startedViewModel(client)
         let chatId = FakeGimClient.demoDirectChatId
 
         _ = try await client.sendText(chatId: chatId, body: "Ready", replyTo: nil)
 
-        await eventually { (try? self.row(chatId, viewModel).lastMessageIsOwn) == true }
         await eventually { self.lastMessageStatus(chatId, viewModel) == .sending }
         await scheduler.advance(by: .milliseconds(300))
         await eventually { self.lastMessageStatus(chatId, viewModel) == .sent }
@@ -269,55 +266,113 @@ final class ChatListViewModelTests: XCTestCase {
 
         await eventually { (try? self.row(chatId, viewModel).state) == .leaving }
         XCTAssertNil(lastMessageStatus(chatId, viewModel))
-        await settle()
-        await scheduler.advance(by: FakeGimClient.leaveCommitDelay)
-        await eventually { (try? self.row(chatId, viewModel).state) == .left }
-        let left = try row(chatId, viewModel)
-        XCTAssertTrue(left.lastMessageIsOwn)
-        XCTAssertNil(viewModel.lastMessageStatus(for: left))
     }
 
     @MainActor
-    func testStopClosesLastMessageStatusLookups() async throws {
-        let (fake, scheduler) = await connected(makeDemoClient())
-        let client = TimelineCountingClient(fake)
+    func testPinnedChatComesFirstUntilUnpinned() async throws {
+        let (client, _) = await connected(makeDemoClient())
         let viewModel = await startedViewModel(client)
-        let chatId = FakeGimClient.demoDirectChatId
-        _ = try await fake.sendText(chatId: chatId, body: "Ready", replyTo: nil)
-        await eventually { self.lastMessageStatus(chatId, viewModel) == .sending }
-        XCTAssertEqual(client.openTimelineChatIds, [chatId])
+        let direct = try row(FakeGimClient.demoDirectChatId, viewModel)
+        XCTAssertFalse(direct.isPinned)
 
-        viewModel.stop()
+        await viewModel.setPinned(direct, true)
 
-        await eventually { client.openTimelineChatIds.isEmpty }
-        await scheduler.runUntilIdle()
-        await settle()
-        XCTAssertEqual(lastMessageStatus(chatId, viewModel), .sending)
+        await eventually { viewModel.rows.first?.id == FakeGimClient.demoDirectChatId }
+        XCTAssertTrue(viewModel.rows[0].isPinned)
+        XCTAssertFalse(viewModel.rows[1].isPinned)
+
+        await viewModel.setPinned(viewModel.rows[0], false)
+
+        await eventually { viewModel.rows.first?.id == FakeGimClient.demoGroupChatId }
+        XCTAssertFalse(try row(FakeGimClient.demoDirectChatId, viewModel).isPinned)
+        XCTAssertNil(viewModel.actionErrorMessage)
     }
 
     @MainActor
-    func testLastMessageStatusLookupsAreCappedClosingTheOldestFirst() async throws {
-        let (fake, scheduler) = await connected(makeDemoClient())
-        let client = TimelineCountingClient(fake)
+    func testMuteAndUnmute() async throws {
+        let (client, _) = await connected(makeDemoClient())
         let viewModel = await startedViewModel(client)
-        let cap = ChatListViewModel.maxStatusLookups
-        var chatIds: [String] = []
+        let groupId = FakeGimClient.demoGroupChatId
+        XCTAssertFalse(try row(groupId, viewModel).isMuted)
 
-        for index in 0...cap {
-            let chatId = try await fake.createGroupChat(name: "Crew \(index)", memberUserIds: ["user-sofia"])
-            _ = try await fake.sendText(chatId: chatId, body: "Ahoy", replyTo: nil)
-            await eventually { self.lastMessageStatus(chatId, viewModel) == .sending }
-            chatIds.append(chatId)
-        }
+        await viewModel.mute(try row(groupId, viewModel), .oneHour)
+        await eventually { (try? self.row(groupId, viewModel).isMuted) == true }
+        XCTAssertFalse(try row(FakeGimClient.demoDirectChatId, viewModel).isMuted)
 
-        await eventually { client.openTimelineChatIds.count == cap }
-        XCTAssertEqual(client.openTimelineChatIds, Array(chatIds.dropFirst()), "the oldest lookup closed first")
-        XCTAssertNil(lastMessageStatus(chatIds[0], viewModel))
-        await scheduler.runUntilIdle()
-        await eventually { self.lastMessageStatus(chatIds[1], viewModel) == .read }
-        XCTAssertNil(lastMessageStatus(chatIds[0], viewModel), "a capped chat never shows a made-up state")
-        XCTAssertEqual(client.openTimelineChatIds.count, cap)
-        XCTAssertTrue(chatIds.dropFirst().allSatisfy { self.lastMessageStatus($0, viewModel) == .read })
+        await viewModel.unmute(try row(groupId, viewModel))
+        await eventually { (try? self.row(groupId, viewModel).isMuted) == false }
+
+        await viewModel.mute(try row(groupId, viewModel), .always)
+        await eventually { (try? self.row(groupId, viewModel).isMuted) == true }
+        XCTAssertNil(viewModel.actionErrorMessage)
+    }
+
+    @MainActor
+    func testArchivedChatsLeaveTheMainList() async throws {
+        let (client, _) = await connected(makeDemoClient())
+        let viewModel = await startedViewModel(client)
+        XCTAssertFalse(viewModel.hasArchived)
+        XCTAssertEqual(viewModel.archivedRows, [])
+
+        await viewModel.setArchived(try row(FakeGimClient.demoGroupChatId, viewModel), true)
+
+        await eventually { viewModel.hasArchived }
+        XCTAssertEqual(viewModel.rows.map(\.id), [FakeGimClient.demoDirectChatId])
+        XCTAssertEqual(viewModel.archivedRows.map(\.id), [FakeGimClient.demoGroupChatId])
+        XCTAssertTrue(viewModel.archivedRows[0].isArchived)
+
+        // A new message does not unarchive the chat.
+        try await client.receiveText(chatId: FakeGimClient.demoGroupChatId, from: "user-luca", body: "Anchor's up")
+        await eventually { viewModel.archivedRows.first?.preview == "Luca Bianchi: Anchor's up" }
+        XCTAssertEqual(viewModel.rows.map(\.id), [FakeGimClient.demoDirectChatId])
+
+        await viewModel.setArchived(viewModel.archivedRows[0], false)
+
+        await eventually { !viewModel.hasArchived }
+        XCTAssertEqual(viewModel.rows.map(\.id), [FakeGimClient.demoGroupChatId, FakeGimClient.demoDirectChatId])
+        XCTAssertEqual(viewModel.archivedRows, [])
+    }
+
+    @MainActor
+    func testArchivedRowsKeepTheClientOrder() async throws {
+        let (client, _) = await connected(makeDemoClient())
+        let viewModel = await startedViewModel(client)
+
+        await viewModel.setArchived(try row(FakeGimClient.demoDirectChatId, viewModel), true)
+        await viewModel.setArchived(try row(FakeGimClient.demoGroupChatId, viewModel), true)
+
+        await eventually { viewModel.archivedRows.count == 2 }
+        XCTAssertEqual(
+            viewModel.archivedRows.map(\.id), [FakeGimClient.demoGroupChatId, FakeGimClient.demoDirectChatId])
+        XCTAssertEqual(viewModel.rows, [])
+        XCTAssertTrue(viewModel.hasArchived)
+    }
+
+    @MainActor
+    func testActionErrorIsShownAndDismissed() async throws {
+        let (client, _) = await connected(makeDemoClient())
+        let viewModel = await startedViewModel(client)
+        let summary = ChatSummary(
+            chatId: "chat-gone", kind: .group, name: "Gone", avatar: nil, lastMessage: nil, unreadCount: 0,
+            updatedAtMs: 0, memberCount: 2, state: .active)
+        let gone = ChatRow(summary: summary, dateFormatter: makeFormatter())
+
+        await viewModel.setPinned(gone, true)
+
+        let expected = await ErrorPresenter.message(for: GimError.NotFound(reason: "chat chat-gone"), client: client)
+        XCTAssertEqual(viewModel.actionErrorMessage, expected)
+        XCTAssertNil(viewModel.errorMessage, "the list itself still loads")
+        viewModel.dismissActionError()
+        XCTAssertNil(viewModel.actionErrorMessage)
+
+        await viewModel.mute(gone, .eightHours)
+        XCTAssertNotNil(viewModel.actionErrorMessage)
+        viewModel.dismissActionError()
+        await viewModel.unmute(gone)
+        XCTAssertNotNil(viewModel.actionErrorMessage)
+        viewModel.dismissActionError()
+        await viewModel.setArchived(gone, true)
+        XCTAssertNotNil(viewModel.actionErrorMessage)
     }
 
     @MainActor
@@ -329,199 +384,6 @@ final class ChatListViewModelTests: XCTestCase {
     private func row(_ chatId: String, _ viewModel: ChatListViewModel) throws -> ChatRow {
         try XCTUnwrap(viewModel.rows.first { $0.id == chatId })
     }
-}
-
-/// Forwards to a `FakeGimClient` and lists the chats with an open timeline subscription, oldest first.
-private final class TimelineCountingClient: GimClientAPI, @unchecked Sendable {
-    private let fake: FakeGimClient
-    private let lock = NSLock()
-    private var open: [String] = []
-
-    init(_ fake: FakeGimClient) {
-        self.fake = fake
-    }
-
-    var openTimelineChatIds: [String] { lock.withLock { open } }
-
-    func timeline(chatId: String) async throws -> any Timeline {
-        CountingTimeline(try await fake.timeline(chatId: chatId), client: self)
-    }
-
-    fileprivate func opened(_ chatId: String) {
-        lock.withLock { open.append(chatId) }
-    }
-
-    fileprivate func closed(_ chatId: String) {
-        lock.withLock { open.firstIndex(of: chatId).map { open.remove(at: $0) } }
-    }
-
-    func session() async throws -> Session? { try await fake.session() }
-    func userId() -> String? { fake.userId() }
-    func localStateReset() -> Bool { fake.localStateReset() }
-    func createIdentity(displayName: String) async throws -> String {
-        try await fake.createIdentity(displayName: displayName)
-    }
-    func restoreFromRecovery(userId: String, recoveryCode: String, revokeOthers: Bool) async throws {
-        try await fake.restoreFromRecovery(userId: userId, recoveryCode: recoveryCode, revokeOthers: revokeOthers)
-    }
-    func startLink(hubs: [String]) throws -> any LinkSession { try fake.startLink(hubs: hubs) }
-    func waitLink(link: any LinkSession) async throws -> String { try await fake.waitLink(link: link) }
-    func confirmLink(accepted: Bool) async throws { try await fake.confirmLink(accepted: accepted) }
-    func approveLink(qrString: String) async throws -> any PendingApproval {
-        try await fake.approveLink(qrString: qrString)
-    }
-    func confirmApproval(approval: any PendingApproval, accepted: Bool) async throws {
-        try await fake.confirmApproval(approval: approval, accepted: accepted)
-    }
-    func devices() async throws -> [DeviceInfo] { try await fake.devices() }
-    func userDevices(userId: String) async throws -> [DeviceInfo] { try await fake.userDevices(userId: userId) }
-    func revokeDevice(deviceId: String) async throws { try await fake.revokeDevice(deviceId: deviceId) }
-    func setDisplayName(name: String) async throws { try await fake.setDisplayName(name: name) }
-    func claimHandle(handle: String) async throws { try await fake.claimHandle(handle: handle) }
-    func releaseHandle() async throws { try await fake.releaseHandle() }
-    func signOut() async throws { try await fake.signOut() }
-    func startSync() async throws { try await fake.startSync() }
-    func stopSync() async throws { try await fake.stopSync() }
-    func setNetworkReachable(reachable: Bool) { fake.setNetworkReachable(reachable: reachable) }
-    func setLocalTimeZone(zone: (any LocalTimeZone)?) { fake.setLocalTimeZone(zone: zone) }
-    func findUser(handle: String) async throws -> UserProfile? { try await fake.findUser(handle: handle) }
-    func createDirectChat(userId: String) async throws -> String { try await fake.createDirectChat(userId: userId) }
-    func createGroupChat(name: String, memberUserIds: [String]) async throws -> String {
-        try await fake.createGroupChat(name: name, memberUserIds: memberUserIds)
-    }
-    func chatMembers(chatId: String) async throws -> [UserProfile] { try await fake.chatMembers(chatId: chatId) }
-    func addMembers(chatId: String, userIds: [String]) async throws {
-        try await fake.addMembers(chatId: chatId, userIds: userIds)
-    }
-    func removeMember(chatId: String, userId: String) async throws {
-        try await fake.removeMember(chatId: chatId, userId: userId)
-    }
-    func leaveChat(chatId: String) async throws { try await fake.leaveChat(chatId: chatId) }
-    func chatState(chatId: String) async throws -> ChatState { try await fake.chatState(chatId: chatId) }
-    func setGroupInfo(chatId: String, name: String?, avatarFilePath: String?) async throws {
-        try await fake.setGroupInfo(chatId: chatId, name: name, avatarFilePath: avatarFilePath)
-    }
-    func sendText(chatId: String, body: String, replyTo: String?) async throws -> String {
-        try await fake.sendText(chatId: chatId, body: body, replyTo: replyTo)
-    }
-    func sendMedia(
-        chatId: String, filePath: String, mime: String, caption: String?, replyTo: String?
-    ) async throws -> String {
-        try await fake.sendMedia(chatId: chatId, filePath: filePath, mime: mime, caption: caption, replyTo: replyTo)
-    }
-    func editMessage(chatId: String, messageId: String, newBody: String) async throws {
-        try await fake.editMessage(chatId: chatId, messageId: messageId, newBody: newBody)
-    }
-    func deleteMessage(chatId: String, messageId: String) async throws {
-        try await fake.deleteMessage(chatId: chatId, messageId: messageId)
-    }
-    func react(chatId: String, messageId: String, emoji: String) async throws {
-        try await fake.react(chatId: chatId, messageId: messageId, emoji: emoji)
-    }
-    func unreact(chatId: String, messageId: String, emoji: String) async throws {
-        try await fake.unreact(chatId: chatId, messageId: messageId, emoji: emoji)
-    }
-    func retrySend(chatId: String, messageId: String) async throws {
-        try await fake.retrySend(chatId: chatId, messageId: messageId)
-    }
-    func cancelSend(chatId: String, messageId: String) async throws {
-        try await fake.cancelSend(chatId: chatId, messageId: messageId)
-    }
-    func markRead(chatId: String, upToMessageId: String) async throws {
-        try await fake.markRead(chatId: chatId, upToMessageId: upToMessageId)
-    }
-    func setTyping(chatId: String, active: Bool) async throws {
-        try await fake.setTyping(chatId: chatId, active: active)
-    }
-    func stopTyping(chatId: String) async throws { try await fake.stopTyping(chatId: chatId) }
-    func fetchMedia(chatId: String, messageId: String, destPath: String) async throws -> String {
-        try await fake.fetchMedia(chatId: chatId, messageId: messageId, destPath: destPath)
-    }
-    func fetchThumbnail(chatId: String, messageId: String, destPath: String) async throws -> String? {
-        try await fake.fetchThumbnail(chatId: chatId, messageId: messageId, destPath: destPath)
-    }
-    func chatList(listener: any ChatListListener) async throws -> TaskHandle {
-        try await fake.chatList(listener: listener)
-    }
-    func connectionState(listener: any ConnectionStateListener) async throws -> TaskHandle {
-        try await fake.connectionState(listener: listener)
-    }
-    func typing(chatId: String, listener: any TypingListener) async throws -> TaskHandle {
-        try await fake.typing(chatId: chatId, listener: listener)
-    }
-    func hubs() async throws -> [HubInfo] { try await fake.hubs() }
-    func addHub(url: String) async throws -> HubInfo { try await fake.addHub(url: url) }
-    func removeHub(hubId: String, confirmOwnedGroups: Bool) async throws {
-        try await fake.removeHub(hubId: hubId, confirmOwnedGroups: confirmOwnedGroups)
-    }
-    func setPrimaryHub(hubId: String) async throws { try await fake.setPrimaryHub(hubId: hubId) }
-    func hubList(listener: any HubListListener) async throws -> TaskHandle {
-        try await fake.hubList(listener: listener)
-    }
-    func registerPush(registration: PushRegistration) async throws {
-        try await fake.registerPush(registration: registration)
-    }
-    func unregisterPush() async throws { try await fake.unregisterPush() }
-    func processPush(payload: String) async throws -> NotificationContent {
-        try await fake.processPush(payload: payload)
-    }
-    func ownProfile() async throws -> UserProfile? { try await fake.ownProfile() }
-    func setAvatar(filePath: String, mime: String) async throws {
-        try await fake.setAvatar(filePath: filePath, mime: mime)
-    }
-    func removeAvatar() async throws { try await fake.removeAvatar() }
-    func fetchUserAvatar(userId: String, destPath: String) async throws -> String {
-        try await fake.fetchUserAvatar(userId: userId, destPath: destPath)
-    }
-    func fetchChatAvatar(chatId: String, destPath: String) async throws -> String {
-        try await fake.fetchChatAvatar(chatId: chatId, destPath: destPath)
-    }
-    func privacy() async throws -> PrivacySettings { try await fake.privacy() }
-    func setReadReceipts(enabled: Bool) async throws { try await fake.setReadReceipts(enabled: enabled) }
-    func setTypingIndicators(enabled: Bool) async throws { try await fake.setTypingIndicators(enabled: enabled) }
-    func blockUser(userId: String) async throws { try await fake.blockUser(userId: userId) }
-    func unblockUser(userId: String) async throws { try await fake.unblockUser(userId: userId) }
-    func setChatMuted(chatId: String, mutedUntilMs: UInt64) async throws {
-        try await fake.setChatMuted(chatId: chatId, mutedUntilMs: mutedUntilMs)
-    }
-    func setChatPinned(chatId: String, pinned: Bool) async throws {
-        try await fake.setChatPinned(chatId: chatId, pinned: pinned)
-    }
-    func setChatArchived(chatId: String, archived: Bool) async throws {
-        try await fake.setChatArchived(chatId: chatId, archived: archived)
-    }
-    func reportUser(userId: String, reason: ReportReason, note: String?, messageIds: [String]) async throws -> String {
-        try await fake.reportUser(userId: userId, reason: reason, note: note, messageIds: messageIds)
-    }
-    func rotateRecoveryCode() async throws -> RecoveryRotation { try await fake.rotateRecoveryCode() }
-    func deleteAccount() async throws -> [String] { try await fake.deleteAccount() }
-}
-
-/// Timeline whose subscriptions are counted by `TimelineCountingClient`.
-private final class CountingTimeline: Timeline {
-    private let base: any Timeline
-    private let client: TimelineCountingClient
-
-    init(_ base: any Timeline, client: TimelineCountingClient) {
-        self.base = base
-        self.client = client
-    }
-
-    func chatId() -> String { base.chatId() }
-
-    func addListener(listener: any TimelineListener) async -> TaskHandle {
-        let handle = await base.addListener(listener: listener)
-        let chatId = base.chatId()
-        let client = client
-        client.opened(chatId)
-        return TaskHandle {
-            handle.cancel()
-            client.closed(chatId)
-        }
-    }
-
-    func paginateBackwards(count: UInt16) async throws -> Bool { try await base.paginateBackwards(count: count) }
-    func chatState() -> ChatState? { base.chatState() }
 }
 
 /// Client whose chat list listener fails; the connection state listener works.

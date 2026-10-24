@@ -167,6 +167,31 @@ public final class AppModel {
         } catch {
             return ErrorPresenter.message(for: error)
         }
+        return wipeAndShowOnboarding(hooks: hooks)
+    }
+
+    /// Deletes the account (`GimClientAPI.deleteAccount`), then wipes and returns to onboarding like `signOut`.
+    /// Servers that could not be reached are not reported: their records expire on their own. Returns the error text
+    /// when deleting or wiping fails; a failed deletion keeps the user signed in.
+    public func deleteAccount() async -> String? {
+        guard let client, let hooks else { return nil }
+        do {
+            _ = try await client.deleteAccount()
+        } catch {
+            return ErrorPresenter.message(for: error)
+        }
+        return wipeAndShowOnboarding(hooks: hooks)
+    }
+
+    /// Re-reads the session, e.g. after claiming a handle in Settings.
+    public func refreshSession() async {
+        guard let client, let session = try? await client.session(), client === self.client else { return }
+        self.session = session
+    }
+
+    /// Wipes the platform keystore and data directory, drops the client and returns to onboarding. Returns the error
+    /// text when wiping fails.
+    private func wipeAndShowOnboarding(hooks: any PlatformHooks) -> String? {
         var wipeError: String?
         do {
             try (hooks as? any PlatformWiping)?.wipe()
@@ -174,18 +199,12 @@ public final class AppModel {
             wipeError = ErrorPresenter.message(for: error)
         }
         (hooks as? AppPlatformHooks)?.reachability.attach(nil)
-        self.client = nil
+        client = nil
         isSyncing = false
         session = nil
         showOnboarding(hooks: hooks, serverUrl: defaultServerUrl(stored: serverUrl), client: nil)
         serverUrl = nil
         return wipeError
-    }
-
-    /// Re-reads the session, e.g. after claiming a handle in Settings.
-    public func refreshSession() async {
-        guard let client, let session = try? await client.session(), client === self.client else { return }
-        self.session = session
     }
 
     private func defaultServerUrl(stored: String?) -> String {
@@ -204,7 +223,8 @@ public final class AppModel {
         hooks: any PlatformHooks, serverUrl: String, client: (any GimClientAPI)?, localStateReset: Bool = false
     ) {
         onboarding = OnboardingViewModel(
-            factory: factory, hooks: hooks, serverUrl: serverUrl, client: client, localStateReset: localStateReset
+            factory: factory, hooks: hooks, recoveryKit: CoreRecoveryKitFunctions(), serverUrl: serverUrl,
+            client: client, localStateReset: localStateReset
         ) { [weak self] registration in
             self?.showReady(registration.client, config: registration.config, session: registration.session)
         }
