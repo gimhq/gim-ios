@@ -46,7 +46,7 @@ public final class RestoreViewModel {
         didSet { if kitText != oldValue { kitChanged() } }
     }
     /// What the kit text contains; `nil` while it is blank.
-    public private(set) var parsed: RecoveryKit.Parsed?
+    public private(set) var parsed: ParsedRecoveryKit?
     /// Set by `enterSeparately()` to show the fields without a kit.
     public private(set) var showsSeparateFields = false
     public var userId = ""
@@ -166,7 +166,7 @@ public final class RestoreViewModel {
             parsed = nil
             return
         }
-        let parsed = RecoveryKit.parse(kitText)
+        let parsed = context.recoveryKit.parseRecoveryKit(text: kitText)
         self.parsed = parsed
         if let found = parsed.userId { userId = found }
         if let found = parsed.recoveryCode { recoveryCode = RecoveryKit.groupedRecoveryCode(found) }

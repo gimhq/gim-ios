@@ -305,7 +305,7 @@ final class AppModelTests: XCTestCase {
             return XCTFail("expected the recovery kit, got \(String(describing: onboarding.stage))")
         }
         recovery.continueToCheck()
-        recovery.endingInput = RecoveryKit.ending(of: recovery.groupedCode)
+        recovery.endingInput = CoreRecoveryKitFunctions().recoveryKeyEnding(recoveryCode: recovery.groupedCode)
         recovery.confirm()
         guard case .claimHandle(let claim) = onboarding.stage else {
             return XCTFail("expected the handle step, got \(String(describing: onboarding.stage))")
