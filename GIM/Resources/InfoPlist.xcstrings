@@ -8,6 +8,24 @@
             "state" : "translated",
             "value" : "GIM uses the camera to scan the code shown on your other device."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GIM usa la cámara para escanear el código que aparece en tu otro dispositivo."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GIM 使用相机扫描你另一台设备上显示的二维码。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GIM 使用相機掃描你另一台裝置上顯示的 QR 碼。"
+          }
         }
       }
     },
@@ -17,6 +35,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "GIM shows your photos so you can choose which ones to send."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GIM muestra tus fotos para que elijas cuáles enviar."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GIM 会显示你的照片，方便你选择要发送哪些。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GIM 會顯示你的照片，方便你選擇要傳送哪些。"
           }
         }
       }
