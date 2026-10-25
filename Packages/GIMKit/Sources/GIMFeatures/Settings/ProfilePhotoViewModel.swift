@@ -8,7 +8,7 @@ import Observation
 public final class ProfilePhotoViewModel {
     /// Side of the square JPEG a picked photo is cropped and scaled to: every member of every chat downloads it, and
     /// gim-core documents no limit of its own.
-    public static let maxPixelSize = 512
+    nonisolated public static let maxPixelSize = 512
     public static let mime = "image/jpeg"
 
     public private(set) var hasPhoto = false
