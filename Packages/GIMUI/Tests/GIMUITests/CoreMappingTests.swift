@@ -8,7 +8,7 @@ final class CoreMappingTests: XCTestCase {
     func testClientConfigKeepsTheMode() {
         XCTAssertEqual(
             GIMCore.ClientConfig(GIMClientKit.ClientConfig(serverUrl: "https://gim.example.eu")),
-            GIMCore.ClientConfig(serverUrl: "https://gim.example.eu", mode: nil, metaServerUrl: nil))
+            GIMCore.ClientConfig(serverUrl: "https://gim.example.eu", mode: nil, keepServerUrl: nil))
         XCTAssertEqual(
             GIMCore.ClientConfig(GIMClientKit.ClientConfig(serverUrl: "https://gim.example.eu", mode: .app)).mode,
             .app)
@@ -17,13 +17,13 @@ final class CoreMappingTests: XCTestCase {
             .extension)
     }
 
-    func testClientConfigKeepsTheMetaServerUrl() {
+    func testClientConfigKeepsTheKeepServerUrl() {
         XCTAssertEqual(
             GIMCore.ClientConfig(
-                GIMClientKit.ClientConfig(serverUrl: "https://gim.example.eu", metaServerUrl: "https://meta.example.eu")
+                GIMClientKit.ClientConfig(serverUrl: "https://gim.example.eu", keepServerUrl: "https://keep.example.eu")
             ),
             GIMCore.ClientConfig(
-                serverUrl: "https://gim.example.eu", mode: nil, metaServerUrl: "https://meta.example.eu"))
+                serverUrl: "https://gim.example.eu", mode: nil, keepServerUrl: "https://keep.example.eu"))
     }
 
     func testChatSummaryMapsTheAccountSafetyFields() {
@@ -113,7 +113,7 @@ final class CoreMappingTests: XCTestCase {
 
     func testMessagePreviewMapsTheSendState() {
         let own = GIMCore.MessagePreview(
-            senderName: "Alex Morgan", text: "On my way", sentAtMs: 1_790_000_000_000, isOwn: true,
+            senderName: "Alex Morgan", text: "On my way", kind: .text, sentAtMs: 1_790_000_000_000, isOwn: true,
             sendState: .delivered)
         XCTAssertEqual(
             GIMClientKit.MessagePreview(own),
@@ -121,12 +121,13 @@ final class CoreMappingTests: XCTestCase {
                 senderName: "Alex Morgan", text: "On my way", sentAtMs: 1_790_000_000_000, isOwn: true,
                 sendState: .delivered))
         let failed = GIMCore.MessagePreview(
-            senderName: "Alex Morgan", text: "On my way", sentAtMs: 1_790_000_000_000, isOwn: true,
+            senderName: "Alex Morgan", text: "On my way", kind: .text, sentAtMs: 1_790_000_000_000, isOwn: true,
             sendState: .failed(reason: "refused", cause: .rejected))
         XCTAssertEqual(
             GIMClientKit.MessagePreview(failed).sendState, .failed(reason: "refused", cause: .rejected))
         let peer = GIMCore.MessagePreview(
-            senderName: "Sofia Marin", text: "Ahoy", sentAtMs: 1_790_000_000_000, isOwn: false, sendState: nil)
+            senderName: "Sofia Marin", text: "Ahoy", kind: .text, sentAtMs: 1_790_000_000_000, isOwn: false,
+            sendState: nil)
         XCTAssertNil(GIMClientKit.MessagePreview(peer).sendState)
     }
 

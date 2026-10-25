@@ -312,11 +312,11 @@ public protocol GimClientAPI: AnyObject, Sendable {
     /// `NotFound` for an unknown chat.
     func setChatArchived(chatId: String, archived: Bool) async throws
 
-    // Meta server (gim-core docs/API.md, "Meta server"): gim-meta, not deployed yet.
+    // Keep server (gim-core docs/API.md, "Keep server"): gim-keep, not deployed yet.
 
-    /// Reports a user to the meta server's moderators with the messages `messageIds` (at most 50, from the local
+    /// Reports a user to the keep server's moderators with the messages `messageIds` (at most 50, from the local
     /// history) in plaintext, and an optional `note` (at most 1000 characters). Returns the report id. Does not block:
-    /// call `blockUser` too if wanted. `InvalidInput` without a meta server (`ClientConfig.metaServerUrl`).
+    /// call `blockUser` too if wanted. `InvalidInput` without a keep server (`ClientConfig.keepServerUrl`).
     func reportUser(userId: String, reason: ReportReason, note: String?, messageIds: [String]) async throws -> String
 
     // Recovery and account deletion (gim-core docs/API.md, "Identity and devices", "Account deletion").
@@ -325,7 +325,7 @@ public protocol GimClientAPI: AnyObject, Sendable {
     /// hub that takes the new backup (the home hub always does, or the call fails without any change). Returns the
     /// new code, which is not stored and must be shown to the user once.
     func rotateRecoveryCode() async throws -> RecoveryRotation
-    /// Deletes the account for good: the meta server's data, every chat (the user leaves), the account on every hub,
+    /// Deletes the account for good: the keep server's data, every chat (the user leaves), the account on every hub,
     /// then everything on this device as `signOut` does. Returns the ids of the user's other hubs that could not be
     /// reached (their records expire on their own). On an error nothing local is deleted and it can be called again.
     /// Irreversible: confirm with the user first.

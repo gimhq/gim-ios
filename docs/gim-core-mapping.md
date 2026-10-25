@@ -5,8 +5,8 @@
 
 - Mirrored commit: gim-core `c1b7503` (`bindings/gim-ffi/src/`, generated
   `bindings/gim-ffi/generated/swift/GIMCore.swift`, contract in `docs/API.md`).
-- Vendored commit: gim-client-sdk `b86283e` (CI run 40038617133), GIMCore `0.1.0+b86283e`; the mirror covers it
-  (see "Changes since `16a5efa`" and "Changes since `c1b7503`").
+- Vendored commit: gim-client-sdk `d2fae1c` (gim-core `db5b741`), GIMCore `0.1.0+d2fae1c`; the mirror covers it except
+  `PreviewKind` (see "Changes since `b86283e`", "Changes since `16a5efa`" and "Changes since `c1b7503`").
 - Mirror sources: `GimClientAPI.swift` (objects, callback interfaces, hooks, `createClient`) and `Models.swift`
   (records, enums, diffs, errors).
 - Everything else in GIMClientKit (`Fake/`, `GimClientFactory`, `CoreGimClientFactory`) is app-level and stays after
@@ -15,7 +15,7 @@
 ## Records
 
 All records are structs with every field public and a memberwise `init` without default values, in field order,
-except `ClientConfig.mode` and `ClientConfig.metaServerUrl`, which default to `nil` like the generated init. Fields
+except `ClientConfig.mode` and `ClientConfig.keepServerUrl`, which default to `nil` like the generated init. Fields
 added after `c1b7503` (`MessagePreview.sendState`, `UserProfile.hasAvatar`, the account safety fields of
 `ChatSummary`) have mirror init defaults (`nil`, `false`, `0`) so existing call sites keep compiling; the generated
 inits have none.
@@ -23,7 +23,7 @@ Generated records are `Equatable, Hashable` plus `extension …: Sendable`; the 
 
 | Mirror | GIMCore | Fields |
 |---|---|---|
-| `ClientConfig` | `ClientConfig` | `serverUrl`, `mode: ClientMode?` (`nil` is `app`), `metaServerUrl: String?` (the gim meta server, gim-meta; `nil` until it is deployed, so `reportUser` fails and settings are not backed up) |
+| `ClientConfig` | `ClientConfig` | `serverUrl`, `mode: ClientMode?` (`nil` is `app`), `keepServerUrl: String?` (the gim keep server, gim-keep; `nil` until it is deployed, so `reportUser` fails and settings are not backed up) |
 | `PushRegistration` | `PushRegistration` | `provider`, `token`, `appId: String?`, `sandbox: Bool?`, `p256dh: String?`, `auth: String?` |
 | `NotificationContent` | `NotificationContent` | `chatId: String?`, `chatTitle: String?`, `senderUserId: String?`, `senderDisplayName: String?`, `body`, `messageId: String?`, `collapseId: String?`, `kind: NotificationKind`, `shouldDisplay`, `timestamp: UInt64` |
 | `Session` | `Session` | `userId`, `deviceId`, `handle` (empty until `claimHandle`), `displayName` |
@@ -172,14 +172,14 @@ listener parameter spelling above.
 | `setChatMuted(chatId:mutedUntilMs: UInt64) async throws` | same; `mutedForever()` for good, 0 to unmute |
 | `setChatPinned(chatId:pinned:) async throws` | same |
 | `setChatArchived(chatId:archived:) async throws` | same |
-| `reportUser(userId:reason: ReportReason, note: String?, messageIds: [String]) async throws -> String` | same; **needs the meta server** (`InvalidInput` without `ClientConfig.metaServerUrl`): keep it hidden in the UI until gim-meta is deployed |
+| `reportUser(userId:reason: ReportReason, note: String?, messageIds: [String]) async throws -> String` | same; **needs the keep server** (`InvalidInput` without `ClientConfig.keepServerUrl`): keep it hidden in the UI until gim-keep is deployed |
 | `rotateRecoveryCode() async throws -> RecoveryRotation` | same |
-| `deleteAccount() async throws -> [String]` | same; returns the other hubs it could not reach. Deletes the meta server's data first when one is configured, so it works without one |
+| `deleteAccount() async throws -> [String]` | same; returns the other hubs it could not reach. Deletes the keep server's data first when one is configured, so it works without one |
 
-The meta server (gim-meta, `ClientConfig.metaServerUrl`) is not deployed: the app passes `nil`. Without it
+The keep server (gim-keep, `ClientConfig.keepServerUrl`) is not deployed: the app passes `nil`. Without it
 `reportUser` fails with `InvalidInput` and the privacy settings (blocked users included) are not backed up, so they
 do not survive the loss of every device; per-chat settings are never backed up. `FakeGimClient.reportUser` needs no
-meta server and records the report in `reports`. The bridge maps `ClientConfig.metaServerUrl` 1:1.
+keep server and records the report in `reports`. The bridge maps `ClientConfig.keepServerUrl` 1:1.
 
 `chatMembers` has no listener in M1. `GroupInfoViewModel` queries it again when a `ChatListDiff` changes that chat or
 a `TimelineItem.membershipChange` arrives. When a query fails before any list has loaded it shows the error with
@@ -199,6 +199,17 @@ Renaming a group goes `GroupInfoViewModel.saveName()` → `GimClientAPI.setGroup
 
 `CoreMappingTests.testFakeRecoveryKitFunctionsMatchGimCore` runs the same vectors through both, so drift between the
 copy and gim-core fails the macOS tests.
+
+## Changes since `b86283e`
+
+`d2fae1c` (gim-client-sdk main, pinning gim-core `db5b741`; vendored with `scripts/sync-gim-core.sh --from-dir
+<artifact gim-core-ios-d2fae1c> --core-sha d2fae1c`, zip sha256 `6ded86a5…f6d2d3`; the artifact's `Package.swift` is
+unchanged). Breaking rename: the server for settings backups and reports is now the gim keep server (gim-keep), the
+storage label is `gim/keep-storage/v1`, and `ClientConfig`'s URL field is `keepServerUrl: String? = nil`; the mirror
+and `CoreMapping` follow. New, not mirrored yet: `enum PreviewKind { text, photo, file(fileName:), deleted }` and a
+`kind: PreviewKind` field on `MessagePreview` and `ReplyPreview` (the generated inits take it after `text`). The bridge
+maps core to mirror and drops `kind`; the app still renders `text`. Adopting `PreviewKind` for localized previews is
+deferred.
 
 ## Changes since `16a5efa`
 

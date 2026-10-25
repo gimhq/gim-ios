@@ -9,14 +9,14 @@ public struct ClientConfig: Sendable, Hashable {
     public var serverUrl: String
     /// The process kind; `nil` is `ClientMode.app`.
     public var mode: ClientMode?
-    /// Base URL of the gim meta server (`http://` or `https://`): the encrypted settings backup and abuse reports.
+    /// Base URL of the gim keep server (`http://` or `https://`): the encrypted settings backup and abuse reports.
     /// `nil`: settings are not backed up and `reportUser` fails.
-    public var metaServerUrl: String?
+    public var keepServerUrl: String?
 
-    public init(serverUrl: String, mode: ClientMode? = nil, metaServerUrl: String? = nil) {
+    public init(serverUrl: String, mode: ClientMode? = nil, keepServerUrl: String? = nil) {
         self.serverUrl = serverUrl
         self.mode = mode
-        self.metaServerUrl = metaServerUrl
+        self.keepServerUrl = keepServerUrl
     }
 }
 

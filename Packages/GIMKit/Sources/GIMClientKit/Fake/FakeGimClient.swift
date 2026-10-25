@@ -1371,9 +1371,9 @@ public actor FakeGimClient: GimClientAPI {
         publishChatList()
     }
 
-    // MARK: - Meta server
+    // MARK: - Keep server
 
-    /// Validates like gim-core and records the report in `reports`; unlike gim-core it needs no meta server.
+    /// Validates like gim-core and records the report in `reports`; unlike gim-core it needs no keep server.
     public func reportUser(
         userId: String, reason: ReportReason, note: String?, messageIds: [String]
     ) async throws -> String {
