@@ -1,6 +1,6 @@
 # gim-ios - Task List
 
-> Updated: 2026-10-23
+> Updated: 2026-10-25
 
 ## Usage
 
@@ -33,4 +33,4 @@ Each task is a single line linking to its detail file. All detailed information 
 
 ## Tasks
 
-- [-] [**20261023-1002-product-ui-i18n-settings Product-grade UI, languages, account and settings**](20261023-1002-product-ui-i18n-settings.md) `P1`
+- [x] [**20261023-1002-product-ui-i18n-settings Product-grade UI, languages, account and settings**](20261023-1002-product-ui-i18n-settings.md) `P1`

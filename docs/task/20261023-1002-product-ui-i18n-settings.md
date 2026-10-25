@@ -1,6 +1,6 @@
 # 20261023-1002-product-ui-i18n-settings Product-grade UI, languages, account and settings
 
-- **status**: in_progress
+- **status**: completed
 - **priority**: P1
 - **owner**: bkd-l1/0mwnv3mh
 - **createdAt**: 2026-10-23 10:02

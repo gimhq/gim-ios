@@ -1,6 +1,6 @@
 # gim-ios - Plan Index
 
-> Updated: 2026-10-23
+> Updated: 2026-10-25
 
 ## Usage
 
@@ -31,4 +31,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 
 ## Plans
 
-- [-] [**20261023-1002-product-ui-i18n-settings Product-grade UI, languages, account explanations and settings**](20261023-1002-product-ui-i18n-settings.md) `2026-10-23`
+- [x] [**20261023-1002-product-ui-i18n-settings Product-grade UI, languages, account explanations and settings**](20261023-1002-product-ui-i18n-settings.md) `2026-10-23`
