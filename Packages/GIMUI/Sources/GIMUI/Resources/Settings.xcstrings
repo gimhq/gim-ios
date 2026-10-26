@@ -169,30 +169,30 @@
         }
       }
     },
-    "Backs up your privacy settings and receives reports. Your data is encrypted." : {
+    "Backs up your privacy settings and receives the reports you send. Your backup is encrypted." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Backs up your privacy settings and receives reports. Your data is encrypted."
+            "value" : "Backs up your privacy settings and receives the reports you send. Your backup is encrypted."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Guarda una copia de tus ajustes de privacidad y recibe los reportes. Tus datos están cifrados."
+            "value" : "Guarda una copia de tus ajustes de privacidad y recibe los reportes que envías. Tu copia de seguridad está cifrada."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "备份你的隐私设置并接收举报。你的数据经过加密。"
+            "value" : "备份你的隐私设置，并接收你发送的举报。你的备份经过加密。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "備份你的隱私權設定並接收檢舉。你的資料經過加密。"
+            "value" : "備份你的隱私權設定，並接收你傳送的檢舉。你的備份經過加密。"
           }
         }
       }
@@ -1541,30 +1541,30 @@
         }
       }
     },
-    "The keep server backs up your privacy settings and receives reports. Your data is encrypted." : {
+    "The Keep server backs up your privacy settings and receives the reports you send. Your backup is encrypted." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The keep server backs up your privacy settings and receives reports. Your data is encrypted."
+            "value" : "The Keep server backs up your privacy settings and receives the reports you send. Your backup is encrypted."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "El servidor Keep guarda una copia de tus ajustes de privacidad y recibe los reportes. Tus datos están cifrados."
+            "value" : "El servidor Keep guarda una copia de tus ajustes de privacidad y recibe los reportes que envías. Tu copia de seguridad está cifrada."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keep 服务器会备份你的隐私设置并接收举报。你的数据经过加密。"
+            "value" : "Keep 服务器会备份你的隐私设置，并接收你发送的举报。你的备份经过加密。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keep 伺服器會備份你的隱私權設定並接收檢舉。你的資料經過加密。"
+            "value" : "Keep 伺服器會備份你的隱私權設定，並接收你傳送的檢舉。你的備份經過加密。"
           }
         }
       }
@@ -1709,12 +1709,12 @@
         }
       }
     },
-    "Use a keep server" : {
+    "Use a Keep server" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Use a keep server"
+            "value" : "Use a Keep server"
           }
         },
         "es" : {
@@ -1765,12 +1765,12 @@
         }
       }
     },
-    "Use the default keep server" : {
+    "Use the default Keep server" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Use the default keep server"
+            "value" : "Use the default Keep server"
           }
         },
         "es" : {

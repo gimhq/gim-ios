@@ -120,7 +120,7 @@ struct SettingsScreen: View {
                 Text("Advanced", tableName: "Settings", bundle: .module)
             } footer: {
                 Text(
-                    "The keep server backs up your privacy settings and receives reports. Your data is encrypted.",
+                    "The Keep server backs up your privacy settings and receives the reports you send. Your backup is encrypted.",
                     tableName: "Settings", bundle: .module)
             }
             helpSection

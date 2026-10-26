@@ -25,7 +25,7 @@ These words name the chat actions and the account safety settings. The code name
 
 | User-facing word | What it means |
 |---|---|
-| Keep server | The server that backs up your privacy settings (encrypted) and receives reports. On by default; Settings → Keep server changes or turns it off. |
+| Keep server | The server that backs up your privacy settings and receives the reports you send. The backup is encrypted; reports are not, so never say that all your data is encrypted. "Keep" is a name and stays untranslated. On by default; Settings → Keep server changes or turns it off. |
 | Pin / Unpin | Keep a chat at the top of the list, or stop keeping it there. |
 | Pinned | This chat stays at the top of the list. |
 | Mute / Unmute | Stop or restart notifications for a chat. |

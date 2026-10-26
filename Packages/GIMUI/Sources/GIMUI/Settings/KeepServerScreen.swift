@@ -14,12 +14,12 @@ struct KeepServerScreen: View {
         Form {
             Section {
                 Toggle(isOn: Binding(get: { model.isOn }, set: { model.setOn($0) })) {
-                    Text("Use a keep server", tableName: "Settings", bundle: .module)
+                    Text("Use a Keep server", tableName: "Settings", bundle: .module)
                 }
                 .accessibilityIdentifier("keepServer.toggle")
             } footer: {
                 Text(
-                    "Backs up your privacy settings and receives reports. Your data is encrypted.",
+                    "Backs up your privacy settings and receives the reports you send. Your backup is encrypted.",
                     tableName: "Settings", bundle: .module)
             }
             if model.isOn {
@@ -45,7 +45,7 @@ struct KeepServerScreen: View {
                         Button {
                             model.resetToDefault()
                         } label: {
-                            Text("Use the default keep server", tableName: "Settings", bundle: .module)
+                            Text("Use the default Keep server", tableName: "Settings", bundle: .module)
                         }
                         .accessibilityIdentifier("keepServer.reset")
                     }
