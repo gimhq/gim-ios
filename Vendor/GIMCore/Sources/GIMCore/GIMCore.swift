@@ -1170,7 +1170,8 @@ public protocol GimClientProtocol: AnyObject, Sendable {
     func createIdentity(displayName: String) async throws  -> String
     
     /**
-     * Deletes the account for good: the keep server's data, every chat
+     * Deletes the account for good: the keep server's data (best effort,
+     * never blocking), every chat
      * (the user leaves), the account on every hub, then everything on
      * this device as `sign_out` does. Returns the ids of the user's other
      * hubs that could not be reached (their records expire on their own).
@@ -1886,7 +1887,8 @@ open func createIdentity(displayName: String)async throws  -> String  {
 }
     
     /**
-     * Deletes the account for good: the keep server's data, every chat
+     * Deletes the account for good: the keep server's data (best effort,
+     * never blocking), every chat
      * (the user leaves), the account on every hub, then everything on
      * this device as `sign_out` does. Returns the ids of the user's other
      * hubs that could not be reached (their records expire on their own).
@@ -9020,7 +9022,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_gim_core_checksum_method_gimclient_create_identity() != 56233) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_gim_core_checksum_method_gimclient_delete_account() != 40779) {
+    if (uniffi_gim_core_checksum_method_gimclient_delete_account() != 29130) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_gim_core_checksum_method_gimclient_delete_message() != 40750) {

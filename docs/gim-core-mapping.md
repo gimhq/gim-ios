@@ -5,8 +5,8 @@
 
 - Mirrored commit: gim-core `c1b7503` (`bindings/gim-ffi/src/`, generated
   `bindings/gim-ffi/generated/swift/GIMCore.swift`, contract in `docs/API.md`).
-- Vendored commit: gim-client-sdk `d2fae1c` (gim-core `db5b741`), GIMCore `0.1.0+d2fae1c`; the mirror covers it except
-  `PreviewKind` (see "Changes since `b86283e`", "Changes since `16a5efa`" and "Changes since `c1b7503`").
+- Vendored commit: gim-client-sdk `2eb3316`, GIMCore `0.1.0+2eb3316`; the mirror covers it except `PreviewKind` (see
+  "Changes since `d2fae1c`", "Changes since `b86283e`", "Changes since `16a5efa`" and "Changes since `c1b7503`").
 - Mirror sources: `GimClientAPI.swift` (objects, callback interfaces, hooks, `createClient`) and `Models.swift`
   (records, enums, diffs, errors).
 - Everything else in GIMClientKit (`Fake/`, `GimClientFactory`, `CoreGimClientFactory`) is app-level and stays after
@@ -174,7 +174,7 @@ listener parameter spelling above.
 | `setChatArchived(chatId:archived:) async throws` | same |
 | `reportUser(userId:reason: ReportReason, note: String?, messageIds: [String]) async throws -> String` | same; **needs the keep server** (`InvalidInput` without `ClientConfig.keepServerUrl`): keep it hidden in the UI until gim-keep is deployed |
 | `rotateRecoveryCode() async throws -> RecoveryRotation` | same |
-| `deleteAccount() async throws -> [String]` | same; returns the other hubs it could not reach. Deletes the keep server's data first when one is configured, so it works without one |
+| `deleteAccount() async throws -> [String]` | same; returns the other hubs it could not reach. Deletes the keep server's data first when one is configured, best effort: a missing or unreachable keep server never blocks it |
 
 The keep server (gim-keep, `ClientConfig.keepServerUrl`) is not deployed: the app passes `nil`. Without it
 `reportUser` fails with `InvalidInput` and the privacy settings (blocked users included) are not backed up, so they
@@ -199,6 +199,14 @@ Renaming a group goes `GroupInfoViewModel.saveName()` → `GimClientAPI.setGroup
 
 `CoreMappingTests.testFakeRecoveryKitFunctionsMatchGimCore` runs the same vectors through both, so drift between the
 copy and gim-core fails the macOS tests.
+
+## Changes since `d2fae1c`
+
+`2eb3316` (gim-client-sdk main; vendored with `scripts/sync-gim-core.sh --from-dir <artifact gim-core-ios-2eb3316>
+--core-sha 2eb3316`, zip sha256 `2156d012…8e92fa`; the artifact's `Package.swift` is unchanged). `deleteAccount` no
+longer fails when the keep server is unreachable: deleting its data is best effort. Only doc comments and UniFFI
+checksums changed in the generated `GIMCore.swift`; no signature, enum case or error changed, and the mirror is
+unchanged apart from that doc comment.
 
 ## Changes since `b86283e`
 

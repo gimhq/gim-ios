@@ -325,9 +325,9 @@ public protocol GimClientAPI: AnyObject, Sendable {
     /// hub that takes the new backup (the home hub always does, or the call fails without any change). Returns the
     /// new code, which is not stored and must be shown to the user once.
     func rotateRecoveryCode() async throws -> RecoveryRotation
-    /// Deletes the account for good: the keep server's data, every chat (the user leaves), the account on every hub,
-    /// then everything on this device as `signOut` does. Returns the ids of the user's other hubs that could not be
-    /// reached (their records expire on their own). On an error nothing local is deleted and it can be called again.
+    /// Deletes the account for good: the keep server's data (best effort, never blocking), every chat (the user
+    /// leaves), the account on every hub, then everything on this device as `signOut` does. Returns the ids of the
+    /// user's other hubs that could not be reached (their records expire on their own). On an error nothing local is deleted and it can be called again.
     /// Irreversible: confirm with the user first.
     func deleteAccount() async throws -> [String]
 }
