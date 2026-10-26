@@ -82,12 +82,14 @@ final class KeepServerFakeTests: E2ETestCase {
         toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
     }
 
-    /// Clears `field` and types `text`.
+    /// Clears `field` and types `text`. The second tap, at the field's right end, puts the cursor after the text (a
+    /// tap on the middle lands inside it).
     @MainActor
     private func replaceText(
         of field: XCUIElement, with text: String, _ check: @autoclosure () -> String, _ app: XCUIApplication
     ) throws {
         try tap(field, check(), app)
+        field.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.5)).tap()
         let current = field.value as? String ?? ""
         field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count + 5))
         field.typeText(text)
