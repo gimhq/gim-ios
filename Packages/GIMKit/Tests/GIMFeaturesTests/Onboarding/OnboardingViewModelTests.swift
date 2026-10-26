@@ -109,13 +109,14 @@ final class OnboardingViewModelTests: XCTestCase {
         serverUrl: String = "",
         client: (any GimClientAPI)? = nil,
         localStateReset: Bool = false,
-        recoveryKit: any RecoveryKitFunctions = FakeRecoveryKitFunctions()
+        recoveryKit: any RecoveryKitFunctions = FakeRecoveryKitFunctions(),
+        keepServerUrl: String? = nil
     ) -> (OnboardingViewModel, Registrations) {
         let registrations = Registrations()
         let viewModel = OnboardingViewModel(
             factory: factory, hooks: TestHooks(dataDir: makeTemporaryDirectory()),
             recoveryKit: recoveryKit, serverUrl: serverUrl, client: client,
-            localStateReset: localStateReset
+            localStateReset: localStateReset, keepServerUrl: keepServerUrl
         ) { registrations.results.append($0) }
         return (viewModel, registrations)
     }
@@ -144,6 +145,18 @@ final class OnboardingViewModelTests: XCTestCase {
 
         XCTAssertFalse(viewModel.showsServerField)
         XCTAssertEqual(viewModel.path, [.createIdentity])
+    }
+
+    @MainActor
+    func testTheChosenServerConfigCarriesTheKeepServer() async {
+        let (viewModel, _) = makeViewModel(
+            serverUrl: "https://gim.example.eu/", keepServerUrl: "https://keep.example.eu")
+
+        viewModel.choose(.createIdentity)
+
+        XCTAssertEqual(
+            viewModel.context?.config,
+            ClientConfig(serverUrl: "https://gim.example.eu", keepServerUrl: "https://keep.example.eu"))
     }
 
     @MainActor

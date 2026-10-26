@@ -292,12 +292,16 @@ final class AppModelTests: XCTestCase {
         return UserDefaults(suiteName: suite)!
     }
 
+    /// The keep server is off by default here, so configs compare without one; the keep server tests set it.
     @MainActor
     private func makeModel(
         factory: ClientFactory, defaults: UserDefaults, bundledServerUrl: String? = nil,
-        hooks: MemoryHooks = MemoryHooks()
+        bundledKeepServerUrl: String? = KeepServer.offValue, hooks: MemoryHooks = MemoryHooks()
     ) -> AppModel {
-        AppModel(factory: factory, defaults: defaults, bundledServerUrl: bundledServerUrl) { hooks }
+        AppModel(
+            factory: factory, defaults: defaults, bundledServerUrl: bundledServerUrl,
+            bundledKeepServerUrl: bundledKeepServerUrl
+        ) { hooks }
     }
 
     /// Runs the create flow: display name, recovery kit ending check and handle `alex`.
@@ -608,6 +612,85 @@ final class AppModelTests: XCTestCase {
         try await register(onboarding)
         XCTAssertEqual(factory.configs.count, 2, "a new client is created after signing out")
         guard case .ready = model.phase else { return XCTFail("expected ready, got \(model.phase)") }
+    }
+
+    @MainActor
+    func testClientsGetTheBuiltInKeepServerByDefault() async {
+        let factory = ClientFactory(FakeGimClient(session: session))
+        let defaults = makeDefaults()
+        defaults.set("https://gim.example.eu", forKey: AppModel.serverUrlKey)
+        let model = makeModel(factory: factory, defaults: defaults, bundledKeepServerUrl: nil)
+
+        await model.start()
+
+        XCTAssertEqual(
+            factory.configs, [ClientConfig(serverUrl: "https://gim.example.eu", keepServerUrl: "https://keep.g.im")])
+        XCTAssertEqual(model.keepServerUrl, "https://keep.g.im")
+    }
+
+    @MainActor
+    func testTheStoredKeepServerChoiceWinsAtLaunchAndInOnboarding() async throws {
+        let factory = ClientFactory(FakeGimClient())
+        let defaults = makeDefaults()
+        KeepServer.store(.custom("https://keep.example.eu"), in: defaults)
+        let model = makeModel(factory: factory, defaults: defaults, bundledKeepServerUrl: "https://bundled.example.eu")
+        await model.start()
+
+        try await register(try XCTUnwrap(model.onboarding))
+
+        XCTAssertEqual(factory.configs.map(\.keepServerUrl), ["https://keep.example.eu"])
+        XCTAssertEqual(model.keepServerUrl, "https://keep.example.eu")
+    }
+
+    @MainActor
+    func testATurnedOffKeepServerGivesClientsNone() async {
+        let factory = ClientFactory(FakeGimClient(session: session))
+        let defaults = makeDefaults()
+        defaults.set("https://gim.example.eu", forKey: AppModel.serverUrlKey)
+        KeepServer.store(.off, in: defaults)
+        let model = makeModel(factory: factory, defaults: defaults, bundledKeepServerUrl: nil)
+
+        await model.start()
+
+        XCTAssertEqual(factory.configs, [ClientConfig(serverUrl: "https://gim.example.eu")])
+        XCTAssertNil(model.keepServerUrl)
+    }
+
+    @MainActor
+    func testSignOutForgetsTheKeepServerChoice() async throws {
+        let factory = ClientFactory(FakeGimClient(session: session), FakeGimClient())
+        let defaults = makeDefaults()
+        defaults.set("https://gim.example.eu", forKey: AppModel.serverUrlKey)
+        KeepServer.store(.custom("https://keep.example.eu"), in: defaults)
+        let model = makeModel(factory: factory, defaults: defaults, bundledKeepServerUrl: nil)
+        await model.start()
+
+        _ = await model.signOut()
+
+        XCTAssertNil(defaults.object(forKey: KeepServer.settingKey))
+        XCTAssertNil(model.keepServerUrl)
+        try await register(try XCTUnwrap(model.onboarding))
+        XCTAssertEqual(
+            factory.configs.map(\.keepServerUrl), ["https://keep.example.eu", "https://keep.g.im"],
+            "the next account starts with the default keep server")
+    }
+
+    @MainActor
+    func testTheKeepServerScreenKnowsTheDefaultAndTheRunningClientsServer() async {
+        let factory = ClientFactory(FakeGimClient(session: session))
+        let defaults = makeDefaults()
+        defaults.set("https://gim.example.eu", forKey: AppModel.serverUrlKey)
+        KeepServer.store(.off, in: defaults)
+        let model = makeModel(factory: factory, defaults: defaults, bundledKeepServerUrl: "https://bundled.example.eu")
+        await model.start()
+
+        let keepServer = model.makeKeepServerViewModel()
+
+        XCTAssertEqual(keepServer.defaultUrl, "https://bundled.example.eu")
+        XCTAssertNil(keepServer.activeUrl)
+        XCTAssertFalse(keepServer.isOn)
+        keepServer.resetToDefault()
+        XCTAssertTrue(keepServer.needsRestart)
     }
 
     @MainActor

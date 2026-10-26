@@ -44,6 +44,9 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         # Pre-filled server when none was used yet; the `-GIMDefaultServerURL <url>` launch argument overrides it.
         GIMDefaultServerURL: $(GIM_DEFAULT_SERVER_URL)
+        # Default keep server; empty uses https://keep.g.im, `off` disables it. The `-GIMDefaultKeepServerURL <url|off>`
+        # launch argument overrides it, and the Settings choice overrides both.
+        GIMDefaultKeepServerURL: $(GIM_DEFAULT_KEEP_SERVER_URL)
         # `mock-ios-sim` registers a push token for gim-push-mock + `xcrun simctl push` (README "Push"); empty
         # registers nothing.
         GIMPushProvider: $(GIM_PUSH_PROVIDER)

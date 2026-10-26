@@ -215,6 +215,7 @@ public final class OnboardingViewModel {
     private let factory: any GimClientFactory
     private let hooks: any PlatformHooks
     private let recoveryKit: any RecoveryKitFunctions
+    private let keepServerUrl: String?
     private let onRegistered: @MainActor (Registration) -> Void
     @ObservationIgnored private var client: (any GimClientAPI)?
     @ObservationIgnored private var clientConfig: ClientConfig?
@@ -224,6 +225,7 @@ public final class OnboardingViewModel {
     ///   - serverUrl: initial value of the server field.
     ///   - client: a client without a session already created for `serverUrl`; reused while the URL is unchanged.
     ///   - localStateReset: whether `client` discarded the local database when it was opened.
+    ///   - keepServerUrl: `ClientConfig.keepServerUrl` of the clients it creates (`KeepServer.resolvedUrl`).
     public init(
         factory: any GimClientFactory,
         hooks: any PlatformHooks,
@@ -231,18 +233,21 @@ public final class OnboardingViewModel {
         serverUrl: String = "",
         client: (any GimClientAPI)? = nil,
         localStateReset: Bool = false,
+        keepServerUrl: String? = nil,
         onRegistered: @escaping @MainActor (Registration) -> Void
     ) {
         self.factory = factory
         self.hooks = hooks
         self.recoveryKit = recoveryKit
+        self.keepServerUrl = keepServerUrl
         self.serverUrl = serverUrl
         self.onRegistered = onRegistered
         showsLocalStateResetNotice = localStateReset
         showsServerField = OnboardingValidation.serverUrlError(serverUrl) != nil
         if let client {
             self.client = client
-            clientConfig = ClientConfig(serverUrl: OnboardingValidation.normalizedServerUrl(serverUrl))
+            clientConfig = ClientConfig(
+                serverUrl: OnboardingValidation.normalizedServerUrl(serverUrl), keepServerUrl: keepServerUrl)
         }
     }
 
@@ -272,7 +277,8 @@ public final class OnboardingViewModel {
             showsServerField = true
             return
         }
-        let config = ClientConfig(serverUrl: OnboardingValidation.normalizedServerUrl(serverUrl))
+        let config = ClientConfig(
+            serverUrl: OnboardingValidation.normalizedServerUrl(serverUrl), keepServerUrl: keepServerUrl)
         let context = OnboardingContext(
             config: config,
             client: { [weak self] in

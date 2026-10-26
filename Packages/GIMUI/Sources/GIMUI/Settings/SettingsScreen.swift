@@ -5,8 +5,8 @@ import PhotosUI
 import SwiftUI
 import UIKit
 
-/// The root of the Settings stack: profile, devices, privacy, notifications, appearance, language, servers, help,
-/// sign-out and account deletion.
+/// The root of the Settings stack: profile, devices, privacy, notifications, appearance, language, servers, keep
+/// server, help, sign-out and account deletion.
 struct SettingsScreen: View {
     let client: any GimClientAPI
     let session: Session?
@@ -14,6 +14,7 @@ struct SettingsScreen: View {
     let refreshSession: @MainActor () async -> Void
     let signOut: () async -> String?
     let deleteAccount: () async -> String?
+    let makeKeepServer: @MainActor () -> KeepServerViewModel
 
     @Environment(\.dismiss) private var dismiss
     @AppStorage(AppearanceSetting.defaultsKey) private var appearanceRaw = AppearanceSetting.system.rawValue
@@ -35,13 +36,15 @@ struct SettingsScreen: View {
 
     init(
         client: any GimClientAPI, session: Session?, refreshSession: @escaping @MainActor () async -> Void,
-        signOut: @escaping () async -> String?, deleteAccount: @escaping () async -> String?
+        signOut: @escaping () async -> String?, deleteAccount: @escaping () async -> String?,
+        makeKeepServer: @escaping @MainActor () -> KeepServerViewModel
     ) {
         self.client = client
         self.session = session
         self.refreshSession = refreshSession
         self.signOut = signOut
         self.deleteAccount = deleteAccount
+        self.makeKeepServer = makeKeepServer
         _profile = State(initialValue: ProfileViewModel(client: client, onChanged: refreshSession))
         _profilePhoto = State(
             initialValue: ProfilePhotoViewModel(
@@ -107,8 +110,18 @@ struct SettingsScreen: View {
                     Text("Servers", tableName: "Settings", bundle: .module)
                 }
                 .accessibilityIdentifier("settings.hubs")
+                NavigationLink {
+                    KeepServerScreen(model: makeKeepServer())
+                } label: {
+                    Text("Keep server", tableName: "Settings", bundle: .module)
+                }
+                .accessibilityIdentifier("settings.keepServer")
             } header: {
                 Text("Advanced", tableName: "Settings", bundle: .module)
+            } footer: {
+                Text(
+                    "The keep server backs up your privacy settings and receives reports. Your data is encrypted.",
+                    tableName: "Settings", bundle: .module)
             }
             helpSection
             signOutSection

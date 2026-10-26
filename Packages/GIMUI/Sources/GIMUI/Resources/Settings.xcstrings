@@ -57,6 +57,34 @@
         }
       }
     },
+    "Address" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Address"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dirección"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "地址"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "位址"
+          }
+        }
+      }
+    },
     "Advanced" : {
       "localizations" : {
         "en" : {
@@ -141,6 +169,34 @@
         }
       }
     },
+    "Backs up your privacy settings and receives reports. Your data is encrypted." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Backs up your privacy settings and receives reports. Your data is encrypted."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guarda una copia de tus ajustes de privacidad y recibe los reportes. Tus datos están cifrados."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "备份你的隐私设置并接收举报。你的数据经过加密。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "備份你的隱私權設定並接收檢舉。你的資料經過加密。"
+          }
+        }
+      }
+    },
     "Blocked people" : {
       "localizations" : {
         "en" : {
@@ -193,6 +249,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "變更使用者名稱"
+          }
+        }
+      }
+    },
+    "Changes apply the next time you open gim." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Changes apply the next time you open gim."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los cambios se aplican la próxima vez que abras gim."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更改将在你下次打开 gim 时生效。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "變更會在你下次開啟 gim 時生效。"
           }
         }
       }
@@ -669,6 +753,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "說明和關於"
+          }
+        }
+      }
+    },
+    "Keep server" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep server"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Servidor Keep"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep 服务器"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep 伺服器"
           }
         }
       }
@@ -1429,6 +1541,34 @@
         }
       }
     },
+    "The keep server backs up your privacy settings and receives reports. Your data is encrypted." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The keep server backs up your privacy settings and receives reports. Your data is encrypted."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El servidor Keep guarda una copia de tus ajustes de privacidad y recibe los reportes. Tus datos están cifrados."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep 服务器会备份你的隐私设置并接收举报。你的数据经过加密。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep 伺服器會備份你的隱私權設定並接收檢舉。你的資料經過加密。"
+          }
+        }
+      }
+    },
     "Theme" : {
       "localizations" : {
         "en" : {
@@ -1569,6 +1709,34 @@
         }
       }
     },
+    "Use a keep server" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use a keep server"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usar un servidor Keep"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用 Keep 服务器"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用 Keep 伺服器"
+          }
+        }
+      }
+    },
     "Use at most 64 characters." : {
       "localizations" : {
         "en" : {
@@ -1593,6 +1761,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "最多 64 個字元。"
+          }
+        }
+      }
+    },
+    "Use the default keep server" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use the default keep server"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usar el servidor Keep predeterminado"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用默认 Keep 服务器"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用預設 Keep 伺服器"
           }
         }
       }

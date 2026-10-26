@@ -224,6 +224,34 @@
           }
         }
       }
+    },
+    "Use an https:// address. http:// only works on your local network." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use an https:// address. http:// only works on your local network."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usa una dirección https://. http:// solo funciona en tu red local."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请使用 https:// 地址。http:// 仅适用于你的本地网络。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請使用 https:// 位址。http:// 僅適用於你的區域網路。"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

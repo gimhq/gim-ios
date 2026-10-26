@@ -34,7 +34,8 @@ public struct RootView: View {
                 SignedInView(
                     client: client, session: model.session,
                     refreshSession: { await model.refreshSession() }, signOut: { await model.signOut() },
-                    deleteAccount: { await model.deleteAccount() })
+                    deleteAccount: { await model.deleteAccount() },
+                    makeKeepServer: { model.makeKeepServerViewModel() })
             }
         }
         .preferredColorScheme(appearance.colorScheme)
@@ -96,6 +97,7 @@ private struct SignedInView: View {
     let refreshSession: @MainActor () async -> Void
     let signOut: () async -> String?
     let deleteAccount: () async -> String?
+    let makeKeepServer: @MainActor () -> KeepServerViewModel
 
     @State private var path: [String] = []
     @State private var drafts = ComposerDrafts()
@@ -104,13 +106,14 @@ private struct SignedInView: View {
     init(
         client: any GimClientAPI, session: Session?,
         refreshSession: @escaping @MainActor () async -> Void, signOut: @escaping () async -> String?,
-        deleteAccount: @escaping () async -> String?
+        deleteAccount: @escaping () async -> String?, makeKeepServer: @escaping @MainActor () -> KeepServerViewModel
     ) {
         self.client = client
         self.session = session
         self.refreshSession = refreshSession
         self.signOut = signOut
         self.deleteAccount = deleteAccount
+        self.makeKeepServer = makeKeepServer
     }
 
     var body: some View {
@@ -127,7 +130,7 @@ private struct SignedInView: View {
             NavigationStack {
                 SettingsScreen(
                     client: client, session: session, refreshSession: refreshSession, signOut: signOut,
-                    deleteAccount: deleteAccount)
+                    deleteAccount: deleteAccount, makeKeepServer: makeKeepServer)
             }
         }
     }

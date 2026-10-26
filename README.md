@@ -49,6 +49,16 @@ Onboarding pre-fills the last used server, else the `-GIMDefaultServerURL <url>`
 built-in `https://hub.g.im`. That hub is not deployed yet: it is only pre-filled, nothing probes it, and the tests
 always pass explicit hub URLs.
 
+## Keep server
+
+The keep server (gim-keep) backs up the privacy settings, encrypted, and receives reports. Each new client gets
+`ClientConfig.keepServerUrl` from `KeepServer.resolvedUrl` (GIMFeatures): the choice in Settings → Keep server
+(stored per account in the App Group's `UserDefaults`, forgotten on sign-out), else the
+`-GIMDefaultKeepServerURL <url|off>` launch argument, else the `GIM_DEFAULT_KEEP_SERVER_URL` build setting, else the
+built-in `https://keep.g.im`. `off` means no keep server. A change applies to the next client, so after reopening the
+app. keep.g.im is not deployed yet: without a reachable keep server, privacy backups only fail in gim-core's log. The
+UI tests launch with `-GIMDefaultKeepServerURL off`, and the Notification Service Extension uses no keep server.
+
 ## Push
 
 There is no APNs or FCM yet. Pushes travel hub webhook → gim-push-mock → a helper on the Mac → `xcrun simctl push`

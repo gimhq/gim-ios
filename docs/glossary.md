@@ -25,6 +25,7 @@ These words name the chat actions and the account safety settings. The code name
 
 | User-facing word | What it means |
 |---|---|
+| Keep server | The server that backs up your privacy settings (encrypted) and receives reports. On by default; Settings → Keep server changes or turns it off. |
 | Pin / Unpin | Keep a chat at the top of the list, or stop keeping it there. |
 | Pinned | This chat stays at the top of the list. |
 | Mute / Unmute | Stop or restart notifications for a chat. |
@@ -123,6 +124,7 @@ usage, Spanish uses neutral informal tú, and the product name is never translat
 | Privacy | 隐私 | 隱私權 | Privacidad |
 | Create a new recovery key / Create new key | 创建新的恢复密钥 / 创建新密钥 | 建立新的復原金鑰 / 建立新金鑰 | Crear una nueva clave de recuperación / Crear nueva clave |
 | Delete account | 删除账号 | 刪除帳號 | Eliminar cuenta |
+| Keep server | Keep 服务器 | Keep 伺服器 | servidor Keep |
 | DELETE (typed to confirm) | 删除 | 刪除 | ELIMINAR |
 
 New strings get all four languages in the same change; the catalog completeness tests fail otherwise.

@@ -29,8 +29,8 @@ final class LocalizedScreensFakeTests: E2ETestCase {
         let app = XCUIApplication()
         // The host simulator's language is not English, so every launch names its language.
         app.launchArguments = [
-            "-GIMUseFakeCore", "YES", "-GIMDefaultServerURL", serverUrl, "-AppleLanguages", "(\(language))",
-            "-AppleLocale", locale,
+            "-GIMUseFakeCore", "YES", "-GIMDefaultServerURL", serverUrl, "-GIMDefaultKeepServerURL", "off",
+            "-AppleLanguages", "(\(language))", "-AppleLocale", locale,
         ]
         app.launch()
         try signOutIfSignedIn(language, app)

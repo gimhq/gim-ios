@@ -19,11 +19,13 @@ class E2ETestCase: XCTestCase {
     @MainActor
     var springboard: XCUIApplication { XCUIApplication(bundleIdentifier: "com.apple.springboard") }
 
-    /// Launches the app in English with `serverUrl` as the default server and signs out a leftover session, so
-    /// onboarding is in front. Every UI test launches through here, after setting its own launch arguments.
+    /// Launches the app in English with `serverUrl` as the default server and no keep server (tests never reach
+    /// keep.g.im), and signs out a leftover session, so onboarding is in front. Every UI test launches through here,
+    /// after setting its own launch arguments.
     @MainActor
     func launchToOnboarding(_ app: XCUIApplication, _ step: String) throws {
-        app.launchArguments += ["-GIMDefaultServerURL", serverUrl] + Self.localeArguments
+        app.launchArguments +=
+            ["-GIMDefaultServerURL", serverUrl, "-GIMDefaultKeepServerURL", "off"] + Self.localeArguments
         app.launch()
         try signOutIfNeeded(app)
         try expectOnboarding(app, step)

@@ -9,7 +9,9 @@ import SwiftUI
 ///
 /// The server URL is part of `ClientConfig`, so the client is created for the last used server (stored in
 /// `defaults`, the App Group's by default, where the Notification Service Extension reads it too) or by onboarding for
-/// the URL the user types. Sync runs while the scene is active. Signing out drops
+/// the URL the user types. Each client gets the keep server from `KeepServer.resolvedUrl` (the Settings choice over
+/// the `KeepServer.defaultUrlKey` launch argument, the bundled default and `KeepServer.builtInUrl`); signing out
+/// forgets the choice. Sync runs while the scene is active. Signing out drops
 /// the client; onboarding creates a new one. Every client created through the factory gets the system time zone
 /// for its date separators (`TimeZoneMonitor`), also when it changes.
 @MainActor
@@ -35,6 +37,8 @@ public final class AppModel {
     public private(set) var session: Session?
     /// Server of the signed-in client.
     public private(set) var serverUrl: String?
+    /// Keep server of the signed-in client; `nil` is none.
+    public private(set) var keepServerUrl: String?
     /// Set when the platform hooks, the client (e.g. the keystore is locked) or the session could not be read while
     /// launching.
     public private(set) var launchError: String?
@@ -45,6 +49,7 @@ public final class AppModel {
     private let factory: any GimClientFactory
     private let defaults: UserDefaults
     private let bundledServerUrl: String?
+    private let bundledKeepServerUrl: String?
     private let makeHooks: @MainActor () throws -> any PlatformHooks
     private let signedIn: @MainActor (any GimClientAPI) async -> Void
     @ObservationIgnored private var hooks: (any PlatformHooks)?
@@ -57,6 +62,7 @@ public final class AppModel {
     ///     that every client it makes is attached to `timeZones`.
     ///   - defaults: remembers the last server URL; its argument domain may hold `defaultServerUrlKey`.
     ///   - bundledServerUrl: the Info.plist `defaultServerUrlKey` value.
+    ///   - bundledKeepServerUrl: the Info.plist `KeepServer.defaultUrlKey` value.
     ///   - makeHooks: builds the platform hooks handed to the factory (once per process).
     ///   - timeZones: sets the system time zone on each new client and on time zone changes.
     ///   - signedIn: called with the client after each sign-in and at launch when signed in, e.g.
@@ -65,6 +71,7 @@ public final class AppModel {
         factory: any GimClientFactory = AppModel.defaultFactory(),
         defaults: UserDefaults = AppGroup.defaults,
         bundledServerUrl: String? = Bundle.main.object(forInfoDictionaryKey: AppModel.defaultServerUrlKey) as? String,
+        bundledKeepServerUrl: String? = Bundle.main.object(forInfoDictionaryKey: KeepServer.defaultUrlKey) as? String,
         makeHooks: @escaping @MainActor () throws -> any PlatformHooks = AppModel.defaultHooks,
         timeZones: TimeZoneMonitor = TimeZoneMonitor(),
         signedIn: @escaping @MainActor (any GimClientAPI) async -> Void = { _ in }
@@ -72,6 +79,7 @@ public final class AppModel {
         self.factory = TimeZoneAttachingFactory(base: factory, timeZones: timeZones)
         self.defaults = defaults
         self.bundledServerUrl = bundledServerUrl
+        self.bundledKeepServerUrl = bundledKeepServerUrl
         self.makeHooks = makeHooks
         self.signedIn = signedIn
         #if DEBUG
@@ -109,7 +117,7 @@ public final class AppModel {
                 showOnboarding(hooks: hooks, serverUrl: defaultServerUrl(stored: nil), client: nil)
                 return
             }
-            let config = ClientConfig(serverUrl: url)
+            let config = ClientConfig(serverUrl: url, keepServerUrl: resolvedKeepServerUrl())
             let client: any GimClientAPI
             do {
                 client = try await factory.make(config: config, hooks: hooks)
@@ -183,6 +191,13 @@ public final class AppModel {
         return wipeAndShowOnboarding(hooks: hooks)
     }
 
+    /// The Keep server settings screen for the running client.
+    public func makeKeepServerViewModel() -> KeepServerViewModel {
+        KeepServerViewModel(
+            defaults: defaults, defaultUrl: KeepServer.defaultUrl(defaults: defaults, bundled: bundledKeepServerUrl),
+            activeUrl: keepServerUrl)
+    }
+
     /// Re-reads the session, e.g. after claiming a handle in Settings.
     public func refreshSession() async {
         guard let client, let session = try? await client.session(), client === self.client else { return }
@@ -202,6 +217,9 @@ public final class AppModel {
         client = nil
         isSyncing = false
         session = nil
+        keepServerUrl = nil
+        // The keep server choice belongs to the account; the next one starts with the default.
+        KeepServer.store(.automatic, in: defaults)
         showOnboarding(hooks: hooks, serverUrl: defaultServerUrl(stored: serverUrl), client: nil)
         serverUrl = nil
         return wipeError
@@ -210,6 +228,10 @@ public final class AppModel {
     private func defaultServerUrl(stored: String?) -> String {
         OnboardingValidation.defaultServerUrl(
             stored: stored, argument: defaults.string(forKey: Self.defaultServerUrlKey), bundled: bundledServerUrl)
+    }
+
+    private func resolvedKeepServerUrl() -> String? {
+        KeepServer.resolvedUrl(defaults: defaults, bundled: bundledKeepServerUrl)
     }
 
     private func existingOrNewHooks() throws -> any PlatformHooks {
@@ -224,7 +246,7 @@ public final class AppModel {
     ) {
         onboarding = OnboardingViewModel(
             factory: factory, hooks: hooks, recoveryKit: CoreRecoveryKitFunctions(), serverUrl: serverUrl,
-            client: client, localStateReset: localStateReset
+            client: client, localStateReset: localStateReset, keepServerUrl: resolvedKeepServerUrl()
         ) { [weak self] registration in
             self?.showReady(registration.client, config: registration.config, session: registration.session)
         }
@@ -236,6 +258,7 @@ public final class AppModel {
         (hooks as? AppPlatformHooks)?.reachability.attach(client)
         defaults.set(config.serverUrl, forKey: Self.serverUrlKey)
         serverUrl = config.serverUrl
+        keepServerUrl = config.keepServerUrl
         self.session = session
         onboarding = nil
         phase = .ready(client)
