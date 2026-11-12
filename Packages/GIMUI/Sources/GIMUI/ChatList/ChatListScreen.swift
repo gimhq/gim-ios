@@ -127,7 +127,9 @@ public struct ChatListScreen: View {
                     String(localized: "No chats yet", table: "Chat", bundle: .module),
                     systemImage: "bubble.left.and.bubble.right")
             } description: {
-                Text("Start a chat. Search for a friend's username.", tableName: "Chat", bundle: .module)
+                Text(
+                    "Start a chat. Scan a friend's QR code or paste their Account ID.", tableName: "Chat",
+                    bundle: .module)
             } actions: {
                 Button(String(localized: "Start a chat", table: "Chat", bundle: .module)) { showsNewChat = true }
                     .buttonStyle(.borderedProminent)

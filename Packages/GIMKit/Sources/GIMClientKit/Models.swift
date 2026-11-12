@@ -106,14 +106,11 @@ public struct NotificationContent: Sendable, Hashable {
 public struct Session: Sendable, Hashable {
     public var userId: String
     public var deviceId: String
-    /// Empty until `claimHandle`.
-    public var handle: String
     public var displayName: String
 
-    public init(userId: String, deviceId: String, handle: String, displayName: String) {
+    public init(userId: String, deviceId: String, displayName: String) {
         self.userId = userId
         self.deviceId = deviceId
-        self.handle = handle
         self.displayName = displayName
     }
 }
@@ -121,14 +118,12 @@ public struct Session: Sendable, Hashable {
 /// Public profile of a user.
 public struct UserProfile: Sendable, Hashable {
     public var userId: String
-    public var handle: String
     public var displayName: String
     /// The user has a profile photo; get it with `fetchUserAvatar`.
     public var hasAvatar: Bool
 
-    public init(userId: String, handle: String, displayName: String, hasAvatar: Bool = false) {
+    public init(userId: String, displayName: String, hasAvatar: Bool = false) {
         self.userId = userId
-        self.handle = handle
         self.displayName = displayName
         self.hasAvatar = hasAvatar
     }
@@ -249,8 +244,12 @@ public struct ChatSummary: Sendable, Hashable {
     /// Where this device stands in the chat; read from local state, so it is right from the first callback after a
     /// restart.
     public var state: ChatState
-    /// For a direct chat: the other user. Show their photo (`fetchUserAvatar`) when the chat has no avatar.
+    /// For a direct chat: the other user, or the signed-in user for the note to self. Show their photo
+    /// (`fetchUserAvatar`) when the chat has no avatar.
     public var peer: UserProfile?
+    /// The note to self: the direct chat with yourself, shared by the user's own devices only (`peer` is the own
+    /// profile, `blocked` is false). `createDirectChat(userId:)` with the own user id creates or returns it.
+    public var isNoteToSelf: Bool
     /// Notifications are muted until then (Unix milliseconds; 0: not muted, `mutedForever()`: until unmuted). Compare
     /// with the current time.
     public var mutedUntilMs: UInt64
@@ -264,7 +263,8 @@ public struct ChatSummary: Sendable, Hashable {
     public init(
         chatId: String, kind: ChatKind, name: String, avatar: MediaRef?, lastMessage: MessagePreview?,
         unreadCount: UInt32, updatedAtMs: UInt64, memberCount: UInt32, state: ChatState, peer: UserProfile? = nil,
-        mutedUntilMs: UInt64 = 0, pinned: Bool = false, archived: Bool = false, blocked: Bool = false
+        isNoteToSelf: Bool = false, mutedUntilMs: UInt64 = 0, pinned: Bool = false, archived: Bool = false,
+        blocked: Bool = false
     ) {
         self.chatId = chatId
         self.kind = kind
@@ -276,6 +276,7 @@ public struct ChatSummary: Sendable, Hashable {
         self.memberCount = memberCount
         self.state = state
         self.peer = peer
+        self.isNoteToSelf = isNoteToSelf
         self.mutedUntilMs = mutedUntilMs
         self.pinned = pinned
         self.archived = archived

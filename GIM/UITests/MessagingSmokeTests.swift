@@ -114,15 +114,15 @@ final class MessagingSmokeTests: E2ETestCase {
             // Each reader first waits until it has the app's newest message (the reply), so the read receipt
             // covers it; gim-core's markRead marks the whole chat read and queues the receipt for sync to send.
             for reader in [peer, bystander] {
-                let handle = reader.session.displayName
-                _ = try eventually("step g: \(handle) has joined the group", app) { reader.chatId(named: groupName) }
-                let target = try eventually("step g: \(handle) has the app's reply", app) {
+                let name = reader.session.displayName
+                _ = try eventually("step g: \(name) has joined the group", app) { reader.chatId(named: groupName) }
+                let target = try eventually("step g: \(name) has the app's reply", app) {
                     try await reader.messages(in: chatId).last {
                         $0.sender.userId != reader.session.userId && $0.text == replyText
                     }
                 }
-                print("[e2e] step g: \(handle) marks read up to \(target.messageId) (\"\(replyText)\")")
-                try waitForPeer("step g: \(handle) marks read", app) {
+                print("[e2e] step g: \(name) marks read up to \(target.messageId) (\"\(replyText)\")")
+                try waitForPeer("step g: \(name) marks read", app) {
                     try await reader.markRead(chatId: chatId, upToMessageId: target.messageId)
                 }
             }

@@ -13,7 +13,7 @@ final class DiffApplierTests: XCTestCase {
     private func message(_ id: String) -> TimelineItem {
         .message(
             item: MessageItem(
-                messageId: id, chatId: "c", sender: UserProfile(userId: "u", handle: "u", displayName: "U"),
+                messageId: id, chatId: "c", sender: UserProfile(userId: "u", displayName: "U"),
                 isOwn: false, sentAtMs: 0, content: .text(body: id), replyTo: nil, reactions: [], edited: false,
                 sendState: nil))
     }

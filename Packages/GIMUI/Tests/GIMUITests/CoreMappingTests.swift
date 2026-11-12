@@ -28,10 +28,10 @@ final class CoreMappingTests: XCTestCase {
 
     func testChatSummaryMapsTheAccountSafetyFields() {
         let peer = GIMCore.UserProfile(
-            userId: "user-sofia", handle: "sofia", displayName: "Sofia Marin", hasAvatar: true)
+            userId: "user-sofia", displayName: "Sofia Marin", hasAvatar: true)
         let core = GIMCore.ChatSummary(
             chatId: "chat-sofia", kind: .direct, name: "Sofia Marin", avatar: nil, lastMessage: nil, unreadCount: 2,
-            updatedAtMs: 1_790_000_000_000, memberCount: 2, state: .active, peer: peer,
+            updatedAtMs: 1_790_000_000_000, memberCount: 2, state: .active, peer: peer, isNoteToSelf: false,
             mutedUntilMs: GIMCore.mutedForever(), pinned: true, archived: true, blocked: true)
         XCTAssertEqual(
             GIMClientKit.ChatSummary(core),
@@ -39,16 +39,27 @@ final class CoreMappingTests: XCTestCase {
                 chatId: "chat-sofia", kind: .direct, name: "Sofia Marin", avatar: nil, lastMessage: nil, unreadCount: 2,
                 updatedAtMs: 1_790_000_000_000, memberCount: 2, state: .active,
                 peer: GIMClientKit.UserProfile(
-                    userId: "user-sofia", handle: "sofia", displayName: "Sofia Marin", hasAvatar: true),
+                    userId: "user-sofia", displayName: "Sofia Marin", hasAvatar: true),
                 mutedUntilMs: GIMClientKit.mutedForever(), pinned: true, archived: true, blocked: true))
         let group = GIMCore.ChatSummary(
             chatId: "chat-crew", kind: .group, name: "Aegean Crew", avatar: nil, lastMessage: nil, unreadCount: 0,
-            updatedAtMs: 1_790_000_000_000, memberCount: 4, state: .active, peer: nil, mutedUntilMs: 0, pinned: false,
-            archived: false, blocked: false)
+            updatedAtMs: 1_790_000_000_000, memberCount: 4, state: .active, peer: nil, isNoteToSelf: false,
+            mutedUntilMs: 0, pinned: false, archived: false, blocked: false)
         let mapped = GIMClientKit.ChatSummary(group)
         XCTAssertNil(mapped.peer)
         XCTAssertEqual(mapped.mutedUntilMs, 0)
-        XCTAssertFalse(mapped.pinned || mapped.archived || mapped.blocked)
+        XCTAssertFalse(mapped.pinned || mapped.archived || mapped.blocked || mapped.isNoteToSelf)
+    }
+
+    func testChatSummaryMapsTheNoteToSelf() {
+        let me = GIMCore.UserProfile(userId: "user-alex", displayName: "Alex", hasAvatar: false)
+        let core = GIMCore.ChatSummary(
+            chatId: "chat-note", kind: .direct, name: "Alex", avatar: nil, lastMessage: nil, unreadCount: 0,
+            updatedAtMs: 1_790_000_000_000, memberCount: 1, state: .active, peer: me, isNoteToSelf: true,
+            mutedUntilMs: 0, pinned: false, archived: false, blocked: false)
+        let mapped = GIMClientKit.ChatSummary(core)
+        XCTAssertTrue(mapped.isNoteToSelf)
+        XCTAssertEqual(mapped.peer, GIMClientKit.UserProfile(userId: "user-alex", displayName: "Alex"))
     }
 
     func testMutedForeverMatchesGimCore() {

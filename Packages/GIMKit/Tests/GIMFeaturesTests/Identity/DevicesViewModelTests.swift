@@ -4,7 +4,7 @@ import GIMFeatures
 import XCTest
 
 final class DevicesViewModelTests: XCTestCase {
-    private let session = Session(userId: "user-sofia", deviceId: "device-phone", handle: "", displayName: "Sofia")
+    private let session = Session(userId: "user-sofia", deviceId: "device-phone", displayName: "Sofia")
 
     @MainActor
     func testLoadListsThisDeviceFirstAndExposesTheUserId() async {

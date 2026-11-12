@@ -31,7 +31,7 @@ extension FakeGimClient {
         }
         let me = FakeDemoData.me
         var seed = FakeDemoData.seed(me: me, dataDirectory: dataDirectory, now: now())
-        seed.session = Session(userId: me.userId, deviceId: "device-1", handle: me.handle, displayName: me.displayName)
+        seed.session = Session(userId: me.userId, deviceId: "device-1", displayName: me.displayName)
         return FakeGimClient(options: options, seed: seed, seedsDemoOnRegister: false)
     }
 }
@@ -46,12 +46,12 @@ enum FakeDemoData {
     ]
 
     /// The demo user (`FakeGimClient.demoSelfId`).
-    static let me = UserProfile(userId: FakeGimClient.demoSelfId, handle: "alex", displayName: "Alex Morgan")
+    static let me = UserProfile(userId: FakeGimClient.demoSelfId, displayName: "Alex Morgan")
 
     static let peers = [
-        UserProfile(userId: "user-sofia", handle: "sofia", displayName: "Sofia Marin"),
-        UserProfile(userId: "user-luca", handle: "luca", displayName: "Luca Bianchi"),
-        UserProfile(userId: "user-nikos", handle: "nikos", displayName: "Nikos Papadopoulos"),
+        UserProfile(userId: "user-sofia", displayName: "Sofia Marin"),
+        UserProfile(userId: "user-luca", displayName: "Luca Bianchi"),
+        UserProfile(userId: "user-nikos", displayName: "Nikos Papadopoulos"),
     ]
 
     private static let lines = [

@@ -91,17 +91,16 @@ final class FakeGimClientTests: XCTestCase {
 
     // MARK: - Account
 
-    func testCreateIdentityAndClaimHandleMoveFromNoSessionToSession() async throws {
+    func testCreateIdentityMovesFromNoSessionToSession() async throws {
         let client = FakeGimClient(
             scheduler: scheduler, dataDirectory: try makeTemporaryDirectory(),
-            users: [UserProfile(userId: "user-sofia", handle: "sofia", displayName: "Sofia")])
+            users: [UserProfile(userId: "user-sofia", displayName: "Sofia")])
         let initial = try await client.session()
         XCTAssertNil(initial)
         XCTAssertNil(client.userId())
         XCTAssertFalse(client.localStateReset())
-        await assertThrows(.NotRegistered) { try await client.findUser(handle: "sofia") }
         await assertThrows(.NotRegistered) { try await client.startSync() }
-        await assertThrows(.NotRegistered) { try await client.claimHandle(handle: "kai") }
+        XCTAssertThrowsError(try client.recoveryCode())
         await assertThrows(.InvalidInput(reason: "Display name is required")) {
             try await client.createIdentity(displayName: " ")
         }
@@ -109,24 +108,8 @@ final class FakeGimClientTests: XCTestCase {
         _ = try await client.createIdentity(displayName: " Kai ")
         let createdValue = try await client.session()
         let created = try XCTUnwrap(createdValue)
-        XCTAssertEqual(created.handle, "")
-        XCTAssertEqual(created.displayName, "Kai")
+        XCTAssertEqual(created, Session(userId: created.userId, deviceId: "device-1", displayName: "Kai"))
         XCTAssertEqual(client.userId(), created.userId)
-        await assertThrows(.Server(status: 409, reason: "Handle is already taken")) {
-            try await client.claimHandle(handle: "Sofia")
-        }
-        await assertThrows(.InvalidInput(reason: "Handle must not be empty or contain spaces")) {
-            try await client.claimHandle(handle: "k ai")
-        }
-
-        try await client.claimHandle(handle: " Kai ")
-        let stored = try await client.session()
-        XCTAssertEqual(
-            stored, Session(userId: created.userId, deviceId: "device-1", handle: "kai", displayName: "Kai"))
-        let found = try await client.findUser(handle: "sofia")
-        XCTAssertEqual(found?.displayName, "Sofia")
-        let me = try await client.findUser(handle: "kai")
-        XCTAssertEqual(me?.userId, created.userId)
         await assertThrows(.InvalidInput(reason: "This device already has an identity")) {
             try await client.createIdentity(displayName: "Kai")
         }
@@ -147,9 +130,6 @@ final class FakeGimClientTests: XCTestCase {
         XCTAssertEqual(members.map(\.userId), [session.userId, "user-sofia", "user-luca", "user-nikos"])
         let (_, timeline) = try await subscribeTimeline(client, group)
         XCTAssertEqual(timeline.messages.filter(\.isOwn).map(\.sender.displayName), ["Kai Weber"])
-        await assertThrows(.Server(status: 409, reason: "Handle is already taken")) {
-            try await client.claimHandle(handle: "sofia")
-        }
     }
 
     func testSignOutClearsListsAndStopsSync() async throws {
@@ -183,14 +163,36 @@ final class FakeGimClientTests: XCTestCase {
         XCTAssertNil(session)
     }
 
+    // MARK: - Note to self
+
+    func testCreateDirectChatWithYourselfCreatesTheNoteToSelfOnce() async throws {
+        let client = try await makeDemo()
+        let list = try await subscribeChatList(client)
+        let me = try XCTUnwrap(client.userId())
+
+        let note = try await client.createDirectChat(userId: me)
+        let again = try await client.createDirectChat(userId: me)
+
+        XCTAssertEqual(again, note)
+        let summary = try XCTUnwrap(list.items.first { $0.chatId == note })
+        XCTAssertTrue(summary.isNoteToSelf)
+        XCTAssertEqual(summary.kind, .direct)
+        XCTAssertEqual(summary.peer?.userId, me)
+        XCTAssertEqual(summary.memberCount, 1)
+        XCTAssertFalse(summary.blocked)
+        XCTAssertFalse(try XCTUnwrap(list.items.first { $0.chatId == direct }).isNoteToSelf)
+        let sofia = try await client.createDirectChat(userId: "user-sofia")
+        XCTAssertEqual(sofia, direct, "the chat with Sofia is not the note to self")
+        await assertThrows(.InvalidInput(reason: "Members can only be added to groups")) {
+            try await client.addMembers(chatId: note, userIds: ["user-luca"])
+        }
+        _ = try await client.sendText(chatId: note, body: "Buy milk", replyTo: nil)
+    }
+
     // MARK: - Demo seed and listeners
 
     func testDemoSeed() async throws {
         let client = try await makeDemo()
-        for handle in ["sofia", "luca", "nikos"] {
-            let user = try await client.findUser(handle: handle)
-            XCTAssertNotNil(user, handle)
-        }
 
         let list = try await subscribeChatList(client)
         XCTAssertEqual(list.events.count, 1)
@@ -218,7 +220,8 @@ final class FakeGimClientTests: XCTestCase {
         XCTAssertTrue(messages.filter { !$0.isOwn }.allSatisfy { $0.sendState == nil })
 
         let members = try await client.chatMembers(chatId: group)
-        XCTAssertEqual(members.map(\.handle), ["alex", "sofia", "luca", "nikos"])
+        XCTAssertEqual(
+            members.map(\.displayName), ["Alex Morgan", "Sofia Marin", "Luca Bianchi", "Nikos Papadopoulos"])
     }
 
     func testTimelineHasADateSeparatorAtTheStartOfEachLocalDay() async throws {
@@ -248,7 +251,7 @@ final class FakeGimClientTests: XCTestCase {
         let clock = clock
         let client = FakeGimClient(
             scheduler: scheduler, dataDirectory: try makeTemporaryDirectory(), now: { clock.now },
-            session: Session(userId: "user-kai", deviceId: "device-1", handle: "kai", displayName: "Kai"))
+            session: Session(userId: "user-kai", deviceId: "device-1", displayName: "Kai"))
         let chat = try await client.createGroupChat(name: "Watch", memberUserIds: [])
         let (_, timeline) = try await subscribeTimeline(client, chat)
         // 22:30 UTC on the 20th and 01:30 UTC on the 21st.
@@ -721,7 +724,7 @@ final class FakeGimClientTests: XCTestCase {
             .membershipChange(
                 userName: "Luca Bianchi", change: .removed, atMs: atMs, userId: "user-luca", actorUserId: me))
         let members = try await client.chatMembers(chatId: chat)
-        XCTAssertEqual(members.map(\.handle), ["alex", "nikos", "sofia"])
+        XCTAssertEqual(members.map(\.userId), ["user-alex", "user-nikos", "user-sofia"])
 
         await assertThrows(.InvalidInput(reason: "Members can only be added to groups")) {
             try await client.addMembers(chatId: self.direct, userIds: ["user-luca"])
@@ -745,7 +748,7 @@ final class FakeGimClientTests: XCTestCase {
 
     func testUnknownAndDevicelessInviteesAreSkipped() async throws {
         let client = try await makeDemo()
-        await client.addRemoteUser(UserProfile(userId: "user-kai", handle: "kai", displayName: "Kai"), hasDevice: false)
+        await client.addRemoteUser(UserProfile(userId: "user-kai", displayName: "Kai"), hasDevice: false)
         await assertThrows(.NotFound(reason: "user user-kai has no device")) {
             try await client.createDirectChat(userId: "user-kai")
         }
@@ -782,17 +785,15 @@ final class FakeGimClientTests: XCTestCase {
         XCTAssertEqual(members.map(\.userId), [FakeGimClient.demoSelfId, "user-luca", "user-nikos"])
     }
 
-    func testRemoteUserWithoutHandle() async throws {
+    func testRemoteUserAddedToTheDirectory() async throws {
         let client = try await makeDemo()
-        let marta = UserProfile(userId: "user-marta", handle: "", displayName: "Marta")
+        let marta = UserProfile(userId: "user-marta", displayName: "Marta")
         await client.addRemoteUser(marta)
 
         try await client.addMembers(chatId: group, userIds: [marta.userId])
 
         let members = try await client.chatMembers(chatId: group)
         XCTAssertEqual(members.last, marta)
-        let found = try await client.findUser(handle: " ")
-        XCTAssertNil(found)
     }
 
     func testFetchMediaFailsOnceWhenInjected() async throws {
@@ -1163,7 +1164,7 @@ final class FakeGimClientTests: XCTestCase {
         await assertThrows(.ContactNotAdmitted(userIds: ["user-nikos"])) {
             try await client.addMembers(chatId: chat, userIds: ["user-nikos"])
         }
-        await client.addRemoteUser(UserProfile(userId: "user-kai", handle: "kai", displayName: "Kai"))
+        await client.addRemoteUser(UserProfile(userId: "user-kai", displayName: "Kai"))
         try await client.addMembers(chatId: chat, userIds: ["user-nikos", "user-kai"])
         members = try await client.chatMembers(chatId: chat)
         XCTAssertEqual(members.map(\.userId), [FakeGimClient.demoSelfId, "user-sofia", "user-kai"])

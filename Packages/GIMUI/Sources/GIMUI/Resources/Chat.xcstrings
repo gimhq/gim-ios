@@ -1385,30 +1385,30 @@
         }
       }
     },
-    "Start a chat. Search for a friend's username." : {
+    "Start a chat. Scan a friend's QR code or paste their Account ID." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Start a chat. Search for a friend's username."
+            "value" : "Start a chat. Scan a friend's QR code or paste their Account ID."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Inicia un chat. Busca el nombre de usuario de un amigo."
+            "value" : "Empieza un chat. Escanea el código QR de un amigo o pega su ID de cuenta."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "开始聊天。搜索好友的用户名。"
+            "value" : "开始聊天。扫描好友的二维码或粘贴对方的账号 ID。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "開始聊天。搜尋朋友的使用者名稱。"
+            "value" : "開始聊天。掃描好友的 QR 碼或貼上對方的帳號 ID。"
           }
         }
       }

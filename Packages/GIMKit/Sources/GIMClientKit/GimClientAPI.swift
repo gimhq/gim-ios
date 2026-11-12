@@ -133,8 +133,8 @@ public protocol GimClientAPI: AnyObject, Sendable {
 
     // Identity and devices (gim-core docs/API.md, "Identity and devices").
 
-    /// Creates a new identity with this device as its first one and signs in. Returns the recovery code, which is
-    /// stored nowhere and must be shown to the user once. `InvalidInput` with a session. A failure keeps nothing of
+    /// Creates a new identity with this device as its first one and signs in. Returns the recovery code, which
+    /// this device also keeps in the platform secure store (`recoveryCode()`). `InvalidInput` with a session. A failure keeps nothing of
     /// the attempt: call it again, which creates a new user.
     func createIdentity(displayName: String) async throws -> String
     /// Restores the user on this fresh device from its recovery code: `InvalidInput` for a malformed code, `Crypto`
@@ -167,10 +167,6 @@ public protocol GimClientAPI: AnyObject, Sendable {
     func revokeDevice(deviceId: String) async throws
     /// Synced to the user's other devices and announced to every joined chat. `InvalidInput` if empty.
     func setDisplayName(name: String) async throws
-    /// Claims `handle` in the hub directory so others find the user with `findUser`; `Server(409)` if it is taken.
-    func claimHandle(handle: String) async throws
-    /// Releases the handle claimed with `claimHandle`; `InvalidInput` if there is none.
-    func releaseHandle() async throws
 
     /// `InvalidInput` in `ClientMode.extension`.
     func startSync() async throws
@@ -178,9 +174,8 @@ public protocol GimClientAPI: AnyObject, Sendable {
     /// Synchronous and never throws.
     func setNetworkReachable(reachable: Bool)
 
-    /// `nil` if no such user exists.
-    func findUser(handle: String) async throws -> UserProfile?
-    /// Returns the existing direct chat with `userId` if there is one.
+    /// Returns the existing direct chat with `userId` if there is one. With the signed-in user's own id: creates or
+    /// returns the note to self (`ChatSummary.isNoteToSelf`).
     func createDirectChat(userId: String) async throws -> String
     func createGroupChat(name: String, memberUserIds: [String]) async throws -> String
     /// Current members, one entry per user, including the signed-in user. There is no members listener: re-query
@@ -323,8 +318,13 @@ public protocol GimClientAPI: AnyObject, Sendable {
 
     /// Replaces the recovery code with a new one, for a user who lost it: the previous code stops working on every
     /// hub that takes the new backup (the home hub always does, or the call fails without any change). Returns the
-    /// new code, which is not stored and must be shown to the user once.
+    /// new code, which is stored in the platform secure store like the code of `createIdentity` (see `recoveryCode()`).
     func rotateRecoveryCode() async throws -> RecoveryRotation
+    /// The recovery code this device keeps in the platform secure store (`createIdentity`, `rotateRecoveryCode` and
+    /// `restoreFromRecovery` store it; `signOut` and `deleteAccount` delete it), or `nil` on a device that does not
+    /// hold it (linked by QR, or an account created before the code was stored). `NotRegistered` without a session.
+    /// Synchronous. Show it only after device authentication.
+    func recoveryCode() throws -> String?
     /// Deletes the account for good: the keep server's data (best effort, never blocking), every chat (the user
     /// leaves), the account on every hub, then everything on this device as `signOut` does. Returns the ids of the
     /// user's other hubs that could not be reached (their records expire on their own). On an error nothing local is deleted and it can be called again.

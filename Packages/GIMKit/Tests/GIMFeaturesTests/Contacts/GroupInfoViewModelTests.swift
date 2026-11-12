@@ -22,8 +22,8 @@ final class GroupInfoViewModelTests: XCTestCase {
     }
 
     @MainActor
-    private func handles(_ viewModel: GroupInfoViewModel) -> [String]? {
-        viewModel.members?.map(\.user.handle)
+    private func names(_ viewModel: GroupInfoViewModel) -> [String]? {
+        viewModel.members?.map { String($0.user.userId.dropFirst("user-".count)) }
     }
 
     @MainActor
@@ -33,7 +33,7 @@ final class GroupInfoViewModelTests: XCTestCase {
 
         XCTAssertEqual(viewModel.summary?.name, "Aegean Crew")
         XCTAssertEqual(viewModel.editedName, "Aegean Crew")
-        XCTAssertEqual(handles(viewModel), ["alex", "sofia", "luca", "nikos"])
+        XCTAssertEqual(names(viewModel), ["alex", "sofia", "luca", "nikos"])
         XCTAssertEqual(viewModel.members?.filter(\.isSelf).map(\.user.userId), [FakeGimClient.demoSelfId])
         XCTAssertTrue(viewModel.canEditMembers)
         XCTAssertTrue(viewModel.canRemoveMembers)
@@ -69,7 +69,7 @@ final class GroupInfoViewModelTests: XCTestCase {
     @MainActor
     func testAddMemberRequeries() async throws {
         let (client, viewModel) = try await startedGroup()
-        await client.addRemoteUser(UserProfile(userId: Self.kaiId, handle: "", displayName: "Kai"))
+        await client.addRemoteUser(UserProfile(userId: Self.kaiId, displayName: "Kai"))
 
         viewModel.memberAccountId = " Account ID: \(Self.kaiId.uppercased()) "
         await viewModel.addMember()
@@ -108,7 +108,7 @@ final class GroupInfoViewModelTests: XCTestCase {
     @MainActor
     func testRemoveMemberRequiresConfirmation() async throws {
         let (_, viewModel) = try await startedGroup()
-        let luca = try XCTUnwrap(viewModel.members?.first { $0.user.handle == "luca" })
+        let luca = try XCTUnwrap(viewModel.members?.first { $0.user.userId == "user-luca" })
 
         viewModel.requestRemoval(luca)
         XCTAssertEqual(viewModel.pendingRemoval, luca)
@@ -122,7 +122,7 @@ final class GroupInfoViewModelTests: XCTestCase {
 
         XCTAssertNil(viewModel.pendingRemoval)
         XCTAssertNil(viewModel.errorMessage)
-        XCTAssertEqual(handles(viewModel), ["alex", "sofia"])
+        XCTAssertEqual(names(viewModel), ["alex", "sofia"])
     }
 
     @MainActor
@@ -138,7 +138,7 @@ final class GroupInfoViewModelTests: XCTestCase {
     @MainActor
     func testRemoveFailureIsPresented() async throws {
         let (client, viewModel) = try await startedGroup()
-        let luca = try XCTUnwrap(viewModel.members?.first { $0.user.handle == "luca" })
+        let luca = try XCTUnwrap(viewModel.members?.first { $0.user.userId == "user-luca" })
         viewModel.stop()
         try await client.removeMember(chatId: viewModel.chatId, userId: luca.user.userId)
 
@@ -157,7 +157,7 @@ final class GroupInfoViewModelTests: XCTestCase {
         await eventually { viewModel.members?.count == 4 }
 
         try await client.removeMember(chatId: viewModel.chatId, userId: "user-sofia")
-        await eventually { self.handles(viewModel) == ["alex", "luca", "nikos"] }
+        await eventually { self.names(viewModel) == ["alex", "luca", "nikos"] }
     }
 
     /// Waits until `count` `chatMembers` calls are held by the fake.
@@ -189,17 +189,17 @@ final class GroupInfoViewModelTests: XCTestCase {
         // A finished query is applied even though a later one (like a listener-driven re-query) is still running.
         await client.releaseChatMembers(at: 1)
         await fresh.value
-        XCTAssertEqual(handles(viewModel), ["alex", "sofia", "luca", "nikos"])
+        XCTAssertEqual(names(viewModel), ["alex", "sofia", "luca", "nikos"])
         XCTAssertTrue(viewModel.isLoading)
 
         // The query that started before the change finishes late and is dropped.
         await client.releaseChatMembers(at: 0)
         await stale.value
-        XCTAssertEqual(handles(viewModel), ["alex", "sofia", "luca", "nikos"])
+        XCTAssertEqual(names(viewModel), ["alex", "sofia", "luca", "nikos"])
 
         await client.releaseChatMembers(at: 0)
         await requery.value
-        XCTAssertEqual(handles(viewModel), ["alex", "sofia", "luca", "nikos"])
+        XCTAssertEqual(names(viewModel), ["alex", "sofia", "luca", "nikos"])
         XCTAssertFalse(viewModel.isLoading)
     }
 
@@ -269,7 +269,7 @@ final class GroupInfoViewModelTests: XCTestCase {
         await viewModel.load()
 
         XCTAssertFalse(viewModel.membersUnavailable)
-        XCTAssertEqual(handles(viewModel), ["alex", "sofia", "luca", "nikos"])
+        XCTAssertEqual(names(viewModel), ["alex", "sofia", "luca", "nikos"])
         XCTAssertEqual(viewModel.errorMessage, ErrorPresenter.message(for: error))
         XCTAssertTrue(viewModel.canRemoveMembers)
     }
@@ -333,7 +333,7 @@ final class GroupInfoViewModelTests: XCTestCase {
     @MainActor
     func testAddMemberWithoutDeviceShowsNotFound() async throws {
         let (client, viewModel) = try await startedGroup()
-        await client.addRemoteUser(UserProfile(userId: Self.kaiId, handle: "", displayName: "Kai"), hasDevice: false)
+        await client.addRemoteUser(UserProfile(userId: Self.kaiId, displayName: "Kai"), hasDevice: false)
 
         viewModel.memberAccountId = Self.kaiId
         await viewModel.addMember()
@@ -354,7 +354,7 @@ final class GroupInfoViewModelTests: XCTestCase {
     @MainActor
     func testAddMemberWhoseHubRefusesNamesThem() async throws {
         let (client, viewModel) = try await startedGroup()
-        await client.addRemoteUser(UserProfile(userId: Self.kaiId, handle: "", displayName: "Kai"))
+        await client.addRemoteUser(UserProfile(userId: Self.kaiId, displayName: "Kai"))
         await client.refuseContacts([Self.kaiId])
 
         viewModel.memberAccountId = Self.kaiId
@@ -370,7 +370,7 @@ final class GroupInfoViewModelTests: XCTestCase {
         let (client, viewModel) = try await startedGroup()
         await client.simulateNotAdmittedByPeer(chatId: viewModel.chatId, hubId: "hub-owner")
 
-        await client.addRemoteUser(UserProfile(userId: Self.kaiId, handle: "", displayName: "Kai"))
+        await client.addRemoteUser(UserProfile(userId: Self.kaiId, displayName: "Kai"))
         viewModel.memberAccountId = Self.kaiId
         await viewModel.addMember()
 
@@ -387,5 +387,5 @@ final class GroupInfoViewModelTests: XCTestCase {
 }
 
 private enum FakeDemoPeers {
-    static let luca = UserProfile(userId: "user-luca", handle: "luca", displayName: "Luca Bianchi")
+    static let luca = UserProfile(userId: "user-luca", displayName: "Luca Bianchi")
 }

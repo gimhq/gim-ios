@@ -4,7 +4,7 @@ import XCTest
 @testable import GIMClientKit
 
 final class FakeGimClientHubTests: XCTestCase {
-    private let me = Session(userId: "user-kai", deviceId: "device-1", handle: "kai", displayName: "Kai")
+    private let me = Session(userId: "user-kai", deviceId: "device-1", displayName: "Kai")
     private let homeUrl = "https://gim.example.eu"
     private let home = "hub-gim.example.eu"
     private let second = "hub-hub2.example.eu"

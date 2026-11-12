@@ -26,11 +26,11 @@ Generated records are `Equatable, Hashable` plus `extension …: Sendable`; the 
 | `ClientConfig` | `ClientConfig` | `serverUrl`, `mode: ClientMode?` (`nil` is `app`), `keepServerUrl: String?` (the gim keep server, gim-keep; `nil` until it is deployed, so `reportUser` fails and settings are not backed up) |
 | `PushRegistration` | `PushRegistration` | `provider`, `token`, `appId: String?`, `sandbox: Bool?`, `p256dh: String?`, `auth: String?` |
 | `NotificationContent` | `NotificationContent` | `chatId: String?`, `chatTitle: String?`, `senderUserId: String?`, `senderDisplayName: String?`, `body`, `messageId: String?`, `collapseId: String?`, `kind: NotificationKind`, `shouldDisplay`, `timestamp: UInt64` |
-| `Session` | `Session` | `userId`, `deviceId`, `handle` (empty until `claimHandle`), `displayName` |
+| `Session` | `Session` | `userId`, `deviceId`, `displayName` |
 | `DeviceInfo` | `DeviceInfo` | `deviceId`, `createdAtMs: UInt64` (0 for revoked devices), `isCurrent`, `revoked` |
 | `HubInfo` | `HubInfo` | `hubId`, `url: String?`, `state: HubState`, `priority: UInt8`, `isPrimary`, `isHome`, `signedIn` |
-| `UserProfile` | `UserProfile` | `userId`, `handle`, `displayName`, `hasAvatar` (get the photo with `fetchUserAvatar`) |
-| `ChatSummary` | `ChatSummary` | `chatId`, `kind`, `name`, `avatar: MediaRef?`, `lastMessage: MessagePreview?`, `unreadCount: UInt32`, `updatedAtMs: UInt64`, `memberCount: UInt32`, `state: ChatState`, `peer: UserProfile?` (direct chats: the other user), `mutedUntilMs: UInt64` (0: not muted, `mutedForever()`: until unmuted), `pinned`, `archived`, `blocked` (direct chat with a blocked user) |
+| `UserProfile` | `UserProfile` | `userId`, `displayName`, `hasAvatar` (get the photo with `fetchUserAvatar`) |
+| `ChatSummary` | `ChatSummary` | `chatId`, `kind`, `name`, `avatar: MediaRef?`, `lastMessage: MessagePreview?`, `unreadCount: UInt32`, `updatedAtMs: UInt64`, `memberCount: UInt32`, `state: ChatState`, `peer: UserProfile?` (direct chats: the other user; the own profile for the note to self), `isNoteToSelf` (the direct chat with yourself, shared by the own devices only; `blocked` is false), `mutedUntilMs: UInt64` (0: not muted, `mutedForever()`: until unmuted), `pinned`, `archived`, `blocked` (direct chat with a blocked user) |
 | `PrivacySettings` | `PrivacySettings` | `readReceipts`, `typingIndicators`, `blockedUserIds: [String]` |
 | `RecoveryRotation` | `RecoveryRotation` | `recoveryCode`, `unsyncedHubIds: [String]` |
 | `MessagePreview` | `MessagePreview` | `senderName`, `text`, `sentAtMs: UInt64`, `isOwn`, `sendState: SendState?` (own messages only; the mirror init defaults it to `nil`) |
@@ -119,13 +119,10 @@ listener parameter spelling above.
 | `userDevices(userId:) async throws -> [DeviceInfo]` | same |
 | `revokeDevice(deviceId:) async throws` | same |
 | `setDisplayName(name:) async throws` | same |
-| `claimHandle(handle:) async throws` | same |
-| `releaseHandle() async throws` | same |
 | `startSync() async throws` | same |
 | `stopSync() async throws` | same |
 | `setNetworkReachable(reachable: Bool)` | same (synchronous, never throws) |
-| `findUser(handle:) async throws -> UserProfile?` | same |
-| `createDirectChat(userId:) async throws -> String` | same |
+| `createDirectChat(userId:) async throws -> String` | same; returns the existing direct chat; with the own user id it creates or returns the note to self |
 | `createGroupChat(name:memberUserIds:) async throws -> String` | same |
 | `chatMembers(chatId:) async throws -> [UserProfile]` | same |
 | `addMembers(chatId:userIds:) async throws` | same |
@@ -173,7 +170,8 @@ listener parameter spelling above.
 | `setChatPinned(chatId:pinned:) async throws` | same |
 | `setChatArchived(chatId:archived:) async throws` | same |
 | `reportUser(userId:reason: ReportReason, note: String?, messageIds: [String]) async throws -> String` | same; **needs the keep server** (`InvalidInput` without `ClientConfig.keepServerUrl`): keep it hidden in the UI until gim-keep is deployed |
-| `rotateRecoveryCode() async throws -> RecoveryRotation` | same |
+| `rotateRecoveryCode() async throws -> RecoveryRotation` | same; the new code is kept in the secure store like the one of `createIdentity` |
+| `recoveryCode() throws -> String?` | same (synchronous); the code kept in the platform secure store (`gim.recovery_code.v1`, written by `createIdentity`, `rotateRecoveryCode` and `restoreFromRecovery`, deleted by `signOut` and `deleteAccount`), `nil` on a device that does not hold it, `NotRegistered` without a session |
 | `deleteAccount() async throws -> [String]` | same; returns the other hubs it could not reach. Deletes the keep server's data first when one is configured, best effort: a missing or unreachable keep server never blocks it |
 
 The keep server (gim-keep, `ClientConfig.keepServerUrl`) is not deployed: the app passes `nil`. Without it
@@ -199,6 +197,25 @@ Renaming a group goes `GroupInfoViewModel.saveName()` → `GimClientAPI.setGroup
 
 `CoreMappingTests.testFakeRecoveryKitFunctionsMatchGimCore` runs the same vectors through both, so drift between the
 copy and gim-core fails the macOS tests.
+
+## Changes since `2eb3316`
+
+`2e2e5d4` (gim-client-sdk CI run artifact, vendored with `GIM_CORE_REPO=gimhq/gim-client-sdk
+scripts/sync-gim-core.sh <run id>`). Diff of the generated `GIMCore.swift`:
+
+- Removed: `claimHandle(handle:)`, `releaseHandle()`, `findUser(handle:)`, `Session.handle`, `UserProfile.handle`.
+  People are found by Account ID only.
+- Added: `recoveryCode() throws -> String?` (synchronous) and `ChatSummary.isNoteToSelf` (after `peer`).
+- Behaviour: `createDirectChat` returns the existing direct chat; with the own user id it creates or returns the note
+  to self, which later linked own devices join and no one else can; `addMembers` of a third user to a direct chat is
+  `InvalidInput`. `createIdentity`, `rotateRecoveryCode` and `restoreFromRecovery` keep the recovery code in the secure
+  store (through the existing `PlatformHooks.secureStore*`), `signOut` and `deleteAccount` delete it.
+
+App adaptations: the mirror drops the handle APIs and fields and adds `recoveryCode()` and `isNoteToSelf`
+(`FakeGimClient` keeps the code per device and creates the note to self). Settings → Recovery key shows the key after
+device authentication (`RecoveryKeyViewModel`, `LocalDeviceAuthenticator`), with "Create a new recovery key" on a
+device without it. The note to self is listed first as "Note to self" with the own avatar and a note badge, has no
+block action, and opens from New chat and Settings.
 
 ## Changes since `d2fae1c`
 
@@ -272,7 +289,7 @@ App adaptations:
   (`registrationMessage(for:)`, `hubRefusedMessage`), without retrying. `NotAdmittedByPeer` → "This chat's hub does not
   accept messages from you." `ContactNotAdmitted` → "<names> does/do not accept contacts from you."
   (`contactNotAdmittedMessage(userIds:profiles:)`; New Chat, New Group and Group Info pass the profiles they know,
-  falling back to the handle, then the user id). A partial result of `createGroupChat` / `addMembers` is a success.
+  falling back to the short user id). A partial result of `createGroupChat` / `addMembers` is a success.
   Nothing signs out or wipes on these errors; `AppModel` stays signed in.
 - `FakeGimClient`: `simulateNotAdmitted(hubId:)` (registration, `addHub` of that hub, then calls and sends like a
   suspension), `simulateNotAdmittedByPeer(chatId:hubId:)` (sends fail with cause `notAdmittedByPeer`; `addMembers`,

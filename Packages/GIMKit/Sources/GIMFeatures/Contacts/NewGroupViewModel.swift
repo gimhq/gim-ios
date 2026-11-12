@@ -71,7 +71,7 @@ public final class NewGroupViewModel {
             return
         }
         if !members.contains(where: { $0.userId == userId }) {
-            members.append(UserProfile(userId: userId, handle: "", displayName: ""))
+            members.append(UserProfile(userId: userId, displayName: ""))
         }
         memberAccountId = ""
     }

@@ -176,6 +176,10 @@ public actor FakeGimClient: GimClientAPI {
     }
     /// `session?.userId` for the synchronous `userId()`.
     private let sessionUserId = Mutex<String?>(nil)
+    /// The recovery code this device keeps, like gim-core's secure store entry: set by `createIdentity`,
+    /// `rotateRecoveryCode` and `restoreFromRecovery`, cleared by `signOut` and `deleteAccount`; a device linked by QR
+    /// (or a client created with a session) has none.
+    private let storedRecoveryCode = Mutex<String?>(nil)
     /// Hub-side state that survives `signOut`: each user's DeviceList (`isCurrent` false) and recovery code
     /// (normalized).
     private var deviceLists: [String: [DeviceInfo]] = [:]
@@ -260,7 +264,7 @@ public actor FakeGimClient: GimClientAPI {
         var seed = Seed(session: session, users: users)
         if let session {
             seed.users.append(
-                UserProfile(userId: session.userId, handle: session.handle, displayName: session.displayName))
+                UserProfile(userId: session.userId, displayName: session.displayName))
         }
         self.init(
             options: Options(
@@ -381,7 +385,7 @@ public actor FakeGimClient: GimClientAPI {
         fetchMediaFailure = error
     }
 
-    /// Adds a user to the directory, for example a remote user without a handle (which `findUser` never returns).
+    /// Adds a user to the directory, for example a remote user to add by Account ID.
     /// Add it to chats with `addMembers` or `createGroupChat`; without a device, chats with it can't be created and
     /// invites to it are skipped.
     public func addRemoteUser(_ profile: UserProfile, hasDevice: Bool = true) {
@@ -488,6 +492,11 @@ public actor FakeGimClient: GimClientAPI {
         sessionUserId.withLock { $0 }
     }
 
+    public nonisolated func recoveryCode() throws -> String? {
+        guard userId() != nil else { throw GimError.NotRegistered }
+        return storedRecoveryCode.withLock { $0 }
+    }
+
     /// Always `false`: the fake keeps no local database.
     public nonisolated func localStateReset() -> Bool {
         false
@@ -503,6 +512,7 @@ public actor FakeGimClient: GimClientAPI {
     /// Deletes the session and every local state, like gim-core's sign-out.
     private func wipeLocal() {
         session = nil
+        storedRecoveryCode.withLock { $0 = nil }
         awaitingLinkConfirmation = false
         pendingApprovals = []
         syncRunning = false
@@ -535,8 +545,9 @@ public actor FakeGimClient: GimClientAPI {
         let code = Self.recoveryCode(
             bytes: (0..<24).map { UInt8(truncatingIfNeeded: createdIdentities &* 37 &+ $0 &* 11) })
         recoveryCodes[userId] = Self.normalizedRecoveryCode(code)
-        let profile = UserProfile(userId: userId, handle: "", displayName: displayName)
+        let profile = UserProfile(userId: userId, displayName: displayName)
         signIn(profile, deviceId: "device-1")
+        storedRecoveryCode.withLock { $0 = code }
         if seedsDemoOnRegister { seedDemo(around: profile) }
         return code
     }
@@ -555,6 +566,7 @@ public actor FakeGimClient: GimClientAPI {
             deviceLists[userId] = deviceLists[userId, default: []].map(Self.revoked)
         }
         signIn(profile, deviceId: makeId("device"))
+        storedRecoveryCode.withLock { $0 = code }
     }
 
     public nonisolated func startLink(hubs: [String]) throws -> any LinkSession {
@@ -655,32 +667,11 @@ public actor FakeGimClient: GimClientAPI {
         updateProfile(session)
     }
 
-    public func claimHandle(handle: String) async throws {
-        var session = try requireSession()
-        let handle = handle.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !handle.isEmpty, !handle.contains(where: \.isWhitespace) else {
-            throw GimError.InvalidInput(reason: "Handle must not be empty or contain spaces")
-        }
-        if users.values.contains(where: { $0.handle == handle && $0.userId != session.userId }) {
-            throw GimError.Server(status: 409, reason: "Handle is already taken")
-        }
-        session.handle = handle
-        updateProfile(session)
-    }
-
-    public func releaseHandle() async throws {
-        var session = try requireSession()
-        guard !session.handle.isEmpty else { throw GimError.InvalidInput(reason: "No handle is claimed") }
-        session.handle = ""
-        updateProfile(session)
-    }
-
     private func signIn(_ profile: UserProfile, deviceId: String) {
         users[profile.userId] = profile
         deviceLists[profile.userId, default: []].append(
             DeviceInfo(deviceId: deviceId, createdAtMs: nowMs(), isCurrent: false, revoked: false))
-        session = Session(
-            userId: profile.userId, deviceId: deviceId, handle: profile.handle, displayName: profile.displayName)
+        session = Session(userId: profile.userId, deviceId: deviceId, displayName: profile.displayName)
     }
 
     private func seedDemo(around me: UserProfile) {
@@ -696,7 +687,7 @@ public actor FakeGimClient: GimClientAPI {
     private func updateProfile(_ session: Session) {
         self.session = session
         users[session.userId] = UserProfile(
-            userId: session.userId, handle: session.handle, displayName: session.displayName,
+            userId: session.userId, displayName: session.displayName,
             hasAvatar: users[session.userId]?.hasAvatar ?? false)
         publishChatList()
     }
@@ -766,17 +757,19 @@ public actor FakeGimClient: GimClientAPI {
 
     // MARK: - Users and chats
 
-    public func findUser(handle: String) async throws -> UserProfile? {
-        _ = try requireSession()
-        let handle = handle.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !handle.isEmpty else { return nil }
-        return users.values.first { $0.handle == handle }
-    }
-
+    /// With the own user id: creates or returns the note to self (a direct chat whose only member is the user).
     public func createDirectChat(userId: String) async throws -> String {
         let session = try requireSession()
         guard userId != session.userId else {
-            throw GimError.InvalidInput(reason: "You can't start a chat with yourself")
+            if let existing = chats.values.first(where: { $0.kind == .direct && $0.members == [session.userId] }) {
+                return existing.id
+            }
+            let chat = StoredChat(
+                id: makeId("chat"), kind: .direct, name: "", createdAtMs: nowMs(), members: [session.userId])
+            chats[chat.id] = chat
+            publishTimelineChange(chat.id)
+            publishChatList()
+            return chat.id
         }
         try refuseBlocked([userId])
         _ = try existingUser(userId)
@@ -1400,6 +1393,7 @@ public actor FakeGimClient: GimClientAPI {
         let code = Self.recoveryCode(
             bytes: (0..<24).map { UInt8(truncatingIfNeeded: rotatedRecoveryCodes &* 53 &+ $0 &* 7 &+ 1) })
         recoveryCodes[session.userId] = Self.normalizedRecoveryCode(code)
+        storedRecoveryCode.withLock { $0 = code }
         return RecoveryRotation(recoveryCode: code, unsyncedHubIds: [])
     }
 
@@ -1484,7 +1478,7 @@ public actor FakeGimClient: GimClientAPI {
         let reply = try replyTo.map { try replyPreview(for: $0, in: chatId) }
         let item = MessageItem(
             messageId: messageId, chatId: chatId,
-            sender: UserProfile(userId: session.userId, handle: session.handle, displayName: session.displayName),
+            sender: UserProfile(userId: session.userId, displayName: session.displayName),
             isOwn: true, sentAtMs: nowMs(), content: content, replyTo: reply, reactions: [], edited: false,
             sendState: .pending)
         appendEntry(.message(StoredMessage(item: item)), chatId)
@@ -1984,7 +1978,10 @@ public actor FakeGimClient: GimClientAPI {
     ) -> ChatSummary {
         let last = chat.entries.last { $0.message != nil }?.message?.item
         let name: String
-        let peerId = chat.kind == .direct ? chat.members.first(where: { $0 != session?.userId }) : nil
+        let isNoteToSelf = chat.kind == .direct && chat.members.count == 1 && chat.members.first == session?.userId
+        let peerId =
+            chat.kind == .direct
+            ? (isNoteToSelf ? session?.userId : chat.members.first(where: { $0 != session?.userId })) : nil
         let peer = peerId.flatMap { users[$0] }
         switch chat.kind {
         case .group:
@@ -2000,8 +1997,9 @@ public actor FakeGimClient: GimClientAPI {
                     isOwn: $0.isOwn, sendState: $0.isOwn ? $0.sendState : nil)
             },
             unreadCount: chat.unreadCount, updatedAtMs: chat.entries.last?.atMs ?? chat.createdAtMs,
-            memberCount: UInt32(chat.members.count), state: chat.state, peer: peer, mutedUntilMs: chat.mutedUntilMs,
-            pinned: chat.pinned, archived: chat.archived, blocked: peerId.map(blocked.contains) ?? false)
+            memberCount: UInt32(chat.members.count), state: chat.state, peer: peer, isNoteToSelf: isNoteToSelf,
+            mutedUntilMs: chat.mutedUntilMs, pinned: chat.pinned, archived: chat.archived,
+            blocked: !isNoteToSelf && (peerId.map(blocked.contains) ?? false))
     }
 
     static func previewText(_ content: MessageContent) -> String {

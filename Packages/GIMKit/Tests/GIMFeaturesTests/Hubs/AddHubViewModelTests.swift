@@ -4,7 +4,7 @@ import GIMFeatures
 import XCTest
 
 final class AddHubViewModelTests: XCTestCase {
-    private let session = Session(userId: "user-kai", deviceId: "device-1", handle: "kai", displayName: "Kai")
+    private let session = Session(userId: "user-kai", deviceId: "device-1", displayName: "Kai")
 
     private func makeClient() -> FakeGimClient {
         FakeGimClient(scheduler: ManualFakeScheduler(), dataDirectory: makeTemporaryDirectory(), session: session)

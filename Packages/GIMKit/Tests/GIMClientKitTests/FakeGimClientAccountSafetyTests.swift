@@ -185,7 +185,7 @@ final class FakeGimClientAccountSafetyTests: XCTestCase {
     func testAvatarsOfOtherUsersAndGroups() async throws {
         let client = try await makeDemo()
         let directory = try makeTemporaryDirectory()
-        await client.addRemoteUser(UserProfile(userId: "user-mira", handle: "", displayName: "Mira", hasAvatar: true))
+        await client.addRemoteUser(UserProfile(userId: "user-mira", displayName: "Mira", hasAvatar: true))
 
         let path = try await client.fetchUserAvatar(
             userId: "user-mira", destPath: directory + "/mira.png")
@@ -216,7 +216,7 @@ final class FakeGimClientAccountSafetyTests: XCTestCase {
         let list = try await subscribeChatList(client)
         XCTAssertEqual(
             list.items.first { $0.chatId == direct }?.peer,
-            UserProfile(userId: sofia, handle: "sofia", displayName: "Sofia Marin"))
+            UserProfile(userId: sofia, displayName: "Sofia Marin"))
         XCTAssertNil(list.items.first { $0.chatId == group }?.peer)
     }
 

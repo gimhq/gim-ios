@@ -9,7 +9,7 @@ final class ErrorPresenterKindTests: XCTestCase {
         let cases: [(ErrorPresenter.Kind, String)] = [
             (.network, "Can't reach the server. Check your internet and try again."),
             (.notRegistered, "This device isn't signed in. Sign in again."),
-            (.invalidInput(reason: "Handle is taken"), "Handle is taken"),
+            (.invalidInput(reason: "Group name is required"), "Group name is required"),
             (.invalidInputEmpty, "Check what you typed and try again."),
             (.notFound, "Couldn't find that. It may have been removed."),
             (.crypto, "Couldn't unlock this message."),
@@ -58,7 +58,7 @@ final class ErrorPresenterKindTests: XCTestCase {
         let cases: [(GimError, ErrorPresenter.Kind)] = [
             (.Network(reason: "timeout"), .network),
             (.NotRegistered, .notRegistered),
-            (.InvalidInput(reason: "Handle is taken"), .invalidInput(reason: "Handle is taken")),
+            (.InvalidInput(reason: "Group name is required"), .invalidInput(reason: "Group name is required")),
             (.InvalidInput(reason: ""), .invalidInputEmpty),
             (.NotFound(reason: "chat x"), .notFound),
             (.Crypto(reason: "mls"), .crypto),
@@ -108,7 +108,7 @@ final class ErrorPresenterKindTests: XCTestCase {
     func testClientKindReadsTheClientsHubs() async throws {
         let scheduler = ManualFakeScheduler()
         let client = FakeGimClient(
-            scheduler: scheduler, session: Session(userId: "u", deviceId: "d", handle: "", displayName: "U"))
+            scheduler: scheduler, session: Session(userId: "u", deviceId: "d", displayName: "U"))
         let hubId = FakeGimClient.hubId(forUrl: "https://hub2.example.eu")
         let single = await ErrorPresenter.kind(for: GimError.UserSuspended(hubId: hubId), client: client)
         XCTAssertEqual(single, .suspended(host: nil))
@@ -134,9 +134,9 @@ final class ErrorPresenterKindTests: XCTestCase {
 
     func testContactNotAdmittedKindResolvesNames() {
         let profiles = [
-            UserProfile(userId: "u-ana", handle: "ana", displayName: "Ana Kovač"),
-            UserProfile(userId: "u-lars", handle: "lars", displayName: ""),
-            UserProfile(userId: "u-x", handle: "", displayName: ""),
+            UserProfile(userId: "u-ana", displayName: "Ana Kovač"),
+            UserProfile(userId: "u-lars", displayName: ""),
+            UserProfile(userId: "u-x", displayName: ""),
         ]
         XCTAssertEqual(
             ErrorPresenter.contactNotAdmittedKind(userIds: ["u-ana", "u-lars", "u-x", "u-new"], profiles: profiles),

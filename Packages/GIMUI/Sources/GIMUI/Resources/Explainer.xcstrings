@@ -6,25 +6,25 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Share your Account ID so friends can reach you. You can also pick a username to make you easier to find."
+            "value" : "Share your Account ID so friends can reach you: show your QR code or send the ID. It's the only way to find you."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Comparte tu ID de cuenta para que tus amigos puedan contactarte. También puedes elegir un nombre de usuario para que te encuentren más fácil."
+            "value" : "Comparte tu ID de cuenta para que tus amigos puedan contactarte: muestra tu código QR o envía el ID. Es la única forma de encontrarte."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "分享你的账号 ID，朋友就能联系你。你也可以设置一个用户名，让别人更容易找到你。"
+            "value" : "分享你的账号 ID，朋友就能联系你：出示你的二维码或发送 ID。这是找到你的唯一方式。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "分享你的帳號 ID，朋友就能聯絡你。你也可以設定一個使用者名稱，讓別人更容易找到你。"
+            "value" : "分享你的帳號 ID，朋友就能聯絡你：出示你的 QR 碼或傳送 ID。這是找到你的唯一方式。"
           }
         }
       }

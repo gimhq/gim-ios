@@ -77,8 +77,8 @@ placeholder (`New message`, `mutable-content: 1`); the hub's payload is under `g
   (`PushNotificationHandler`): title = chat title, or "<sender> in <chat>" when the sender's name differs from the chat
   title (groups), body = gim-core's body, thread = chat id, `userInfo["collapseId"]`; delivered notifications with the
   same collapse id are removed first. An invitation (`invite`: gim-core joined the chat while processing the push) shows
-  title = the group name and body "<inviter> added you" (the inviter's name, or their handle until their profile is
-  known). If gim-core says not to display it (`shouldDisplay` false: own messages, receipts, member changes, messages
+  title = the group name and body "<inviter> added you" (the inviter's name, or their Account ID until their profile
+  is known). If gim-core says not to display it (`shouldDisplay` false: own messages, receipts, member changes, messages
   already read), the extension delivers empty content; since the hub coalesces pushes, an alert-priority push may
   legitimately end silent this way. "New message" only appears when gim-core returns `generic`, and for any failure or
   running out of time. Each push appends

@@ -37,6 +37,10 @@ public final class RealGimClient: GimClientAPI {
         core.localStateReset()
     }
 
+    public func recoveryCode() throws -> String? {
+        try bridgedSync { try core.recoveryCode() }
+    }
+
     public func signOut() async throws {
         try await bridged { try await core.signOut() }
     }
@@ -93,14 +97,6 @@ public final class RealGimClient: GimClientAPI {
         try await bridged { try await core.setDisplayName(name: name) }
     }
 
-    public func claimHandle(handle: String) async throws {
-        try await bridged { try await core.claimHandle(handle: handle) }
-    }
-
-    public func releaseHandle() async throws {
-        try await bridged { try await core.releaseHandle() }
-    }
-
     public func startSync() async throws {
         try await bridged { try await core.startSync() }
     }
@@ -111,10 +107,6 @@ public final class RealGimClient: GimClientAPI {
 
     public func setNetworkReachable(reachable: Bool) {
         core.setNetworkReachable(reachable: reachable)
-    }
-
-    public func findUser(handle: String) async throws -> GIMClientKit.UserProfile? {
-        try await bridged { try await core.findUser(handle: handle).map { GIMClientKit.UserProfile($0) } }
     }
 
     public func createDirectChat(userId: String) async throws -> String {

@@ -1122,12 +1122,6 @@ public protocol GimClientProtocol: AnyObject, Sendable {
     func chatState(chatId: String) async throws  -> ChatState
     
     /**
-     * Claims `handle` in the hub directory, so others find the user with
-     * `find_user`; `Server(409)` if it is taken.
-     */
-    func claimHandle(handle: String) async throws 
-    
-    /**
      * Old device: the user compared the SAS. `true` adds the new device to
      * the user's devices and to every joined chat (the new device must
      * have finished `wait_link`); `false` revokes it.
@@ -1148,7 +1142,9 @@ public protocol GimClientProtocol: AnyObject, Sendable {
     
     /**
      * Returns the chat id of the direct chat with `user_id`, creating it if
-     * needed.
+     * needed (the lowest chat id if two devices created one at the same
+     * time). With the own user id it is the note to self: the direct chat
+     * with yourself, whose members are only the own devices.
      */
     func createDirectChat(userId: String) async throws  -> String
     
@@ -1161,7 +1157,7 @@ public protocol GimClientProtocol: AnyObject, Sendable {
      * Creates a new identity with this device as its first one: uploads
      * its signed DeviceList, recovery backup and KeyPackages to the hub,
      * signs in and persists the session. Returns the recovery code, which
-     * is not stored and must be shown to the user once.
+     * is also kept in the keystore (`recovery_code`).
      *
      * On failure nothing of the attempt is kept: call it again (it creates
      * a new user), also after the app restarted. `InvalidInput` once an
@@ -1212,11 +1208,6 @@ public protocol GimClientProtocol: AnyObject, Sendable {
      * have none.
      */
     func fetchUserAvatar(userId: String, destPath: String) async throws  -> String
-    
-    /**
-     * Looks up a user by handle; `None` if no such user exists.
-     */
-    func findUser(handle: String) async throws  -> UserProfile?
     
     /**
      * Subscribes to the user's hubs; the first callback carries the
@@ -1280,6 +1271,16 @@ public protocol GimClientProtocol: AnyObject, Sendable {
     func react(chatId: String, messageId: String, emoji: String) async throws 
     
     /**
+     * The recovery code kept in the keystore, to show it again (after
+     * device authentication); `None` on a device that does not hold it
+     * (linked by QR code, or created before codes were kept): offer
+     * `rotate_recovery_code` there. `create_identity`,
+     * `rotate_recovery_code` and `restore_from_recovery` store it;
+     * `sign_out` and `delete_account` delete it.
+     */
+    func recoveryCode() throws  -> String?
+    
+    /**
      * Registers this device for push on every hub of the user (`PUT
      * /v2/push/registration`) and keeps the registration on this device:
      * hubs that cannot be reached now, hubs added later and hubs this
@@ -1288,12 +1289,6 @@ public protocol GimClientProtocol: AnyObject, Sendable {
      * `InvalidInput` for a malformed registration (see `PushRegistration`).
      */
     func registerPush(registration: PushRegistration) async throws 
-    
-    /**
-     * Releases the handle claimed with `claim_handle`; `InvalidInput` if
-     * there is none.
-     */
-    func releaseHandle() async throws 
     
     /**
      * Removes the signed-in user's profile photo.
@@ -1324,6 +1319,7 @@ public protocol GimClientProtocol: AnyObject, Sendable {
      * Restores the user on this (fresh) device from its recovery code
      * after losing every device: becomes a new device of `user_id`, signed
      * in, with a new self group. Chats are not rejoined automatically.
+     * The code is kept in the keystore (`recovery_code`).
      *
      * Reads the user's current DeviceList from the hub (no session
      * needed) and publishes the next one with this device added. With
@@ -1353,8 +1349,9 @@ public protocol GimClientProtocol: AnyObject, Sendable {
      * Replaces the recovery code with a new one, for a user who lost it:
      * the previous code stops working on every hub that takes the new
      * backup (the home hub always does, or the call fails without any
-     * change). Returns the new code, which is not stored and must be shown
-     * to the user once.
+     * change). Returns the new code, which replaces the one in the
+     * keystore (`recovery_code`); a device that held none holds it from
+     * now on.
      */
     func rotateRecoveryCode() async throws  -> RecoveryRotation
     
@@ -1741,26 +1738,6 @@ open func chatState(chatId: String)async throws  -> ChatState  {
 }
     
     /**
-     * Claims `handle` in the hub directory, so others find the user with
-     * `find_user`; `Server(409)` if it is taken.
-     */
-open func claimHandle(handle: String)async throws   {
-    return
-        try  await uniffiRustCallAsync(
-            rustFutureFunc: {
-                uniffi_gim_core_fn_method_gimclient_claim_handle(
-                        self.uniffiCloneHandle(),FfiConverterString.lower(handle)
-                )
-            },
-            pollFunc: ffi_gim_core_rust_future_poll_void,
-            completeFunc: ffi_gim_core_rust_future_complete_void,
-            freeFunc: ffi_gim_core_rust_future_free_void,
-            liftFunc: { $0 },
-            errorHandler: FfiConverterTypeGimError_lift
-        )
-}
-    
-    /**
      * Old device: the user compared the SAS. `true` adds the new device to
      * the user's devices and to every joined chat (the new device must
      * have finished `wait_link`); `false` revokes it.
@@ -1823,7 +1800,9 @@ open func connectionState(listener: ConnectionStateListener)async throws  -> Tas
     
     /**
      * Returns the chat id of the direct chat with `user_id`, creating it if
-     * needed.
+     * needed (the lowest chat id if two devices created one at the same
+     * time). With the own user id it is the note to self: the direct chat
+     * with yourself, whose members are only the own devices.
      */
 open func createDirectChat(userId: String)async throws  -> String  {
     return
@@ -1864,7 +1843,7 @@ open func createGroupChat(name: String, memberUserIds: [String])async throws  ->
      * Creates a new identity with this device as its first one: uploads
      * its signed DeviceList, recovery backup and KeyPackages to the hub,
      * signs in and persists the session. Returns the recovery code, which
-     * is not stored and must be shown to the user once.
+     * is also kept in the keystore (`recovery_code`).
      *
      * On failure nothing of the attempt is kept: call it again (it creates
      * a new user), also after the app restarted. `InvalidInput` once an
@@ -2038,25 +2017,6 @@ open func fetchUserAvatar(userId: String, destPath: String)async throws  -> Stri
             completeFunc: ffi_gim_core_rust_future_complete_rust_buffer,
             freeFunc: ffi_gim_core_rust_future_free_rust_buffer,
             liftFunc: FfiConverterString.lift,
-            errorHandler: FfiConverterTypeGimError_lift
-        )
-}
-    
-    /**
-     * Looks up a user by handle; `None` if no such user exists.
-     */
-open func findUser(handle: String)async throws  -> UserProfile?  {
-    return
-        try  await uniffiRustCallAsync(
-            rustFutureFunc: {
-                uniffi_gim_core_fn_method_gimclient_find_user(
-                        self.uniffiCloneHandle(),FfiConverterString.lower(handle)
-                )
-            },
-            pollFunc: ffi_gim_core_rust_future_poll_rust_buffer,
-            completeFunc: ffi_gim_core_rust_future_complete_rust_buffer,
-            freeFunc: ffi_gim_core_rust_future_free_rust_buffer,
-            liftFunc: FfiConverterOptionTypeUserProfile.lift,
             errorHandler: FfiConverterTypeGimError_lift
         )
 }
@@ -2242,6 +2202,23 @@ open func react(chatId: String, messageId: String, emoji: String)async throws   
 }
     
     /**
+     * The recovery code kept in the keystore, to show it again (after
+     * device authentication); `None` on a device that does not hold it
+     * (linked by QR code, or created before codes were kept): offer
+     * `rotate_recovery_code` there. `create_identity`,
+     * `rotate_recovery_code` and `restore_from_recovery` store it;
+     * `sign_out` and `delete_account` delete it.
+     */
+open func recoveryCode()throws  -> String?  {
+    return try  FfiConverterOptionString.lift(try rustCallWithError(FfiConverterTypeGimError_lift) {
+        uniffiCallStatus in
+    uniffi_gim_core_fn_method_gimclient_recovery_code(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
      * Registers this device for push on every hub of the user (`PUT
      * /v2/push/registration`) and keeps the registration on this device:
      * hubs that cannot be reached now, hubs added later and hubs this
@@ -2255,26 +2232,6 @@ open func registerPush(registration: PushRegistration)async throws   {
             rustFutureFunc: {
                 uniffi_gim_core_fn_method_gimclient_register_push(
                         self.uniffiCloneHandle(),FfiConverterTypePushRegistration_lower(registration)
-                )
-            },
-            pollFunc: ffi_gim_core_rust_future_poll_void,
-            completeFunc: ffi_gim_core_rust_future_complete_void,
-            freeFunc: ffi_gim_core_rust_future_free_void,
-            liftFunc: { $0 },
-            errorHandler: FfiConverterTypeGimError_lift
-        )
-}
-    
-    /**
-     * Releases the handle claimed with `claim_handle`; `InvalidInput` if
-     * there is none.
-     */
-open func releaseHandle()async throws   {
-    return
-        try  await uniffiRustCallAsync(
-            rustFutureFunc: {
-                uniffi_gim_core_fn_method_gimclient_release_handle(
-                        self.uniffiCloneHandle()
                 )
             },
             pollFunc: ffi_gim_core_rust_future_poll_void,
@@ -2370,6 +2327,7 @@ open func reportUser(userId: String, reason: ReportReason, note: String?, messag
      * Restores the user on this (fresh) device from its recovery code
      * after losing every device: becomes a new device of `user_id`, signed
      * in, with a new self group. Chats are not rejoined automatically.
+     * The code is kept in the keystore (`recovery_code`).
      *
      * Reads the user's current DeviceList from the hub (no session
      * needed) and publishes the next one with this device added. With
@@ -2441,8 +2399,9 @@ open func revokeDevice(deviceId: String)async throws   {
      * Replaces the recovery code with a new one, for a user who lost it:
      * the previous code stops working on every hub that takes the new
      * backup (the home hub always does, or the call fails without any
-     * change). Returns the new code, which is not stored and must be shown
-     * to the user once.
+     * change). Returns the new code, which replaces the one in the
+     * keystore (`recovery_code`); a device that held none holds it from
+     * now on.
      */
 open func rotateRecoveryCode()async throws  -> RecoveryRotation  {
     return
@@ -4903,7 +4862,8 @@ public struct ChatSummary: Equatable, Hashable {
     public var chatId: String
     public var kind: ChatKind
     /**
-     * Group name, or the other user's display name for a direct chat.
+     * Group name, or the other user's display name for a direct chat (the
+     * own display name for the note to self).
      */
     public var name: String
     public var avatar: MediaRef?
@@ -4917,10 +4877,18 @@ public struct ChatSummary: Equatable, Hashable {
      */
     public var state: ChatState
     /**
-     * For a direct chat: the other user. Show their photo
-     * (`fetch_user_avatar`) when the chat has no avatar.
+     * For a direct chat: the other user, the own user for the note to
+     * self. Show their photo (`fetch_user_avatar`) when the chat has no
+     * avatar.
      */
     public var peer: UserProfile?
+    /**
+     * The note to self: the direct chat with yourself (`peer` is the own
+     * user), synced across the own devices and never admitting anyone
+     * else. Pin it on top and label it; it has no read receipts, typing
+     * indicators, report or block.
+     */
+    public var isNoteToSelf: Bool
     /**
      * Notifications are muted until then (Unix milliseconds; 0: not muted,
      * `muted_forever()`: until unmuted). Compare with the current time.
@@ -4943,16 +4911,24 @@ public struct ChatSummary: Equatable, Hashable {
     // declare one manually.
     public init(chatId: String, kind: ChatKind, 
         /**
-         * Group name, or the other user's display name for a direct chat.
+         * Group name, or the other user's display name for a direct chat (the
+         * own display name for the note to self).
          */name: String, avatar: MediaRef?, lastMessage: MessagePreview?, unreadCount: UInt32, updatedAtMs: UInt64, memberCount: UInt32, 
         /**
          * Where this device stands in the chat; read from local state, so it is
          * right from the first callback after a restart.
          */state: ChatState, 
         /**
-         * For a direct chat: the other user. Show their photo
-         * (`fetch_user_avatar`) when the chat has no avatar.
+         * For a direct chat: the other user, the own user for the note to
+         * self. Show their photo (`fetch_user_avatar`) when the chat has no
+         * avatar.
          */peer: UserProfile?, 
+        /**
+         * The note to self: the direct chat with yourself (`peer` is the own
+         * user), synced across the own devices and never admitting anyone
+         * else. Pin it on top and label it; it has no read receipts, typing
+         * indicators, report or block.
+         */isNoteToSelf: Bool, 
         /**
          * Notifications are muted until then (Unix milliseconds; 0: not muted,
          * `muted_forever()`: until unmuted). Compare with the current time.
@@ -4976,6 +4952,7 @@ public struct ChatSummary: Equatable, Hashable {
         self.memberCount = memberCount
         self.state = state
         self.peer = peer
+        self.isNoteToSelf = isNoteToSelf
         self.mutedUntilMs = mutedUntilMs
         self.pinned = pinned
         self.archived = archived
@@ -5008,6 +4985,7 @@ public struct FfiConverterTypeChatSummary: FfiConverterRustBuffer {
                 memberCount: FfiConverterUInt32.read(from: &buf), 
                 state: FfiConverterTypeChatState.read(from: &buf), 
                 peer: FfiConverterOptionTypeUserProfile.read(from: &buf), 
+                isNoteToSelf: FfiConverterBool.read(from: &buf), 
                 mutedUntilMs: FfiConverterUInt64.read(from: &buf), 
                 pinned: FfiConverterBool.read(from: &buf), 
                 archived: FfiConverterBool.read(from: &buf), 
@@ -5026,6 +5004,7 @@ public struct FfiConverterTypeChatSummary: FfiConverterRustBuffer {
         FfiConverterUInt32.write(value.memberCount, into: &buf)
         FfiConverterTypeChatState.write(value.state, into: &buf)
         FfiConverterOptionTypeUserProfile.write(value.peer, into: &buf)
+        FfiConverterBool.write(value.isNoteToSelf, into: &buf)
         FfiConverterUInt64.write(value.mutedUntilMs, into: &buf)
         FfiConverterBool.write(value.pinned, into: &buf)
         FfiConverterBool.write(value.archived, into: &buf)
@@ -6090,7 +6069,7 @@ public func FfiConverterTypeRecoveryKitLabels_lower(_ value: RecoveryKitLabels) 
  */
 public struct RecoveryRotation: Equatable, Hashable {
     /**
-     * The new recovery code; not stored, show it to the user once.
+     * The new recovery code; it replaces the one `recovery_code` returns.
      */
     public var recoveryCode: String
     /**
@@ -6103,7 +6082,7 @@ public struct RecoveryRotation: Equatable, Hashable {
     // declare one manually.
     public init(
         /**
-         * The new recovery code; not stored, show it to the user once.
+         * The new recovery code; it replaces the one `recovery_code` returns.
          */recoveryCode: String, 
         /**
          * Listed hubs that did not take the new backup: the previous code still
@@ -6233,21 +6212,13 @@ public func FfiConverterTypeReplyPreview_lower(_ value: ReplyPreview) -> RustBuf
 public struct Session: Equatable, Hashable {
     public var userId: String
     public var deviceId: String
-    /**
-     * Empty until `claim_handle`.
-     */
-    public var handle: String
     public var displayName: String
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(userId: String, deviceId: String, 
-        /**
-         * Empty until `claim_handle`.
-         */handle: String, displayName: String) {
+    public init(userId: String, deviceId: String, displayName: String) {
         self.userId = userId
         self.deviceId = deviceId
-        self.handle = handle
         self.displayName = displayName
     }
 
@@ -6269,7 +6240,6 @@ public struct FfiConverterTypeSession: FfiConverterRustBuffer {
             try Session(
                 userId: FfiConverterString.read(from: &buf), 
                 deviceId: FfiConverterString.read(from: &buf), 
-                handle: FfiConverterString.read(from: &buf), 
                 displayName: FfiConverterString.read(from: &buf)
         )
     }
@@ -6277,7 +6247,6 @@ public struct FfiConverterTypeSession: FfiConverterRustBuffer {
     public static func write(_ value: Session, into buf: inout [UInt8]) {
         FfiConverterString.write(value.userId, into: &buf)
         FfiConverterString.write(value.deviceId, into: &buf)
-        FfiConverterString.write(value.handle, into: &buf)
         FfiConverterString.write(value.displayName, into: &buf)
     }
 }
@@ -6303,7 +6272,6 @@ public func FfiConverterTypeSession_lower(_ value: Session) -> RustBuffer {
  */
 public struct UserProfile: Equatable, Hashable {
     public var userId: String
-    public var handle: String
     public var displayName: String
     /**
      * The user has a profile photo; get it with `fetch_user_avatar`.
@@ -6312,12 +6280,11 @@ public struct UserProfile: Equatable, Hashable {
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(userId: String, handle: String, displayName: String, 
+    public init(userId: String, displayName: String, 
         /**
          * The user has a profile photo; get it with `fetch_user_avatar`.
          */hasAvatar: Bool) {
         self.userId = userId
-        self.handle = handle
         self.displayName = displayName
         self.hasAvatar = hasAvatar
     }
@@ -6339,7 +6306,6 @@ public struct FfiConverterTypeUserProfile: FfiConverterRustBuffer {
         return
             try UserProfile(
                 userId: FfiConverterString.read(from: &buf), 
-                handle: FfiConverterString.read(from: &buf), 
                 displayName: FfiConverterString.read(from: &buf), 
                 hasAvatar: FfiConverterBool.read(from: &buf)
         )
@@ -6347,7 +6313,6 @@ public struct FfiConverterTypeUserProfile: FfiConverterRustBuffer {
 
     public static func write(_ value: UserProfile, into buf: inout [UInt8]) {
         FfiConverterString.write(value.userId, into: &buf)
-        FfiConverterString.write(value.handle, into: &buf)
         FfiConverterString.write(value.displayName, into: &buf)
         FfiConverterBool.write(value.hasAvatar, into: &buf)
     }
@@ -9001,9 +8966,6 @@ private let initializationResult: InitializationResult = {
     if (uniffi_gim_core_checksum_method_gimclient_chat_state() != 39217) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_gim_core_checksum_method_gimclient_claim_handle() != 25957) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_gim_core_checksum_method_gimclient_confirm_approval() != 47132) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -9013,13 +8975,13 @@ private let initializationResult: InitializationResult = {
     if (uniffi_gim_core_checksum_method_gimclient_connection_state() != 25642) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_gim_core_checksum_method_gimclient_create_direct_chat() != 26778) {
+    if (uniffi_gim_core_checksum_method_gimclient_create_direct_chat() != 55023) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_gim_core_checksum_method_gimclient_create_group_chat() != 10041) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_gim_core_checksum_method_gimclient_create_identity() != 56233) {
+    if (uniffi_gim_core_checksum_method_gimclient_create_identity() != 17890) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_gim_core_checksum_method_gimclient_delete_account() != 29130) {
@@ -9044,9 +9006,6 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_gim_core_checksum_method_gimclient_fetch_user_avatar() != 26902) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_gim_core_checksum_method_gimclient_find_user() != 25186) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_gim_core_checksum_method_gimclient_hub_list() != 18852) {
@@ -9076,10 +9035,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_gim_core_checksum_method_gimclient_react() != 11948) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_gim_core_checksum_method_gimclient_register_push() != 42844) {
+    if (uniffi_gim_core_checksum_method_gimclient_recovery_code() != 58458) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_gim_core_checksum_method_gimclient_release_handle() != 61692) {
+    if (uniffi_gim_core_checksum_method_gimclient_register_push() != 42844) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_gim_core_checksum_method_gimclient_remove_avatar() != 37794) {
@@ -9094,7 +9053,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_gim_core_checksum_method_gimclient_report_user() != 7723) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_gim_core_checksum_method_gimclient_restore_from_recovery() != 59727) {
+    if (uniffi_gim_core_checksum_method_gimclient_restore_from_recovery() != 45609) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_gim_core_checksum_method_gimclient_retry_send() != 31098) {
@@ -9103,7 +9062,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_gim_core_checksum_method_gimclient_revoke_device() != 54975) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_gim_core_checksum_method_gimclient_rotate_recovery_code() != 7811) {
+    if (uniffi_gim_core_checksum_method_gimclient_rotate_recovery_code() != 42764) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_gim_core_checksum_method_gimclient_send_media() != 37766) {

@@ -8,7 +8,7 @@ import XCTest
 private let bubbleSize = CGSize(width: 200, height: 60)
 
 private func row(isOwn: Bool = false, isFirstInRun: Bool, hasTail: Bool, isEdited: Bool = false) -> TimelineMessageRow {
-    let sender = UserProfile(userId: "u-alice", handle: "alice", displayName: "Alice")
+    let sender = UserProfile(userId: "u-alice", displayName: "Alice")
     let message = MessageItem(
         messageId: "m1", chatId: "chat", sender: sender, isOwn: isOwn, sentAtMs: 0, content: .text(body: "hi"),
         replyTo: nil, reactions: [], edited: isEdited, sendState: nil)

@@ -64,8 +64,7 @@ Write for a 12-year-old. Signal and Telegram are the benchmark.
 ## Code keeps the old terms
 
 Only the text a user reads changes. Code, identifiers, string resource keys,
-logs, test tags and the gim-client-sdk keep the old terms (hub, handle, user
-ID, ...). Support and developers can use the table above to map between what
+logs, test tags and the gim-client-sdk keep the old terms (hub, user ID, ...). Support and developers can use the table above to map between what
 a user sees and what the code and logs say.
 
 ## iOS note
@@ -87,6 +86,7 @@ usage, Spanish uses neutral informal tú, and the product name is never translat
 | Account ID | 账号 ID | 帳號 ID | ID de cuenta |
 | Account | 账号 | 帳號 | cuenta |
 | Recovery key | 恢复密钥 | 復原金鑰 | clave de recuperación |
+| Note to self | 给自己的笔记 | 給自己的筆記 | Nota personal |
 | Recovery kit | 恢复资料 | 復原資料 | kit de recuperación |
 | Restore (an account) | 恢复 | 復原 | restaurar |
 | Device / Linked devices | 设备 / 已关联的设备 | 裝置 / 已連結的裝置 | dispositivo / Dispositivos vinculados |

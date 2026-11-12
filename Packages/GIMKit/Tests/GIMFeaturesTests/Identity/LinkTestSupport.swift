@@ -96,6 +96,7 @@ actor LinkRecordingClient: GimClientAPI {
     func signOut() async throws { try await fake.signOut() }
     func session() async throws -> Session? { try await fake.session() }
     nonisolated func userId() -> String? { fake.userId() }
+    nonisolated func recoveryCode() throws -> String? { try fake.recoveryCode() }
     nonisolated func localStateReset() -> Bool { fake.localStateReset() }
     func createIdentity(displayName: String) async throws -> String {
         try await fake.createIdentity(displayName: displayName)
@@ -106,14 +107,11 @@ actor LinkRecordingClient: GimClientAPI {
     func devices() async throws -> [DeviceInfo] { try await fake.devices() }
     func userDevices(userId: String) async throws -> [DeviceInfo] { try await fake.userDevices(userId: userId) }
     func setDisplayName(name: String) async throws { try await fake.setDisplayName(name: name) }
-    func claimHandle(handle: String) async throws { try await fake.claimHandle(handle: handle) }
-    func releaseHandle() async throws { try await fake.releaseHandle() }
     func stopTyping(chatId: String) async throws { try await fake.stopTyping(chatId: chatId) }
     func startSync() async throws { try await fake.startSync() }
     func stopSync() async throws { try await fake.stopSync() }
     nonisolated func setNetworkReachable(reachable: Bool) { fake.setNetworkReachable(reachable: reachable) }
     nonisolated func setLocalTimeZone(zone: (any LocalTimeZone)?) { fake.setLocalTimeZone(zone: zone) }
-    func findUser(handle: String) async throws -> UserProfile? { try await fake.findUser(handle: handle) }
     func createDirectChat(userId: String) async throws -> String { try await fake.createDirectChat(userId: userId) }
     func createGroupChat(name: String, memberUserIds: [String]) async throws -> String {
         try await fake.createGroupChat(name: name, memberUserIds: memberUserIds)

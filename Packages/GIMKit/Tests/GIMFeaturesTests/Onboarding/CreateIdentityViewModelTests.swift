@@ -119,7 +119,7 @@ final class CreateIdentityViewModelTests: XCTestCase {
 
     @MainActor
     func testClientWithAnIdentityShowsTheCoreError() async throws {
-        let session = Session(userId: "user-sofia", deviceId: "device-1", handle: "", displayName: "Sofia")
+        let session = Session(userId: "user-sofia", deviceId: "device-1", displayName: "Sofia")
         let client = FakeGimClient(session: session)
         let (viewModel, created) = makeViewModel { client }
         viewModel.displayName = "Someone Else"
@@ -155,6 +155,7 @@ final class CreateIdentityViewModelTests: XCTestCase {
 private final class SessionlessIdentityClient: GimClientAPI {
     func session() async throws -> Session? { nil }
     func userId() -> String? { nil }
+    func recoveryCode() throws -> String? { nil }
     func localStateReset() -> Bool { false }
     func createIdentity(displayName: String) async throws -> String {
         "7BQ2-K9MX-4TVA-0HZR-PC63-W8NE-1SJD-5GFY-QK2M-V7R"
@@ -169,14 +170,11 @@ private final class SessionlessIdentityClient: GimClientAPI {
     func userDevices(userId: String) async throws -> [DeviceInfo] { throw GimError.NotRegistered }
     func revokeDevice(deviceId: String) async throws {}
     func setDisplayName(name: String) async throws {}
-    func claimHandle(handle: String) async throws {}
-    func releaseHandle() async throws {}
     func signOut() async throws {}
     func startSync() async throws {}
     func stopSync() async throws {}
     func setNetworkReachable(reachable: Bool) {}
     func setLocalTimeZone(zone: (any LocalTimeZone)?) {}
-    func findUser(handle: String) async throws -> UserProfile? { nil }
     func createDirectChat(userId: String) async throws -> String { throw GimError.NotRegistered }
     func createGroupChat(name: String, memberUserIds: [String]) async throws -> String {
         throw GimError.NotRegistered

@@ -4,9 +4,9 @@ import GIMFeatures
 import XCTest
 
 final class NewGroupViewModelTests: XCTestCase {
-    private static let sofia = UserProfile(userId: accountId("s"), handle: "", displayName: "Sofia Marin")
-    private static let luca = UserProfile(userId: accountId("l"), handle: "", displayName: "Luca Bianchi")
-    private static let nikos = UserProfile(userId: accountId("n"), handle: "", displayName: "Nikos Papadopoulos")
+    private static let sofia = UserProfile(userId: accountId("s"), displayName: "Sofia Marin")
+    private static let luca = UserProfile(userId: accountId("l"), displayName: "Luca Bianchi")
+    private static let nikos = UserProfile(userId: accountId("n"), displayName: "Nikos Papadopoulos")
 
     /// The demo client (signed in as `user-alex`) that also knows Sofia, Luca and Nikos by valid Account IDs.
     @MainActor
@@ -53,12 +53,12 @@ final class NewGroupViewModelTests: XCTestCase {
         await add(unknown, to: viewModel)
 
         XCTAssertNil(viewModel.memberError)
-        XCTAssertEqual(viewModel.members, [UserProfile(userId: unknown, handle: "", displayName: "")])
+        XCTAssertEqual(viewModel.members, [UserProfile(userId: unknown, displayName: "")])
     }
 
     @MainActor
     func testAddMemberRejectsInvalidIdsAndSelf() async {
-        let me = Session(userId: accountId("m"), deviceId: "device-1", handle: "", displayName: "Me")
+        let me = Session(userId: accountId("m"), deviceId: "device-1", displayName: "Me")
         let viewModel = NewGroupViewModel(client: FakeGimClient(session: me))
 
         await add("sofia", to: viewModel)

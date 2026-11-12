@@ -221,7 +221,7 @@ final class OnboardingViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testCreateFlowShowsTheKitChecksTheEndingAndRegistersWithoutAHandle() async throws {
+    func testCreateFlowShowsTheKitChecksTheEndingAndRegisters() async throws {
         let client = FakeGimClient()
         let factory = RecordingFactory { _ in client }
         let (viewModel, registrations) = makeViewModel(factory: factory, serverUrl: "https://gim.example.eu/")
@@ -247,7 +247,6 @@ final class OnboardingViewModelTests: XCTestCase {
         let result = try XCTUnwrap(registrations.results.first)
         XCTAssertTrue(result.client === client)
         XCTAssertEqual(result.config, ClientConfig(serverUrl: "https://gim.example.eu"))
-        XCTAssertEqual(result.session.handle, "")
         XCTAssertEqual(result.session.displayName, "Sofia Marin")
         let session = try await client.session()
         XCTAssertEqual(session, result.session)
@@ -255,7 +254,7 @@ final class OnboardingViewModelTests: XCTestCase {
 
     @MainActor
     func testClientWithAnIdentityShowsTheCoreErrorInsteadOfSkippingTheCode() async throws {
-        let session = Session(userId: "user-sofia", deviceId: "device-1", handle: "", displayName: "Sofia")
+        let session = Session(userId: "user-sofia", deviceId: "device-1", displayName: "Sofia")
         let client = FakeGimClient(session: session)
         let factory = RecordingFactory { _ in FakeGimClient() }
         let (viewModel, _) = makeViewModel(factory: factory, serverUrl: "https://gim.example.eu", client: client)
@@ -300,7 +299,7 @@ final class OnboardingViewModelTests: XCTestCase {
         let (viewModel, registrations) = makeViewModel(serverUrl: "https://gim.example.eu")
         viewModel.choose(.restore)
         let context = try XCTUnwrap(viewModel.context)
-        let session = Session(userId: "user-sofia", deviceId: "device-2", handle: "sofia", displayName: "Sofia")
+        let session = Session(userId: "user-sofia", deviceId: "device-2", displayName: "Sofia")
 
         context.onRegistered(Registration(client: FakeGimClient(), config: context.config, session: session))
 

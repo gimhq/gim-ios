@@ -37,7 +37,7 @@ public struct NotificationPresentation: Sendable, Hashable {
     ///   an alert-priority push, since the hub coalesces pushes): empty title, body and thread, so the extension
     ///   delivers empty content and the system shows nothing.
     /// - `invite`: title = the group name (`chatTitle`), body = "<inviter> added you", the inviter being
-    ///   `senderDisplayName` (gim-core gives the handle until the inviter's profile is known), else `senderUserId`; with
+    ///   `senderDisplayName` (gim-core gives the user id until the inviter's profile is known), else `senderUserId`; with
     ///   neither, gim-core's body.
     /// - Any other kind: the title is the chat title, or "<sender> in <chat>" when the sender's name differs from the
     ///   chat title (a group; in a direct chat the title is the other user's name); without a chat title the sender's

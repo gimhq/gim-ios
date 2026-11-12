@@ -9,7 +9,7 @@ final class ErrorPresenterTests: XCTestCase {
         let cases: [(GimError, String)] = [
             (.Network(reason: "timeout"), "Can't reach the server. Check your internet and try again."),
             (.NotRegistered, "This device isn't signed in. Sign in again."),
-            (.InvalidInput(reason: "Handle is taken"), "Handle is taken"),
+            (.InvalidInput(reason: "Group name is required"), "Group name is required"),
             (.InvalidInput(reason: ""), "Check what you typed and try again."),
             (.NotFound(reason: "chat x"), "Couldn't find that. It may have been removed."),
             (.Crypto(reason: "mls"), "Couldn't unlock this message."),
@@ -87,7 +87,7 @@ final class ErrorPresenterTests: XCTestCase {
     func testSuspensionReadsTheClientsHubs() async throws {
         let scheduler = ManualFakeScheduler()
         let client = FakeGimClient(
-            scheduler: scheduler, session: Session(userId: "u", deviceId: "d", handle: "", displayName: "U"))
+            scheduler: scheduler, session: Session(userId: "u", deviceId: "d", displayName: "U"))
         let error = GimError.UserSuspended(hubId: FakeGimClient.hubId(forUrl: "https://hub2.example.eu"))
         let single = await ErrorPresenter.message(for: error, client: client)
         XCTAssertEqual(single, suspended)
@@ -117,7 +117,7 @@ final class ErrorPresenterTests: XCTestCase {
     func testNotAdmittedReadsTheClientsHubs() async throws {
         let scheduler = ManualFakeScheduler()
         let client = FakeGimClient(
-            scheduler: scheduler, session: Session(userId: "u", deviceId: "d", handle: "", displayName: "U"))
+            scheduler: scheduler, session: Session(userId: "u", deviceId: "d", displayName: "U"))
         _ = try await client.addHub(url: "https://hub2.example.eu")
         await scheduler.advance(by: FakeGimClient.hubVerifyDelay)
         let error = GimError.UserNotAdmitted(hubId: FakeGimClient.hubId(forUrl: "https://hub2.example.eu"))
@@ -138,9 +138,9 @@ final class ErrorPresenterTests: XCTestCase {
 
     func testContactRefusalNamesTheUsers() {
         let profiles = [
-            UserProfile(userId: "u-ana", handle: "ana", displayName: "Ana Kovač"),
-            UserProfile(userId: "u-lars", handle: "lars", displayName: ""),
-            UserProfile(userId: "u-x", handle: "", displayName: ""),
+            UserProfile(userId: "u-ana", displayName: "Ana Kovač"),
+            UserProfile(userId: "u-lars", displayName: ""),
+            UserProfile(userId: "u-x", displayName: ""),
         ]
         XCTAssertEqual(
             ErrorPresenter.contactNotAdmittedMessage(userIds: ["u-ana"], profiles: profiles),

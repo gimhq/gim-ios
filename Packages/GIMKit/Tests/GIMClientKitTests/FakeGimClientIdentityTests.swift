@@ -4,7 +4,7 @@ import XCTest
 @testable import GIMClientKit
 
 final class FakeGimClientIdentityTests: XCTestCase {
-    private let me = Session(userId: "user-kai", deviceId: "device-1", handle: "kai", displayName: "Kai")
+    private let me = Session(userId: "user-kai", deviceId: "device-1", displayName: "Kai")
 
     private func makeClient(session: Session? = nil, users: [UserProfile] = []) throws -> FakeGimClient {
         FakeGimClient(dataDirectory: try makeTemporaryDirectory(), users: users, session: session)
@@ -50,7 +50,7 @@ final class FakeGimClientIdentityTests: XCTestCase {
         let code = try await client.createIdentity(displayName: "Kai")
         let createdValue = try await client.session()
         let created = try XCTUnwrap(createdValue)
-        try await client.claimHandle(handle: "kai")
+        XCTAssertEqual(try client.recoveryCode(), code, "createIdentity keeps the code on this device")
         await assertThrows(.InvalidInput(reason: "This device already has an identity")) {
             try await client.restoreFromRecovery(userId: created.userId, recoveryCode: code, revokeOthers: false)
         }
@@ -75,7 +75,10 @@ final class FakeGimClientIdentityTests: XCTestCase {
         let restoredValue = try await client.session()
         let restored = try XCTUnwrap(restoredValue)
         XCTAssertEqual(restored.userId, created.userId)
-        XCTAssertEqual(restored.handle, "kai")
+        XCTAssertEqual(restored.displayName, "Kai")
+        XCTAssertEqual(
+            try client.recoveryCode().flatMap(FakeGimClient.normalizedRecoveryCode),
+            FakeGimClient.normalizedRecoveryCode(code), "restoreFromRecovery keeps the code on this device")
         XCTAssertNotEqual(restored.deviceId, created.deviceId)
         XCTAssertEqual(client.userId(), created.userId)
         let devices = try await client.devices()
@@ -134,24 +137,16 @@ final class FakeGimClientIdentityTests: XCTestCase {
 
     // MARK: - Profile
 
-    func testDisplayNameAndHandleChanges() async throws {
+    func testDisplayNameChanges() async throws {
         let client = try makeClient(
-            session: me, users: [UserProfile(userId: "user-sofia", handle: "sofia", displayName: "Sofia")])
+            session: me, users: [UserProfile(userId: "user-sofia", displayName: "Sofia")])
         await assertThrows(.InvalidInput(reason: "Display name is required")) {
             try await client.setDisplayName(name: "  ")
         }
         try await client.setDisplayName(name: " Kai Weber ")
-        try await client.releaseHandle()
-        await assertThrows(.InvalidInput(reason: "No handle is claimed")) { try await client.releaseHandle() }
 
         let session = try await client.session()
-        XCTAssertEqual(session?.displayName, "Kai Weber")
-        XCTAssertEqual(session?.handle, "")
-        let released = try await client.findUser(handle: "kai")
-        XCTAssertNil(released)
-        try await client.claimHandle(handle: "kai_w")
-        let found = try await client.findUser(handle: "kai_w")
-        XCTAssertEqual(found, UserProfile(userId: me.userId, handle: "kai_w", displayName: "Kai Weber"))
+        XCTAssertEqual(session, Session(userId: me.userId, deviceId: me.deviceId, displayName: "Kai Weber"))
     }
 
     // MARK: - Device link
@@ -242,5 +237,32 @@ final class FakeGimClientIdentityTests: XCTestCase {
             devices.map(\.deviceId),
             ["device-1", FakeGimClient.fakeOtherDeviceId, accepted.deviceId(), rejected.deviceId()])
         XCTAssertEqual(devices.map(\.revoked), [false, false, false, true])
+    }
+
+    // MARK: - Recovery code on this device
+
+    func testRecoveryCodeIsKeptByRotationAndDroppedBySignOutAndAbsentOnLinkedDevices() async throws {
+        let client = try makeClient()
+        XCTAssertThrowsError(try client.recoveryCode()) { XCTAssertEqual($0 as? GimError, .NotRegistered) }
+        let first = try await client.createIdentity(displayName: "Kai")
+
+        let rotation = try await client.rotateRecoveryCode()
+
+        XCTAssertNotEqual(rotation.recoveryCode, first)
+        XCTAssertEqual(try client.recoveryCode(), rotation.recoveryCode)
+        try await client.signOut()
+        XCTAssertThrowsError(try client.recoveryCode())
+
+        let linked = try makeClient(session: me)
+        XCTAssertNil(try linked.recoveryCode(), "a client created with a session (like a linked device) has no code")
+    }
+
+    func testRecoveryCodeIsDroppedByDeleteAccount() async throws {
+        let client = try makeClient()
+        _ = try await client.createIdentity(displayName: "Kai")
+
+        _ = try await client.deleteAccount()
+
+        XCTAssertThrowsError(try client.recoveryCode())
     }
 }

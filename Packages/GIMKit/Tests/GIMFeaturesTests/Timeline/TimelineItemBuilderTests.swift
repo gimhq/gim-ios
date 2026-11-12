@@ -3,8 +3,8 @@ import GIMClientKit
 import GIMFeatures
 import XCTest
 
-private let alice = UserProfile(userId: "u-alice", handle: "alice", displayName: "Alice")
-private let bob = UserProfile(userId: "u-bob", handle: "bob", displayName: "Bob")
+private let alice = UserProfile(userId: "u-alice", displayName: "Alice")
+private let bob = UserProfile(userId: "u-bob", displayName: "Bob")
 private let minute: UInt64 = 60_000
 /// 2026-10-15 10:00 UTC.
 private let builderNow = Date(timeIntervalSince1970: 1_792_058_400)
@@ -179,7 +179,7 @@ final class TimelineItemBuilderTests: XCTestCase {
 
     func testUserIdsAndMissingNamesAreShortened() {
         let userId = "u" + String(repeating: "q", count: 55)
-        let remote = UserProfile(userId: userId, handle: "", displayName: userId)
+        let remote = UserProfile(userId: userId, displayName: userId)
         let items: [TimelineItem] = [
             .membershipChange(
                 userName: userId, change: .removed, atMs: nowMs - 2 * minute, userId: userId, actorUserId: alice.userId),

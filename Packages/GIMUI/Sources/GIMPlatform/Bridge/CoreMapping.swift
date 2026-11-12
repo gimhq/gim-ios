@@ -161,7 +161,7 @@ extension GIMClientKit.NotificationContent {
 
 extension GIMClientKit.Session {
     init(_ core: GIMCore.Session) {
-        self.init(userId: core.userId, deviceId: core.deviceId, handle: core.handle, displayName: core.displayName)
+        self.init(userId: core.userId, deviceId: core.deviceId, displayName: core.displayName)
     }
 }
 
@@ -192,7 +192,7 @@ extension GIMClientKit.HubInfo {
 
 extension GIMClientKit.UserProfile {
     init(_ core: GIMCore.UserProfile) {
-        self.init(userId: core.userId, handle: core.handle, displayName: core.displayName, hasAvatar: core.hasAvatar)
+        self.init(userId: core.userId, displayName: core.displayName, hasAvatar: core.hasAvatar)
     }
 }
 
@@ -238,8 +238,8 @@ extension GIMClientKit.ChatSummary {
             avatar: core.avatar.map { GIMClientKit.MediaRef($0) },
             lastMessage: core.lastMessage.map { GIMClientKit.MessagePreview($0) }, unreadCount: core.unreadCount,
             updatedAtMs: core.updatedAtMs, memberCount: core.memberCount, state: GIMClientKit.ChatState(core.state),
-            peer: core.peer.map { GIMClientKit.UserProfile($0) }, mutedUntilMs: core.mutedUntilMs, pinned: core.pinned,
-            archived: core.archived, blocked: core.blocked)
+            peer: core.peer.map { GIMClientKit.UserProfile($0) }, isNoteToSelf: core.isNoteToSelf,
+            mutedUntilMs: core.mutedUntilMs, pinned: core.pinned, archived: core.archived, blocked: core.blocked)
     }
 }
 

@@ -4,7 +4,7 @@ import GIMFeatures
 import XCTest
 
 final class HubsViewModelTests: XCTestCase {
-    private let session = Session(userId: "user-kai", deviceId: "device-1", handle: "kai", displayName: "Kai")
+    private let session = Session(userId: "user-kai", deviceId: "device-1", displayName: "Kai")
     private let home = FakeGimClient.hubId(forUrl: FakeGimClient.defaultHomeHubUrl)
     private let secondUrl = "https://hub2.example.eu"
     private let second = FakeGimClient.hubId(forUrl: "https://hub2.example.eu")

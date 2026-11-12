@@ -24,7 +24,7 @@ final class ProfileViewModelTests: XCTestCase {
         await viewModel.load()
 
         XCTAssertEqual(viewModel.name, "Alex Morgan")
-        XCTAssertEqual(viewModel.session?.handle, "alex")
+        XCTAssertEqual(viewModel.session?.userId, FakeGimClient.demoSelfId)
         XCTAssertNil(viewModel.errorMessage)
         XCTAssertFalse(viewModel.canSave)
         XCTAssertEqual(changes.count, 0)
