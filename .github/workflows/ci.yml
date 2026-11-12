@@ -31,13 +31,15 @@ jobs:
   ios:
     name: iOS (xcodebuild)
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
-    runs-on: macos-latest
+    # Xcode 26.6 crashes in the region-based isolation checker on GIMFeatures;
+    # the xcode-27 image (macOS 27) has the Xcode the Mac build host uses.
+    runs-on: xcode-27
     steps:
       - uses: actions/checkout@v4
 
       - uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: latest-stable
+          xcode-version: '27.0'
 
       - name: Install tools
         run: brew install xcodegen xcbeautify
@@ -120,14 +122,16 @@ jobs:
   ios-e2e:
     name: iOS E2E (XCUITest + gim-hub)
     if: (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) && vars.GIM_E2E_HUB_URL != ''
-    runs-on: macos-latest
+    # Xcode 26.6 crashes in the region-based isolation checker on GIMFeatures;
+    # the xcode-27 image (macOS 27) has the Xcode the Mac build host uses.
+    runs-on: xcode-27
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
       - uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: latest-stable
+          xcode-version: '27.0'
 
       - name: Install tools
         run: brew install xcodegen xcbeautify
