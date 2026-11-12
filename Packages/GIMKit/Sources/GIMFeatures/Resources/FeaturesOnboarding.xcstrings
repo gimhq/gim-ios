@@ -29,6 +29,34 @@
         }
       }
     },
+    "Couldn't confirm it's you. Try again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't confirm it's you. Try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo confirmar que eres tú. Inténtalo de nuevo."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法确认是你本人。请重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法確認是你本人。請再試一次。"
+          }
+        }
+      }
+    },
     "Enter a full address, like https://example.com" : {
       "localizations" : {
         "en" : {
@@ -249,6 +277,62 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "復原金鑰"
+          }
+        }
+      }
+    },
+    "Set a device passcode to see your recovery key." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Set a device passcode to see your recovery key."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configura un código de acceso en el dispositivo para ver tu clave de recuperación."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请先为设备设置密码，才能查看恢复密钥。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請先為裝置設定密碼，才能查看復原金鑰。"
+          }
+        }
+      }
+    },
+    "Show your recovery key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show your recovery key"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar tu clave de recuperación"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示你的恢复密钥"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "顯示你的復原金鑰"
           }
         }
       }

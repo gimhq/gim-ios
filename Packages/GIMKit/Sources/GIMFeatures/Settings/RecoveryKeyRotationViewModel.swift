@@ -27,6 +27,8 @@ public final class RecoveryKeyRotationViewModel {
     private let client: any GimClientAPI
     private let userId: String
     private let recoveryKit: any RecoveryKitFunctions
+    /// Runs once the user confirmed the new kit's ending.
+    @ObservationIgnored public var onKitConfirmed: (@MainActor () -> Void)?
 
     public init(client: any GimClientAPI, userId: String, recoveryKit: any RecoveryKitFunctions) {
         self.client = client
@@ -57,6 +59,7 @@ public final class RecoveryKeyRotationViewModel {
                 [weak self] in
                 self?.kit = nil
                 self?.state = .idle
+                self?.onKitConfirmed?()
             }
             state = .showingKit(code: rotation.recoveryCode)
         } catch {

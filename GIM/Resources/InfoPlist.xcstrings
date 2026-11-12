@@ -29,6 +29,34 @@
         }
       }
     },
+    "NSFaceIDUsageDescription" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GIM uses Face ID to make sure it's you before showing your recovery key."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GIM usa Face ID para confirmar que eres tú antes de mostrar tu clave de recuperación."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GIM 使用面容 ID 确认是你本人，然后才显示你的恢复密钥。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GIM 使用 Face ID 確認是你本人，然後才顯示你的復原金鑰。"
+          }
+        }
+      }
+    },
     "NSPhotoLibraryUsageDescription" : {
       "localizations" : {
         "en" : {
