@@ -30,12 +30,29 @@ public struct ChatRow: Sendable, Hashable, Identifiable {
     public let isMuted: Bool
     /// Archived chats are listed apart from the others.
     public let isArchived: Bool
+    /// The note to self (`ChatSummary.isNoteToSelf`): titled `noteToSelfTitle`, listed first, shown with the own
+    /// avatar and a note badge.
+    public let isNoteToSelf: Bool
+    /// Seeds the avatar colour: the chat id, or the own user id for the note to self.
+    public let avatarId: String
+    /// The name the avatar's initials come from: the title, or the own name for the note to self.
+    public let avatarName: String
+
+    /// The title of the note to self in the user's language.
+    public static var noteToSelfTitle: String {
+        NSLocalizedString(
+            "Note to self", tableName: "FeaturesChat", bundle: FeaturesLocalization.bundle, value: "Note to self",
+            comment: "")
+    }
 
     /// - Parameter now: the time `isMuted` is checked against.
     public init(summary: ChatSummary, dateFormatter: RelativeDateFormatter, now: Date = Date()) {
         id = summary.chatId
         kind = summary.kind
-        title = UserLabel.name(summary.name)
+        isNoteToSelf = summary.isNoteToSelf
+        title = summary.isNoteToSelf ? Self.noteToSelfTitle : UserLabel.name(summary.name)
+        avatarId = summary.isNoteToSelf ? summary.peer?.userId ?? summary.chatId : summary.chatId
+        avatarName = summary.isNoteToSelf ? summary.peer.map(UserLabel.name(for:)) ?? title : title
         avatar = summary.avatar
         preview = Self.preview(for: summary)
         time = summary.lastMessage.map { dateFormatter.string(from: Date(epochMilliseconds: $0.sentAtMs)) }

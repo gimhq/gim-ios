@@ -43,8 +43,10 @@ public final class ChatActionsViewModel {
     public var isBlocked: Bool { summary?.blocked ?? false }
     /// The other user of a direct chat; `nil` for a group or before the chat list arrives.
     public var peerName: String? { summary?.peer.map(UserLabel.name(for:)) }
+    /// The note to self: there is no one to block or report.
+    public var isNoteToSelf: Bool { summary?.isNoteToSelf ?? false }
     /// A direct chat with a known other user, who can be blocked or unblocked.
-    public var canBlock: Bool { !isGroup && summary?.peer != nil }
+    public var canBlock: Bool { !isGroup && !isNoteToSelf && summary?.peer != nil }
 
     // MARK: - Subscription
 

@@ -2,7 +2,7 @@ import Foundation
 import GIMClientKit
 import Observation
 
-/// Starts a direct chat with the user of a scanned or typed Account ID.
+/// Starts a direct chat with the user of a scanned or typed Account ID, or opens the note to self.
 @MainActor
 @Observable
 public final class NewChatViewModel {
@@ -47,5 +47,21 @@ public final class NewChatViewModel {
         }
         startError = message
         return .failed(message)
+    }
+
+    /// Creates or opens the note to self (`createDirectChat` with the own user id) and returns its chat id; `nil` with
+    /// `startError` set on failure.
+    public func startNoteToSelf() async -> String? {
+        guard !isStarting else { return nil }
+        isStarting = true
+        startError = nil
+        defer { isStarting = false }
+        do {
+            guard let userId = client.userId() else { throw GimError.NotRegistered }
+            return try await client.createDirectChat(userId: userId)
+        } catch {
+            startError = await ErrorPresenter.message(for: error, client: client)
+            return nil
+        }
     }
 }

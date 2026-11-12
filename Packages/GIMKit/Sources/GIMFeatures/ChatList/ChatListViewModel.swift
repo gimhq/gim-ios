@@ -7,8 +7,12 @@ import Observation
 @MainActor
 @Observable
 public final class ChatListViewModel {
-    /// The chats that are not archived, in the client's order: pinned first, then by recent activity.
-    public var rows: [ChatRow] { allRows.filter { !$0.isArchived } }
+    /// The chats that are not archived: the note to self first, then the client's order (pinned first, then by recent
+    /// activity).
+    public var rows: [ChatRow] {
+        let rows = allRows.filter { !$0.isArchived }
+        return rows.filter(\.isNoteToSelf) + rows.filter { !$0.isNoteToSelf }
+    }
     /// The archived chats, in the client's order.
     public var archivedRows: [ChatRow] { allRows.filter(\.isArchived) }
     public var hasArchived: Bool { allRows.contains(where: \.isArchived) }

@@ -2,12 +2,12 @@ import GIMCore
 import XCTest
 
 /// End-to-end identity test against a running gim-hub (`scripts/e2e-hub.sh start`): the app creates an identity,
-/// links a `ScriptedLinkingDevice` as a second device by its pasted link code and compares the SAS, revokes it, then
-/// signs out and restores the identity from the recovery code with the other devices revoked. See `E2ETestCase` for
-/// the hub URL.
+/// shows its recovery key in Settings, links a `ScriptedLinkingDevice` as a second device by its pasted link code and
+/// compares the SAS, writes to the note to self that both devices share, revokes the linked device, then signs out and
+/// restores the identity from the recovery code with the other devices revoked. See `E2ETestCase` for the hub URL.
 final class IdentitySmokeTests: E2ETestCase {
     private let summary = StepSummary(
-        "IdentitySmokeTests", steps: ["create", "settings", "link", "devices", "revoke", "restore"])
+        "IdentitySmokeTests", steps: ["create", "settings", "recovery", "link", "note", "devices", "revoke", "restore"])
 
     @MainActor
     func testCreateLinkRevokeRestore() throws {
@@ -46,6 +46,27 @@ final class IdentitySmokeTests: E2ETestCase {
         }
         print("[e2e] settings: user \(userId), app device \(appDeviceId)")
         summary.finish("settings")
+
+        summary.start("recovery")
+        try XCTContext.runActivity(named: "recovery: Settings shows the recovery key after authentication") { _ in
+            // Device authentication is skipped by `-GIMSkipDeviceAuth` (simulators have no passcode).
+            try tap(app.buttons["settings.recoveryKey"], "recovery: Recovery key row", app)
+            let code = app.descendants(matching: .any)["recoveryKey.code"]
+            try require(!code.exists, "recovery: nothing is shown before Show recovery key", app)
+            try tap(app.buttons["recoveryKey.show"], "recovery: Show recovery key button", app)
+            try require(
+                code.waitForExistence(timeout: networkTimeout),
+                "recovery: key shown (error: \(app.staticTexts["recoveryKey.error"].label))", app)
+            try require(
+                code.label == recoveryCode, "recovery: key \"\(code.label)\" is the onboarding key \"\(recoveryCode)\"",
+                app)
+            try tap(app.buttons["recoveryKey.hide"], "recovery: Hide button", app)
+            try require(
+                app.buttons["recoveryKey.show"].waitForExistence(timeout: 5) && !code.exists, "recovery: key hidden",
+                app)
+            try tap(backButton(app, to: "Settings"), "recovery: back to Settings", app)
+        }
+        summary.finish("recovery")
 
         summary.start("link")
         let (linked, linkedDeviceId) = try XCTContext.runActivity(named: "link: a new device links by its link code") {
@@ -87,6 +108,42 @@ final class IdentitySmokeTests: E2ETestCase {
         }
         print("[e2e] link: linked device \(linkedDeviceId)")
         summary.finish("link")
+
+        summary.start("note")
+        try XCTContext.runActivity(named: "note: both devices write to the note to self") { _ in
+            let linkedCode = try waitForPeer("note: linked device's recovery key", app) { try linked.recoveryCode() }
+            try require(linkedCode == nil, "note: a device linked by QR keeps no recovery key", app)
+            try waitForPeer("note: linked device starts syncing", app) { try await linked.startSync() }
+            try tap(app.buttons["settings.noteToSelf"], "note: Note to self row", app)
+            try require(
+                app.navigationBars["Note to self"].waitForExistence(timeout: networkTimeout),
+                "note: the note to self opens", app)
+            let fromApp = "Note from the app \(suffix)"
+            try send(fromApp, "note", app)
+            let chatId = try eventually("note: linked device lists the note to self", app) {
+                linked.noteToSelfChatId()
+            }
+            _ = try eventually("note: linked device has the app's note", app) { () async -> Bool? in
+                let messages = (try? await linked.messages(in: chatId)) ?? []
+                return messages.contains {
+                    if case .text(let body) = $0.content { body == fromApp } else { false }
+                } ? true : nil
+            }
+            let fromLinked = "Note from the linked device \(suffix)"
+            _ = try waitForPeer("note: linked device writes a note", app) {
+                try await linked.sendText(chatId: chatId, body: fromLinked)
+            }
+            try require(
+                messageText(fromLinked, in: app).waitForExistence(timeout: networkTimeout),
+                "note: the app shows the linked device's note", app)
+            try tap(backButton(app), "note: back to the chat list", app)
+            let first = app.buttons.matching(identifier: "chatList.row").firstMatch
+            try require(
+                first.waitForExistence(timeout: networkTimeout) && first.label.hasPrefix("Note to self"),
+                "note: the note to self is the first chat, found \"\(first.label)\"", app)
+            try tap(app.buttons["chatList.settings"], "note: Settings button", app)
+        }
+        summary.finish("note")
 
         summary.start("devices")
         try XCTContext.runActivity(named: "devices: the app lists both devices") { _ in

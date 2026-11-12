@@ -49,6 +49,17 @@ final class ChatActionsViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testTheNoteToSelfCannotBeBlocked() async throws {
+        let (client, _) = await connected(makeDemoClient())
+        let note = try await client.createDirectChat(userId: FakeGimClient.demoSelfId)
+        let viewModel = await startedViewModel(client, chatId: note)
+
+        XCTAssertTrue(viewModel.isNoteToSelf)
+        XCTAssertFalse(viewModel.isGroup)
+        XCTAssertFalse(viewModel.canBlock)
+    }
+
+    @MainActor
     func testPinAndUnpin() async {
         let (client, _) = await connected(makeDemoClient())
         let viewModel = await startedViewModel(client, chatId: direct)

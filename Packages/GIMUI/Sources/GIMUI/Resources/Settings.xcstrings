@@ -673,6 +673,118 @@
         }
       }
     },
+    "Hidden while your screen is recorded or shared." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hidden while your screen is recorded or shared."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oculta mientras se graba o se comparte la pantalla."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "屏幕正在录制或共享，已隐藏。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "螢幕正在錄製或分享，已隱藏。"
+          }
+        }
+      }
+    },
+    "Hide" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ocultar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隐藏"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隱藏"
+          }
+        }
+      }
+    },
+    "It holds your Account ID and recovery key. Keep it as private as the key." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "It holds your Account ID and recovery key. Keep it as private as the key."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contiene tu ID de cuenta y tu clave de recuperación. Guárdalo con el mismo cuidado que la clave."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "它包含你的账号 ID 和恢复密钥。请像保管密钥一样保密。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "它包含你的帳號 ID 和復原金鑰。請像保管金鑰一樣保密。"
+          }
+        }
+      }
+    },
+    "It was made on another device. Create a new one to keep it here too. Your current key then stops working." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "It was made on another device. Create a new one to keep it here too. Your current key then stops working."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se creó en otro dispositivo. Crea una nueva para guardarla también aquí. Tu clave actual dejará de funcionar."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "它是在另一台设备上创建的。创建一个新密钥即可在这台设备上保存。你当前的密钥随后会失效。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "它是在另一台裝置上建立的。建立一個新金鑰即可在這台裝置上保存。你目前的金鑰隨後會失效。"
+          }
+        }
+      }
+    },
     "Keep server" : {
       "localizations" : {
         "en" : {
@@ -893,6 +1005,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "你沒有封鎖任何人。"
+          }
+        }
+      }
+    },
+    "Note to self" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Note to self"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nota personal"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "给自己的笔记"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "給自己的筆記"
           }
         }
       }
@@ -1149,6 +1289,62 @@
         }
       }
     },
+    "Recovery key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recovery key"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clave de recuperación"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "恢复密钥"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "復原金鑰"
+          }
+        }
+      }
+    },
+    "Recovery kit QR code" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recovery kit QR code"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Código QR del kit de recuperación"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "恢复资料二维码"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "復原資料 QR 碼"
+          }
+        }
+      }
+    },
     "Remove photo" : {
       "localizations" : {
         "en" : {
@@ -1257,6 +1453,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "設定"
+          }
+        }
+      }
+    },
+    "Show recovery key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show recovery key"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar clave de recuperación"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示恢复密钥"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "顯示復原金鑰"
           }
         }
       }
@@ -1453,6 +1677,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "此操作無法復原，你的復原金鑰也將失效。目前無法連線的伺服器稍後會自行刪除你的帳號。"
+          }
+        }
+      }
+    },
+    "This device doesn't have your recovery key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This device doesn't have your recovery key"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este dispositivo no tiene tu clave de recuperación"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这台设备上没有你的恢复密钥"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這台裝置上沒有你的復原金鑰"
           }
         }
       }
@@ -1873,6 +2125,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "你的其他裝置會登出。"
+          }
+        }
+      }
+    },
+    "Your recovery key and Account ID bring your account back if you lose all your devices. Anyone who sees them can get into your account." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your recovery key and Account ID bring your account back if you lose all your devices. Anyone who sees them can get into your account."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu clave de recuperación y tu ID de cuenta recuperan tu cuenta si pierdes todos tus dispositivos. Quien los vea puede entrar en tu cuenta."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "如果你丢失了所有设备，恢复密钥和账号 ID 可以找回你的账号。任何看到它们的人都能进入你的账号。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "如果你遺失了所有裝置，復原金鑰和帳號 ID 可以找回你的帳號。任何看到它們的人都能進入你的帳號。"
           }
         }
       }

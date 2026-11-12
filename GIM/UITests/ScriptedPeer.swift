@@ -112,6 +112,8 @@ final class ScriptedLinkingDevice: Sendable {
     private let client: GimClient
     private let link: LinkSession
     private let directory: URL
+    private let chats = ChatListCollector()
+    private let timelines = TimelineStore()
 
     private init(client: GimClient, link: LinkSession, directory: URL) {
         self.client = client
@@ -146,8 +148,40 @@ final class ScriptedLinkingDevice: Sendable {
         try await client.devices()
     }
 
+    /// The recovery code this device keeps; `nil` on a device linked by QR.
+    func recoveryCode() throws -> String? {
+        try client.recoveryCode()
+    }
+
+    /// Starts syncing and follows the chat list, once linked.
+    func startSync() async throws {
+        try await client.startSync()
+        chats.handle = try await client.chatList(listener: chats)
+    }
+
+    /// The id of the note to self, once this device has it in its chat list.
+    func noteToSelfChatId() -> String? {
+        chats.current.first(where: \.isNoteToSelf)?.chatId
+    }
+
+    /// The messages of `chatId`, oldest first; the first call subscribes to the timeline.
+    func messages(in chatId: String) async throws -> [MessageItem] {
+        if let collector = timelines.collector(for: chatId) { return collector.messages }
+        let collector = TimelineCollector()
+        let timeline = try await client.timeline(chatId: chatId)
+        collector.handle = await timeline.addListener(listener: collector)
+        timelines.add(collector, timeline: timeline, for: chatId)
+        return collector.messages
+    }
+
+    func sendText(chatId: String, body: String) async throws -> String {
+        try await client.sendText(chatId: chatId, body: body, replyTo: nil)
+    }
+
     /// Stops syncing and removes the data directory.
     func shutdown() async {
+        chats.handle?.cancel()
+        timelines.cancelAll()
         try? await client.stopSync()
         try? FileManager.default.removeItem(at: directory)
     }

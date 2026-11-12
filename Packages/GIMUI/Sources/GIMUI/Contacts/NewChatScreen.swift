@@ -2,7 +2,8 @@ import GIMClientKit
 import GIMFeatures
 import SwiftUI
 
-/// Opens a direct chat with someone by Account ID, scanned from their QR code or pasted; links to group creation.
+/// Opens a direct chat with someone by Account ID, scanned from their QR code or pasted, or the note to self; links to
+/// group creation.
 /// Shown inside a navigation stack.
 public struct NewChatScreen: View {
     private let client: any GimClientAPI
@@ -13,6 +14,7 @@ public struct NewChatScreen: View {
     @State private var scanError: String?
     @State private var accountId = ""
     @State private var accountIdError: String?
+    @State private var noteError: String?
     @Environment(\.dismiss) private var dismiss
 
     /// - Parameter onOpen: called with the direct or group chat that was created.
@@ -46,6 +48,28 @@ public struct NewChatScreen: View {
                     }
                 }
                 .accessibilityIdentifier("newChat.scan")
+                Button {
+                    noteError = nil
+                    Task {
+                        if let chatId = await viewModel.startNoteToSelf() {
+                            onOpen(chatId)
+                        } else {
+                            noteError = viewModel.startError
+                        }
+                    }
+                } label: {
+                    Label {
+                        Text("Note to self", tableName: "Contacts", bundle: .module)
+                    } icon: {
+                        Image(systemName: "note.text")
+                    }
+                }
+                .disabled(viewModel.isStarting)
+                .accessibilityIdentifier("newChat.noteToSelf")
+            } footer: {
+                if let noteError {
+                    Text(noteError).foregroundStyle(.red)
+                }
             }
             Section {
                 HStack {

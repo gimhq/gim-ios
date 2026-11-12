@@ -15,6 +15,8 @@ struct SettingsScreen: View {
     let signOut: () async -> String?
     let deleteAccount: () async -> String?
     let makeKeepServer: @MainActor () -> KeepServerViewModel
+    /// Closes Settings and opens the chat.
+    let openChat: @MainActor (String) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @AppStorage(AppearanceSetting.defaultsKey) private var appearanceRaw = AppearanceSetting.system.rawValue
@@ -29,11 +31,14 @@ struct SettingsScreen: View {
     @State private var errorMessage: String?
     @State private var copiedUserId = false
     @State private var recoveryKeyRotation: RecoveryKeyRotationViewModel
+    @State private var noteToSelf: NewChatViewModel
+    @State private var noteToSelfError: String?
 
     init(
         client: any GimClientAPI, session: Session?, refreshSession: @escaping @MainActor () async -> Void,
         signOut: @escaping () async -> String?, deleteAccount: @escaping () async -> String?,
-        makeKeepServer: @escaping @MainActor () -> KeepServerViewModel
+        makeKeepServer: @escaping @MainActor () -> KeepServerViewModel,
+        openChat: @escaping @MainActor (String) -> Void
     ) {
         self.client = client
         self.session = session
@@ -41,6 +46,8 @@ struct SettingsScreen: View {
         self.signOut = signOut
         self.deleteAccount = deleteAccount
         self.makeKeepServer = makeKeepServer
+        self.openChat = openChat
+        _noteToSelf = State(initialValue: NewChatViewModel(client: client))
         _profile = State(initialValue: ProfileViewModel(client: client, onChanged: refreshSession))
         _profilePhoto = State(
             initialValue: ProfilePhotoViewModel(
@@ -216,10 +223,22 @@ struct SettingsScreen: View {
                 Text("My QR code", tableName: "Settings", bundle: .module)
             }
             .accessibilityIdentifier("settings.qrCode")
+            Button {
+                openNoteToSelf()
+            } label: {
+                HStack {
+                    Text("Note to self", tableName: "Settings", bundle: .module)
+                    Spacer()
+                    if noteToSelf.isStarting { ProgressView() }
+                }
+            }
+            .foregroundStyle(.primary)
+            .disabled(noteToSelf.isStarting)
+            .accessibilityIdentifier("settings.noteToSelf")
         } header: {
             Text("Profile", tableName: "Settings", bundle: .module)
         } footer: {
-            if let error = profile.errorMessage ?? profilePhoto.errorMessage {
+            if let error = profile.errorMessage ?? profilePhoto.errorMessage ?? noteToSelfError {
                 Text(error).foregroundStyle(.red)
             }
         }
@@ -290,6 +309,15 @@ struct SettingsScreen: View {
                 Text("Link a new device", tableName: "Settings", bundle: .module)
             }
             .accessibilityIdentifier("settings.linkDevice")
+            NavigationLink {
+                RecoveryKeyScreen(
+                    viewModel: RecoveryKeyViewModel(
+                        client: client, userId: session?.userId ?? "", recoveryKit: CoreRecoveryKitFunctions(),
+                        authenticator: LocalDeviceAuthenticator()))
+            } label: {
+                Text("Recovery key", tableName: "Settings", bundle: .module)
+            }
+            .accessibilityIdentifier("settings.recoveryKey")
             Button {
                 recoveryKeyRotation.start()
             } label: {
@@ -391,6 +419,17 @@ struct SettingsScreen: View {
                 Text("Delete account", tableName: "Settings", bundle: .module).foregroundStyle(.red)
             }
             .accessibilityIdentifier("settings.deleteAccount")
+        }
+    }
+
+    private func openNoteToSelf() {
+        noteToSelfError = nil
+        Task {
+            if let chatId = await noteToSelf.startNoteToSelf() {
+                openChat(chatId)
+            } else {
+                noteToSelfError = noteToSelf.startError
+            }
         }
     }
 

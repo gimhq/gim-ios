@@ -33,6 +33,26 @@ final class ChatListViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testTheNoteToSelfIsListedFirstWithItsTitleAndTheOwnAvatar() async throws {
+        let (client, _) = await connected(makeDemoClient())
+        let viewModel = await startedViewModel(client)
+
+        let note = try await client.createDirectChat(userId: FakeGimClient.demoSelfId)
+        try await client.receiveText(chatId: FakeGimClient.demoDirectChatId, from: "user-sofia", body: "Later")
+
+        await eventually { viewModel.rows.count == 3 && viewModel.rows[1].id == FakeGimClient.demoDirectChatId }
+        XCTAssertEqual(viewModel.rows.map(\.id), [note, FakeGimClient.demoDirectChatId, FakeGimClient.demoGroupChatId])
+        let row = viewModel.rows[0]
+        XCTAssertTrue(row.isNoteToSelf)
+        XCTAssertEqual(row.title, "Note to self")
+        XCTAssertEqual(row.avatarId, FakeGimClient.demoSelfId)
+        XCTAssertEqual(row.avatarName, "Alex Morgan")
+        XCTAssertFalse(viewModel.rows[1].isNoteToSelf)
+        XCTAssertEqual(viewModel.rows[1].avatarId, FakeGimClient.demoDirectChatId)
+        XCTAssertEqual(viewModel.rows[1].avatarName, "Sofia Marin")
+    }
+
+    @MainActor
     func testNewMessageReordersViaRemoveAndInsert() async throws {
         let (client, _) = await connected(makeDemoClient())
         let viewModel = await startedViewModel(client)
@@ -392,6 +412,7 @@ private final class FailingChatListClient: GimClientAPI {
 
     func session() async throws -> Session? { nil }
     func userId() -> String? { nil }
+    func recoveryCode() throws -> String? { nil }
     func localStateReset() -> Bool { false }
     func createIdentity(displayName: String) async throws -> String { throw GimError.NotImplemented }
     func restoreFromRecovery(userId: String, recoveryCode: String, revokeOthers: Bool) async throws {}
@@ -404,14 +425,11 @@ private final class FailingChatListClient: GimClientAPI {
     func userDevices(userId: String) async throws -> [DeviceInfo] { throw GimError.NotRegistered }
     func revokeDevice(deviceId: String) async throws {}
     func setDisplayName(name: String) async throws {}
-    func claimHandle(handle: String) async throws {}
-    func releaseHandle() async throws {}
     func signOut() async throws {}
     func startSync() async throws {}
     func stopSync() async throws {}
     func setNetworkReachable(reachable: Bool) {}
     func setLocalTimeZone(zone: (any LocalTimeZone)?) {}
-    func findUser(handle: String) async throws -> UserProfile? { nil }
     func createDirectChat(userId: String) async throws -> String { throw GimError.NotRegistered }
     func createGroupChat(name: String, memberUserIds: [String]) async throws -> String {
         throw GimError.NotRegistered

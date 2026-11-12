@@ -25,6 +25,18 @@ final class TimelineViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testTheNoteToSelfIsTitledNoteToSelfAndTakesMessages() async throws {
+        let (client, _) = await connected(makeDemoClient())
+        let note = try await client.createDirectChat(userId: FakeGimClient.demoSelfId)
+        let viewModel = await startedViewModel(client, chatId: note)
+
+        XCTAssertEqual(viewModel.title, "Note to self")
+        XCTAssertFalse(viewModel.isGroup)
+        _ = try await client.sendText(chatId: note, body: "Passport in the drawer", replyTo: nil)
+        await eventually { self.messageCount(viewModel) == 1 }
+    }
+
+    @MainActor
     func testInitialLoad() async {
         let (client, _) = await connected(makeDemoClient())
         let viewModel = await startedViewModel(client, chatId: FakeGimClient.demoDirectChatId)
@@ -402,10 +414,10 @@ final class TimelineViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testRemoteMemberWithoutHandleIsNamed() async throws {
+    func testRemoteMemberWithoutADisplayNameIsNamed() async throws {
         let (client, _) = await connected(makeDemoClient())
         let chatId = FakeGimClient.demoGroupChatId
-        await client.addRemoteUser(UserProfile(userId: "user-marta-remote", handle: "", displayName: ""))
+        await client.addRemoteUser(UserProfile(userId: "user-marta-remote", displayName: ""))
         try await client.addMembers(chatId: chatId, userIds: ["user-marta-remote"])
         let viewModel = await startedViewModel(client, chatId: chatId)
         await eventually { viewModel.isGroup }

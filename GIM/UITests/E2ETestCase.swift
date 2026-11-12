@@ -25,7 +25,8 @@ class E2ETestCase: XCTestCase {
     @MainActor
     func launchToOnboarding(_ app: XCUIApplication, _ step: String) throws {
         app.launchArguments +=
-            ["-GIMDefaultServerURL", serverUrl, "-GIMDefaultKeepServerURL", "off"] + Self.localeArguments
+            ["-GIMDefaultServerURL", serverUrl, "-GIMDefaultKeepServerURL", "off", "-GIMSkipDeviceAuth", "YES"]
+            + Self.localeArguments
         app.launch()
         try signOutIfNeeded(app)
         try expectOnboarding(app, step)

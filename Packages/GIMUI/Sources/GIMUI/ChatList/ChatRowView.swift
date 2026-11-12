@@ -1,5 +1,6 @@
 import GIMFeatures
 import SwiftUI
+import UIKit
 
 /// One chat list row: avatar, title with the muted and pinned marks, time and status ticks, then the subtitle and the
 /// unread badge. VoiceOver reads it as one element.
@@ -27,7 +28,7 @@ struct ChatRowView: View {
 
     private var standardLayout: some View {
         HStack(alignment: .top, spacing: 12) {
-            AvatarView(id: row.id, name: row.title, avatarPath: nil, size: 56)
+            ChatRowAvatar(row: row, size: 56)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     titleText.lineLimit(1)
@@ -48,7 +49,7 @@ struct ChatRowView: View {
     /// Time and badge get their own line so nothing clips at the largest text sizes.
     private var accessibilityLayout: some View {
         HStack(alignment: .top, spacing: 12) {
-            AvatarView(id: row.id, name: row.title, avatarPath: nil, size: 44)
+            ChatRowAvatar(row: row, size: 44)
             VStack(alignment: .leading, spacing: 4) {
                 titleText.lineLimit(2)
                 subtitleText
@@ -163,5 +164,35 @@ struct ChatRowView: View {
         case .read: String(localized: "Read", table: "Chat", bundle: .module)
         case .failed: String(localized: "Not sent", table: "Chat", bundle: .module)
         }
+    }
+}
+
+/// The row's avatar; the note to self shows the own avatar with a note badge.
+struct ChatRowAvatar: View {
+    let row: ChatRow
+    let size: CGFloat
+
+    var body: some View {
+        AvatarView(id: row.avatarId, name: row.avatarName, avatarPath: nil, size: size)
+            .overlay(alignment: .bottomTrailing) {
+                if row.isNoteToSelf {
+                    NoteToSelfBadge(size: size * 0.42)
+                }
+            }
+    }
+}
+
+/// The note badge on the note to self's avatar.
+struct NoteToSelfBadge: View {
+    let size: CGFloat
+
+    var body: some View {
+        Image(systemName: "note.text")
+            .font(.system(size: size * 0.55, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: size, height: size)
+            .background(Circle().fill(Color.accentColor))
+            .overlay(Circle().stroke(Color(uiColor: .systemBackground), lineWidth: 2))
+            .accessibilityHidden(true)
     }
 }

@@ -276,7 +276,7 @@ public final class TimelineViewModel {
         guard (try? DiffApplier.apply(diffs, to: &chatList)) != nil,
             let summary = chatList.first(where: { $0.chatId == chatId })
         else { return }
-        title = summary.name
+        title = summary.isNoteToSelf ? ChatRow.noteToSelfTitle : summary.name
         updateChatState(summary.state)
         if isGroup != (summary.kind == .group) {
             isGroup = summary.kind == .group

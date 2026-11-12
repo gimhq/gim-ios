@@ -130,7 +130,11 @@ private struct SignedInView: View {
             NavigationStack {
                 SettingsScreen(
                     client: client, session: session, refreshSession: refreshSession, signOut: signOut,
-                    deleteAccount: deleteAccount, makeKeepServer: makeKeepServer)
+                    deleteAccount: deleteAccount, makeKeepServer: makeKeepServer,
+                    openChat: { chatId in
+                        showsSettings = false
+                        path = [chatId]
+                    })
             }
         }
     }

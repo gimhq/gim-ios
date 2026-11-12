@@ -4,6 +4,30 @@ import GIMFeatures
 import XCTest
 
 final class NewChatViewModelTests: XCTestCase {
+    @MainActor
+    func testStartNoteToSelfOpensTheSameChatEachTime() async throws {
+        let (client, _) = await connected(makeDemoClient())
+        let viewModel = NewChatViewModel(client: client)
+
+        let first = await viewModel.startNoteToSelf()
+        let second = await viewModel.startNoteToSelf()
+
+        let chatId = try XCTUnwrap(first)
+        XCTAssertEqual(second, chatId)
+        XCTAssertNil(viewModel.startError)
+        XCTAssertFalse(viewModel.isStarting)
+    }
+
+    @MainActor
+    func testStartNoteToSelfWithoutASessionShowsTheError() async {
+        let viewModel = NewChatViewModel(client: FakeGimClient())
+
+        let chatId = await viewModel.startNoteToSelf()
+
+        XCTAssertNil(chatId)
+        XCTAssertEqual(viewModel.startError, ErrorPresenter.message(for: GimError.NotRegistered))
+    }
+
     private static let validUserId = "u" + String(repeating: "a", count: 55)
 
     @MainActor
@@ -102,6 +126,7 @@ private actor DirectChatStubClient: GimClientAPI {
     }
     func session() async throws -> Session? { try await fake.session() }
     nonisolated func userId() -> String? { fake.userId() }
+    nonisolated func recoveryCode() throws -> String? { try fake.recoveryCode() }
     nonisolated func localStateReset() -> Bool { fake.localStateReset() }
     func createIdentity(displayName: String) async throws -> String {
         try await fake.createIdentity(displayName: displayName)
@@ -122,15 +147,12 @@ private actor DirectChatStubClient: GimClientAPI {
     func userDevices(userId: String) async throws -> [DeviceInfo] { try await fake.userDevices(userId: userId) }
     func revokeDevice(deviceId: String) async throws { try await fake.revokeDevice(deviceId: deviceId) }
     func setDisplayName(name: String) async throws { try await fake.setDisplayName(name: name) }
-    func claimHandle(handle: String) async throws { try await fake.claimHandle(handle: handle) }
-    func releaseHandle() async throws { try await fake.releaseHandle() }
     func stopTyping(chatId: String) async throws { try await fake.stopTyping(chatId: chatId) }
     func signOut() async throws { try await fake.signOut() }
     func startSync() async throws { try await fake.startSync() }
     func stopSync() async throws { try await fake.stopSync() }
     nonisolated func setNetworkReachable(reachable: Bool) { fake.setNetworkReachable(reachable: reachable) }
     nonisolated func setLocalTimeZone(zone: (any LocalTimeZone)?) { fake.setLocalTimeZone(zone: zone) }
-    func findUser(handle: String) async throws -> UserProfile? { try await fake.findUser(handle: handle) }
     func createGroupChat(name: String, memberUserIds: [String]) async throws -> String {
         try await fake.createGroupChat(name: name, memberUserIds: memberUserIds)
     }
