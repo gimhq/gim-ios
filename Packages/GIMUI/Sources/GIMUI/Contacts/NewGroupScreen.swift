@@ -87,7 +87,7 @@ public struct NewGroupScreen: View {
     }
 
     private func addMember() {
-        Task { await viewModel.addMemberByAccountId() }
+        Task { await viewModel.addMember() }
     }
 }
 

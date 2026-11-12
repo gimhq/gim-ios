@@ -29,34 +29,6 @@
         }
       }
     },
-    "Choose a username." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Choose a username."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Elige un nombre de usuario."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请选择一个用户名。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "請選擇一個使用者名稱。"
-          }
-        }
-      }
-    },
     "Enter a full address, like https://example.com" : {
       "localizations" : {
         "en" : {
@@ -281,34 +253,6 @@
         }
       }
     },
-    "Someone already has this username. Try another one." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Someone already has this username. Try another one."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Alguien ya tiene este nombre de usuario. Prueba con otro."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这个用户名已经有人用了。换一个试试。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "這個使用者名稱已經有人使用。換一個試試。"
-          }
-        }
-      }
-    },
     "That doesn't match. Look at your recovery key and try again." : {
       "localizations" : {
         "en" : {
@@ -389,62 +333,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "這個伺服器上沒有這個帳號 ID 的帳號。請檢查 ID 和伺服器。"
-          }
-        }
-      }
-    },
-    "Use only letters, digits, underscores and dots." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Use only letters, digits, underscores and dots."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Usa solo letras, números, guiones bajos y puntos."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "只能使用字母、数字、下划线和点。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "只能使用字母、數字、底線和句點。"
-          }
-        }
-      }
-    },
-    "Usernames are 3 to 32 characters long." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Usernames are 3 to 32 characters long."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Los nombres de usuario tienen de 3 a 32 caracteres."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "用户名长度为 3 到 32 个字符。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "使用者名稱長度為 3 到 32 個字元。"
           }
         }
       }

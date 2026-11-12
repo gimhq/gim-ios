@@ -18,8 +18,6 @@ public final class NewGroupViewModel {
     public var name = ""
     /// Account ID typed or pasted into the "add member" field.
     public var memberAccountId = ""
-    /// Handle typed into the "add member" field of gim-mac; removed once gim-mac adds members by Account ID.
-    public var memberHandle = ""
     public private(set) var members: [UserProfile] = []
     public private(set) var isAddingMember = false
     /// Error from the last `addMember()`.
@@ -54,7 +52,7 @@ public final class NewGroupViewModel {
 
     /// Adds the user of the first Account ID in `memberAccountId` as a chip. The ID is not looked up: an unknown user
     /// fails `create()` with `NotFound`, or is reported as removed in the timeline.
-    public func addMemberByAccountId() async {
+    public func addMember() async {
         guard !isAddingMember, !memberAccountId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         memberError = nil
         guard let userId = UserID.firstValid(in: memberAccountId) else {
@@ -76,32 +74,6 @@ public final class NewGroupViewModel {
             members.append(UserProfile(userId: userId, handle: "", displayName: ""))
         }
         memberAccountId = ""
-    }
-
-    /// Looks up `memberHandle` and adds the user as a chip (gim-mac; removed with the SDK's handle APIs).
-    public func addMember() async {
-        let handle = OnboardingValidation.normalizedHandle(memberHandle)
-        guard !handle.isEmpty, !isAddingMember else { return }
-        isAddingMember = true
-        memberError = nil
-        defer { isAddingMember = false }
-        do {
-            guard let user = try await client.findUser(handle: handle) else {
-                let format = NSLocalizedString(
-                    "No one has the username @%@.", tableName: "FeaturesContacts",
-                    bundle: FeaturesLocalization.bundle, value: "No one has the username @%@.", comment: "")
-                memberError = String(format: format, handle)
-                return
-            }
-            if try await client.session()?.userId == user.userId {
-                memberError = ContactsText.ownGroup
-                return
-            }
-            if !members.contains(where: { $0.userId == user.userId }) { members.append(user) }
-            memberHandle = ""
-        } catch {
-            memberError = await ErrorPresenter.message(for: error, client: client)
-        }
     }
 
     public func removeMember(_ userId: String) {

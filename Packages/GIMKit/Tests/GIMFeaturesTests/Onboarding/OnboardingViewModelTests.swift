@@ -72,22 +72,6 @@ final class OnboardingValidationTests: XCTestCase {
             "https://gim.example.eu")
     }
 
-    func testHandleRules() {
-        XCTAssertNil(OnboardingValidation.handleError("sofia_m.2"))
-        XCTAssertNil(OnboardingValidation.handleError("  Sofia "))
-        XCTAssertNil(OnboardingValidation.handleError(String(repeating: "a", count: 32)))
-        XCTAssertNotNil(OnboardingValidation.handleError(""))
-        XCTAssertNotNil(OnboardingValidation.handleError("ab"))
-        XCTAssertNotNil(OnboardingValidation.handleError(String(repeating: "a", count: 33)))
-        XCTAssertNotNil(OnboardingValidation.handleError("so fia"))
-        XCTAssertNotNil(OnboardingValidation.handleError("sofia-m"))
-        XCTAssertNotNil(OnboardingValidation.handleError("sofía"))
-    }
-
-    func testHandleNormalisationLowercasesAndTrims() {
-        XCTAssertEqual(OnboardingValidation.normalizedHandle("  Sofia_M "), "sofia_m")
-    }
-
     func testDisplayNameRules() {
         XCTAssertNil(OnboardingValidation.displayNameError("Sofia Marin"))
         XCTAssertNil(OnboardingValidation.displayNameError(String(repeating: "é", count: 64)))

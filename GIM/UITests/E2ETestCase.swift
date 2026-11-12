@@ -138,7 +138,8 @@ class E2ETestCase: XCTestCase {
         try type(name, into: app.textFields["newGroup.name"], "\(step): group name field", app)
         for member in members {
             try type(
-                member.userId, into: app.textFields["newGroup.memberAccountId"], "\(step): member Account ID field", app)
+                member.userId, into: app.textFields["newGroup.memberAccountId"], "\(step): member Account ID field", app
+            )
             try tap(app.buttons["newGroup.addMember"], "\(step): Add button for \(member.displayName)", app)
             // The chip shows the short Account ID: members are not looked up before the group is created.
             let chip = app.buttons["Remove \(member.userId.dropFirst().prefix(8))…"]

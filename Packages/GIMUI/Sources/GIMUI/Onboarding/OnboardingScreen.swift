@@ -17,7 +17,7 @@ public struct OnboardingScreen: View {
         switch viewModel.stage {
         case .recoveryKit(let recoveryKit):
             NavigationStack { RecoveryKitScreen(viewModel: recoveryKit) }
-        case .claimHandle, nil:
+        case nil:
             start
         }
     }

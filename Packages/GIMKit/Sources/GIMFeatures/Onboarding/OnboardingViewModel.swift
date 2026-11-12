@@ -19,10 +19,6 @@ public enum OnboardingValidation {
         return url
     }
 
-    public static func normalizedHandle(_ raw: String) -> String {
-        raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-    }
-
     public static func normalizedDisplayName(_ raw: String) -> String {
         raw.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -38,24 +34,6 @@ public enum OnboardingValidation {
             switch self {
             case .empty: onboardingText("Enter the server address.")
             case .notAFullAddress: onboardingText("Enter a full address, like https://example.com")
-            }
-        }
-    }
-
-    /// Why a handle is not accepted; `text` gives the localized message.
-    public enum HandleError: Sendable, Hashable {
-        case empty
-        /// Not 3 to 32 characters long.
-        case length
-        /// Contains a character other than `a-z`, `0-9`, `_` and `.`.
-        case characters
-
-        /// The localized message.
-        public var text: String {
-            switch self {
-            case .empty: onboardingText("Choose a username.")
-            case .length: onboardingText("Usernames are 3 to 32 characters long.")
-            case .characters: onboardingText("Use only letters, digits, underscores and dots.")
             }
         }
     }
@@ -103,21 +81,6 @@ public enum OnboardingValidation {
             if let candidate, serverUrlError(candidate) == nil { return normalizedServerUrl(candidate) }
         }
         return builtInServerUrl
-    }
-
-    /// Returns an error message, or `nil` when the normalised handle matches `^[a-z0-9_.]{3,32}$`.
-    public static func handleError(_ raw: String) -> String? {
-        handleErrorKind(raw)?.text
-    }
-
-    /// The kind behind `handleError(_:)`.
-    public static func handleErrorKind(_ raw: String) -> HandleError? {
-        let handle = normalizedHandle(raw)
-        if handle.isEmpty { return .empty }
-        guard (3...32).contains(handle.count) else { return .length }
-        let allowed = Set("abcdefghijklmnopqrstuvwxyz0123456789_.")
-        guard handle.allSatisfy(allowed.contains) else { return .characters }
-        return nil
     }
 
     /// Returns an error message, or `nil` when the trimmed name is 1 to 64 characters long.
@@ -187,8 +150,6 @@ public struct OnboardingContext {
 @MainActor
 public enum IdentityStage {
     case recoveryKit(RecoveryKitViewModel)
-    /// No longer produced: onboarding asks for the display name only. Kept until gim-mac drops its username step.
-    case claimHandle(ClaimHandleViewModel)
 }
 
 /// Drives onboarding: the server address, the choice between creating, linking and restoring an identity, and the

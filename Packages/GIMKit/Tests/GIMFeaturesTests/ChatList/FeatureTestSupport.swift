@@ -99,51 +99,7 @@ func settle() async {
     }
 }
 
-/// Debounce sleep the test releases by hand. Cancelled sleepers throw `CancellationError`.
-final class ManualSleeper: @unchecked Sendable {
-    private struct Waiter {
-        var id: Int
-        var continuation: CheckedContinuation<Void, any Error>
-    }
-
-    private let lock = NSLock()
-    private var waiters: [Waiter] = []
-    private var nextId = 0
-    private var recorded: [Duration] = []
-
-    var pendingCount: Int { lock.withLock { waiters.count } }
-    var durations: [Duration] { lock.withLock { recorded } }
-
-    func sleep(_ duration: Duration) async throws {
-        let id = lock.withLock {
-            recorded.append(duration)
-            nextId += 1
-            return nextId
-        }
-        try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
-                lock.withLock {
-                    if Task.isCancelled {
-                        continuation.resume(throwing: CancellationError())
-                    } else {
-                        waiters.append(Waiter(id: id, continuation: continuation))
-                    }
-                }
-            }
-        } onCancel: {
-            let waiter = lock.withLock {
-                waiters.firstIndex { $0.id == id }.map { waiters.remove(at: $0) }
-            }
-            waiter?.continuation.resume(throwing: CancellationError())
-        }
-    }
-
-    /// Ends every pending sleep.
-    func releaseAll() {
-        let released = lock.withLock {
-            defer { waiters = [] }
-            return waiters
-        }
-        for waiter in released { waiter.continuation.resume() }
-    }
+/// A valid gim Account ID repeating `letter` (a-z or 2-7).
+func accountId(_ letter: Character) -> String {
+    "u" + String(repeating: letter, count: 54) + "a"
 }

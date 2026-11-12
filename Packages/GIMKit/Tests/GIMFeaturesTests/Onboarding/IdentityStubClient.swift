@@ -2,21 +2,18 @@ import Foundation
 import GIMClientKit
 
 /// Forwards to a `FakeGimClient`; `createIdentity` and `restoreFromRecovery` throw the next of their configured
-/// errors first (keeping nothing, like gim-core), `claimHandle` throws its configured error.
+/// errors first (keeping nothing, like gim-core).
 actor IdentityStubClient: GimClientAPI {
     let fake: FakeGimClient
-    let claimHandleError: GimError?
     private var createIdentityErrors: [GimError]
     private var restoreErrors: [GimError]
 
     init(
-        _ fake: FakeGimClient = FakeGimClient(), createIdentityErrors: [GimError] = [], restoreErrors: [GimError] = [],
-        claimHandleError: GimError? = nil
+        _ fake: FakeGimClient = FakeGimClient(), createIdentityErrors: [GimError] = [], restoreErrors: [GimError] = []
     ) {
         self.fake = fake
         self.createIdentityErrors = createIdentityErrors
         self.restoreErrors = restoreErrors
-        self.claimHandleError = claimHandleError
     }
 
     func signOut() async throws { try await fake.signOut() }
@@ -44,10 +41,7 @@ actor IdentityStubClient: GimClientAPI {
     func userDevices(userId: String) async throws -> [DeviceInfo] { try await fake.userDevices(userId: userId) }
     func revokeDevice(deviceId: String) async throws { try await fake.revokeDevice(deviceId: deviceId) }
     func setDisplayName(name: String) async throws { try await fake.setDisplayName(name: name) }
-    func claimHandle(handle: String) async throws {
-        if let claimHandleError { throw claimHandleError }
-        try await fake.claimHandle(handle: handle)
-    }
+    func claimHandle(handle: String) async throws { try await fake.claimHandle(handle: handle) }
     func releaseHandle() async throws { try await fake.releaseHandle() }
     func stopTyping(chatId: String) async throws { try await fake.stopTyping(chatId: chatId) }
     func startSync() async throws { try await fake.startSync() }

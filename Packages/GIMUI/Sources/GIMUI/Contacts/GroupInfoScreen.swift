@@ -169,7 +169,7 @@ public struct GroupInfoScreen: View {
     }
 
     private func addMember() {
-        Task { await viewModel.addMemberByAccountId() }
+        Task { await viewModel.addMember() }
     }
 
     private func saveName() {

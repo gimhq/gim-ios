@@ -85,34 +85,6 @@
         }
       }
     },
-    "No one has the username @%@." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No one has the username @%@."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nadie tiene el nombre de usuario @%@."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "没有人使用用户名 @%@。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "沒有人使用使用者名稱 @%@。"
-          }
-        }
-      }
-    },
     "No one uses this Account ID." : {
       "localizations" : {
         "en" : {

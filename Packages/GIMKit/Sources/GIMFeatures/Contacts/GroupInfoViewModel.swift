@@ -35,8 +35,6 @@ public final class GroupInfoViewModel {
 
     /// Account ID typed or pasted into the "add member" field.
     public var memberAccountId = ""
-    /// Handle typed into the "add member" field of gim-mac; removed once gim-mac adds members by Account ID.
-    public var memberHandle = ""
     public private(set) var isUpdatingMembers = false
     /// Member waiting for the user to confirm removal.
     public private(set) var pendingRemoval: Member?
@@ -146,7 +144,7 @@ public final class GroupInfoViewModel {
     }
 
     /// Adds the user of the first Account ID in `memberAccountId`.
-    public func addMemberByAccountId() async {
+    public func addMember() async {
         guard !memberAccountId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         guard let userId = UserID.firstValid(in: memberAccountId) else {
             errorMessage = ContactsText.notAnAccountId
@@ -164,33 +162,6 @@ public final class GroupInfoViewModel {
                 return false
             }
             self.memberAccountId = ""
-            return true
-        }
-    }
-
-    /// Looks up `memberHandle` and adds the user (gim-mac; removed with the SDK's handle APIs).
-    public func addMember() async {
-        let handle = OnboardingValidation.normalizedHandle(memberHandle)
-        guard !handle.isEmpty else { return }
-        await updateMembers {
-            guard let user = try await self.client.findUser(handle: handle) else {
-                let format = NSLocalizedString(
-                    "No one has the username @%@.", tableName: "FeaturesContacts",
-                    bundle: FeaturesLocalization.bundle, value: "No one has the username @%@.", comment: "")
-                self.errorMessage = String(format: format, handle)
-                return false
-            }
-            do {
-                try await self.client.addMembers(chatId: self.chatId, userIds: [user.userId])
-            } catch GimError.NotFound {
-                // Every invitee is unknown or has no device; nothing was committed.
-                self.errorMessage = NewGroupViewModel.noneFoundMessage
-                return false
-            } catch GimError.ContactNotAdmitted(let userIds) {
-                self.errorMessage = ErrorPresenter.contactNotAdmittedMessage(userIds: userIds, profiles: [user])
-                return false
-            }
-            self.memberHandle = ""
             return true
         }
     }

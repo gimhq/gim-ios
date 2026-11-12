@@ -64,15 +64,15 @@ final class GroupInfoViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.errorMessage, ErrorPresenter.message(for: GimError.NotFound(reason: "chat missing")))
     }
 
-    private static let kaiId = "u" + String(repeating: "k", count: 54) + "a"
+    private static let kaiId = accountId("k")
 
     @MainActor
-    func testAddMemberByAccountIdRequeries() async throws {
+    func testAddMemberRequeries() async throws {
         let (client, viewModel) = try await startedGroup()
         await client.addRemoteUser(UserProfile(userId: Self.kaiId, handle: "", displayName: "Kai"))
 
         viewModel.memberAccountId = " Account ID: \(Self.kaiId.uppercased()) "
-        await viewModel.addMemberByAccountId()
+        await viewModel.addMember()
 
         XCTAssertNil(viewModel.errorMessage)
         XCTAssertEqual(viewModel.memberAccountId, "")
@@ -82,11 +82,11 @@ final class GroupInfoViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testAddMemberByInvalidAccountIdShowsErrorAndKeepsTheField() async throws {
+    func testAddMemberWithAnInvalidAccountIdShowsErrorAndKeepsTheField() async throws {
         let (_, viewModel) = try await startedGroup()
 
         viewModel.memberAccountId = "nikos"
-        await viewModel.addMemberByAccountId()
+        await viewModel.addMember()
 
         XCTAssertEqual(viewModel.errorMessage, "This isn't a gim Account ID.")
         XCTAssertEqual(viewModel.memberAccountId, "nikos")
@@ -94,41 +94,14 @@ final class GroupInfoViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testAddMemberByUnknownAccountIdShowsNotFound() async throws {
+    func testAddMemberWithAnUnknownAccountIdShowsNotFound() async throws {
         let (_, viewModel) = try await startedGroup()
 
         viewModel.memberAccountId = Self.kaiId
-        await viewModel.addMemberByAccountId()
+        await viewModel.addMember()
 
         XCTAssertEqual(viewModel.errorMessage, "Couldn't find anyone with these Account IDs.")
         XCTAssertEqual(viewModel.memberAccountId, Self.kaiId)
-        XCTAssertEqual(viewModel.members?.count, 3)
-    }
-
-    @MainActor
-    func testAddMemberByHandleRequeries() async throws {
-        let (_, viewModel) = try await startedGroup()
-        XCTAssertEqual(viewModel.members?.count, 3)
-
-        viewModel.memberHandle = " Nikos "
-        await viewModel.addMember()
-
-        XCTAssertNil(viewModel.errorMessage)
-        XCTAssertEqual(viewModel.memberHandle, "")
-        XCTAssertEqual(handles(viewModel), ["alex", "sofia", "luca", "nikos"])
-        await eventually { viewModel.summary?.memberCount == 4 }
-        XCTAssertFalse(viewModel.isUpdatingMembers)
-    }
-
-    @MainActor
-    func testAddUnknownHandleShowsError() async throws {
-        let (_, viewModel) = try await startedGroup()
-
-        viewModel.memberHandle = "nobody"
-        await viewModel.addMember()
-
-        XCTAssertEqual(viewModel.errorMessage, "No one has the username @nobody.")
-        XCTAssertEqual(viewModel.memberHandle, "nobody")
         XCTAssertEqual(viewModel.members?.count, 3)
     }
 
@@ -275,9 +248,9 @@ final class GroupInfoViewModelTests: XCTestCase {
         XCTAssertNil(viewModel.pendingRemoval)
 
         // Adding still works; the count follows the chat list.
-        viewModel.memberHandle = "kai"
+        viewModel.memberAccountId = "kai"
         await viewModel.addMember()
-        XCTAssertEqual(viewModel.errorMessage, "No one has the username @kai.")
+        XCTAssertEqual(viewModel.errorMessage, "This isn't a gim Account ID.")
 
         await client.failChatMembers(with: nil)
         await viewModel.load()
@@ -360,13 +333,13 @@ final class GroupInfoViewModelTests: XCTestCase {
     @MainActor
     func testAddMemberWithoutDeviceShowsNotFound() async throws {
         let (client, viewModel) = try await startedGroup()
-        await client.addRemoteUser(UserProfile(userId: "user-kai", handle: "kai", displayName: "Kai"), hasDevice: false)
+        await client.addRemoteUser(UserProfile(userId: Self.kaiId, handle: "", displayName: "Kai"), hasDevice: false)
 
-        viewModel.memberHandle = "kai"
+        viewModel.memberAccountId = Self.kaiId
         await viewModel.addMember()
 
         XCTAssertEqual(viewModel.errorMessage, "Couldn't find anyone with these Account IDs.")
-        XCTAssertEqual(viewModel.memberHandle, "kai")
+        XCTAssertEqual(viewModel.memberAccountId, Self.kaiId)
         XCTAssertEqual(viewModel.members?.count, 3)
     }
 
@@ -381,13 +354,14 @@ final class GroupInfoViewModelTests: XCTestCase {
     @MainActor
     func testAddMemberWhoseHubRefusesNamesThem() async throws {
         let (client, viewModel) = try await startedGroup()
-        await client.refuseContacts(["user-nikos"])
+        await client.addRemoteUser(UserProfile(userId: Self.kaiId, handle: "", displayName: "Kai"))
+        await client.refuseContacts([Self.kaiId])
 
-        viewModel.memberHandle = "nikos"
+        viewModel.memberAccountId = Self.kaiId
         await viewModel.addMember()
 
-        XCTAssertEqual(viewModel.errorMessage, "Nikos Papadopoulos doesn't accept messages from you.")
-        XCTAssertEqual(viewModel.memberHandle, "nikos")
+        XCTAssertEqual(viewModel.errorMessage, "kkkkkkkk… doesn't accept messages from you.")
+        XCTAssertEqual(viewModel.memberAccountId, Self.kaiId)
         XCTAssertEqual(viewModel.members?.count, 3)
     }
 
@@ -396,7 +370,8 @@ final class GroupInfoViewModelTests: XCTestCase {
         let (client, viewModel) = try await startedGroup()
         await client.simulateNotAdmittedByPeer(chatId: viewModel.chatId, hubId: "hub-owner")
 
-        viewModel.memberHandle = "nikos"
+        await client.addRemoteUser(UserProfile(userId: Self.kaiId, handle: "", displayName: "Kai"))
+        viewModel.memberAccountId = Self.kaiId
         await viewModel.addMember()
 
         XCTAssertEqual(viewModel.errorMessage, "This chat's server doesn't accept messages from you.")
