@@ -1,6 +1,6 @@
 # gim-ios - Task List
 
-> Updated: 2026-11-12
+> Updated: 2026-11-13
 
 ## Usage
 
@@ -35,3 +35,4 @@ Each task is a single line linking to its detail file. All detailed information 
 
 - [x] [**20261023-1002-product-ui-i18n-settings Product-grade UI, languages, account and settings**](20261023-1002-product-ui-i18n-settings.md) `P1`
 - [x] [**20261112-1924-account-id-only App icon, one-name onboarding, no username UI**](20261112-1924-account-id-only.md) `P1`
+- [x] [**20261112-2300-recovery-key-note-to-self SDK without handles, recovery key in Settings, note to self**](20261112-2300-recovery-key-note-to-self.md) `P1`
