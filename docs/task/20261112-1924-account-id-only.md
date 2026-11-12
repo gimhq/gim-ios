@@ -1,6 +1,6 @@
 # 20261112-1924-account-id-only App icon, one-name onboarding, no username UI
 
-- **status**: in_progress
+- **status**: completed
 - **priority**: P1
 - **owner**: bkd-l2/gim-ios
 - **createdAt**: 2026-11-12 19:24
