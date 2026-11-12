@@ -147,10 +147,10 @@ final class ErrorPresenterTests: XCTestCase {
             "Ana Kovač doesn't accept messages from you.")
         XCTAssertEqual(
             ErrorPresenter.contactNotAdmittedMessage(userIds: ["u-ana", "u-lars"], profiles: profiles),
-            "Ana Kovač and @lars don't accept messages from you.")
+            "Ana Kovač and u-lars don't accept messages from you.")
         XCTAssertEqual(
             ErrorPresenter.contactNotAdmittedMessage(userIds: ["u-ana", "u-lars", "u-x", "u-new"], profiles: profiles),
-            "Ana Kovač, @lars, u-x and u-new don't accept messages from you.")
+            "Ana Kovač, u-lars, u-x and u-new don't accept messages from you.")
         XCTAssertEqual(
             ErrorPresenter.contactNotAdmittedMessage(userIds: [], profiles: profiles),
             "This person doesn't accept messages from you.")

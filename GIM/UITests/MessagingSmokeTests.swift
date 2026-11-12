@@ -14,10 +14,9 @@ final class MessagingSmokeTests: E2ETestCase {
         continueAfterFailure = false
         let serverUrl = serverUrl
         let suffix = UUID().uuidString.prefix(8).lowercased()
-        let appHandle = "alice_\(suffix)"
         let groupName = "Smoke \(suffix)"
         let app = XCUIApplication()
-        print("[e2e] app and peer use server \(serverUrl); app handle \(appHandle)")
+        print("[e2e] app and peer use server \(serverUrl)")
         // Teardown blocks also run after a failure has stopped the test, so the summary line is always printed.
         addTeardownBlock { [summary] in await summary.report() }
 
@@ -28,8 +27,7 @@ final class MessagingSmokeTests: E2ETestCase {
         summary.start("a")
         let peer = try XCTContext.runActivity(named: "step a: peer registers on \(serverUrl)") { _ in
             try waitForPeer("step a: peer registers as peer_\(suffix)", app) {
-                try await ScriptedPeer.register(
-                    serverUrl: serverUrl, handle: "peer_\(suffix)", displayName: "Peer \(suffix)")
+                try await ScriptedPeer.register(serverUrl: serverUrl, displayName: "Peer \(suffix)")
             }
         }
         addTeardownBlock { await peer.shutdown() }
@@ -38,15 +36,14 @@ final class MessagingSmokeTests: E2ETestCase {
         // every other member sent a read receipt (aggregate_receipts), despite SendState.read's "at least one" doc.
         let bystander = try XCTContext.runActivity(named: "step a: bystander registers on \(serverUrl)") { _ in
             try waitForPeer("step a: bystander registers as bystander_\(suffix)", app) {
-                try await ScriptedPeer.register(
-                    serverUrl: serverUrl, handle: "bystander_\(suffix)", displayName: "Bystander \(suffix)")
+                try await ScriptedPeer.register(serverUrl: serverUrl, displayName: "Bystander \(suffix)")
             }
         }
         addTeardownBlock { await bystander.shutdown() }
 
         try XCTContext.runActivity(named: "step a: app onboarding with server \(serverUrl)") { _ in
             try launchToOnboarding(app, "step a")
-            try createIdentity(displayName: "Alice \(suffix)", handle: appHandle, "step a", app)
+            try createIdentity(displayName: "Alice \(suffix)", "step a", app)
         }
         summary.finish("a")
 
@@ -117,7 +114,7 @@ final class MessagingSmokeTests: E2ETestCase {
             // Each reader first waits until it has the app's newest message (the reply), so the read receipt
             // covers it; gim-core's markRead marks the whole chat read and queues the receipt for sync to send.
             for reader in [peer, bystander] {
-                let handle = reader.session.handle
+                let handle = reader.session.displayName
                 _ = try eventually("step g: \(handle) has joined the group", app) { reader.chatId(named: groupName) }
                 let target = try eventually("step g: \(handle) has the app's reply", app) {
                     try await reader.messages(in: chatId).last {

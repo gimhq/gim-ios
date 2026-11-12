@@ -2,7 +2,7 @@ import GIMClientKit
 import GIMFeatures
 import SwiftUI
 
-/// Group name plus members added by handle. Shown inside a navigation stack.
+/// Group name plus members added by Account ID. Shown inside a navigation stack.
 public struct NewGroupScreen: View {
     private let onCreated: (String) -> Void
 
@@ -34,19 +34,19 @@ public struct NewGroupScreen: View {
                 }
                 HStack {
                     TextField(
-                        String(localized: "Add by username", table: "Contacts", bundle: .module),
-                        text: $viewModel.memberHandle
+                        String(localized: "Add by Account ID", table: "Contacts", bundle: .module),
+                        text: $viewModel.memberAccountId
                     )
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .submitLabel(.done)
                     .onSubmit(addMember)
-                    .accessibilityIdentifier("newGroup.memberHandle")
+                    .accessibilityIdentifier("newGroup.memberAccountId")
                     if viewModel.isAddingMember {
                         ProgressView()
                     } else {
                         Button(String(localized: "Add", table: "Common", bundle: .module), action: addMember)
-                            .disabled(viewModel.memberHandle.trimmingCharacters(in: .whitespaces).isEmpty)
+                            .disabled(viewModel.memberAccountId.trimmingCharacters(in: .whitespaces).isEmpty)
                             .accessibilityIdentifier("newGroup.addMember")
                     }
                 }
@@ -87,7 +87,7 @@ public struct NewGroupScreen: View {
     }
 
     private func addMember() {
-        Task { await viewModel.addMember() }
+        Task { await viewModel.addMemberByAccountId() }
     }
 }
 

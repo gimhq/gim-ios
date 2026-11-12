@@ -2,7 +2,8 @@ import Foundation
 import GIMClientKit
 import Observation
 
-/// Finds a user by exact handle (debounced) and starts a direct chat with them.
+/// Starts a direct chat with the user of a scanned or typed Account ID. gim-mac still finds users by exact handle
+/// (debounced `query`), until the SDK drops handles.
 @MainActor
 @Observable
 public final class NewChatViewModel {
@@ -25,8 +26,8 @@ public final class NewChatViewModel {
     public static let defaultDebounce: Duration = .milliseconds(300)
     /// `createDirectChat` fails with `NotFound` when the user does not exist or has no device.
     public static let notFoundMessage = NSLocalizedString(
-        "No one has this username.", tableName: "FeaturesContacts", bundle: FeaturesLocalization.bundle,
-        value: "No one has this username.", comment: "")
+        "No one uses this Account ID.", tableName: "FeaturesContacts", bundle: FeaturesLocalization.bundle,
+        value: "No one uses this Account ID.", comment: "")
 
     /// Typing restarts the debounced search.
     public var query = "" {

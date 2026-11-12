@@ -64,6 +64,47 @@ final class GroupInfoViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.errorMessage, ErrorPresenter.message(for: GimError.NotFound(reason: "chat missing")))
     }
 
+    private static let kaiId = "u" + String(repeating: "k", count: 54) + "a"
+
+    @MainActor
+    func testAddMemberByAccountIdRequeries() async throws {
+        let (client, viewModel) = try await startedGroup()
+        await client.addRemoteUser(UserProfile(userId: Self.kaiId, handle: "", displayName: "Kai"))
+
+        viewModel.memberAccountId = " Account ID: \(Self.kaiId.uppercased()) "
+        await viewModel.addMemberByAccountId()
+
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertEqual(viewModel.memberAccountId, "")
+        XCTAssertEqual(viewModel.members?.map(\.user.userId).last, Self.kaiId)
+        await eventually { viewModel.summary?.memberCount == 4 }
+        XCTAssertFalse(viewModel.isUpdatingMembers)
+    }
+
+    @MainActor
+    func testAddMemberByInvalidAccountIdShowsErrorAndKeepsTheField() async throws {
+        let (_, viewModel) = try await startedGroup()
+
+        viewModel.memberAccountId = "nikos"
+        await viewModel.addMemberByAccountId()
+
+        XCTAssertEqual(viewModel.errorMessage, "This isn't a gim Account ID.")
+        XCTAssertEqual(viewModel.memberAccountId, "nikos")
+        XCTAssertEqual(viewModel.members?.count, 3)
+    }
+
+    @MainActor
+    func testAddMemberByUnknownAccountIdShowsNotFound() async throws {
+        let (_, viewModel) = try await startedGroup()
+
+        viewModel.memberAccountId = Self.kaiId
+        await viewModel.addMemberByAccountId()
+
+        XCTAssertEqual(viewModel.errorMessage, "Couldn't find anyone with these Account IDs.")
+        XCTAssertEqual(viewModel.memberAccountId, Self.kaiId)
+        XCTAssertEqual(viewModel.members?.count, 3)
+    }
+
     @MainActor
     func testAddMemberByHandleRequeries() async throws {
         let (_, viewModel) = try await startedGroup()
@@ -324,7 +365,7 @@ final class GroupInfoViewModelTests: XCTestCase {
         viewModel.memberHandle = "kai"
         await viewModel.addMember()
 
-        XCTAssertEqual(viewModel.errorMessage, "Couldn't find anyone with these usernames.")
+        XCTAssertEqual(viewModel.errorMessage, "Couldn't find anyone with these Account IDs.")
         XCTAssertEqual(viewModel.memberHandle, "kai")
         XCTAssertEqual(viewModel.members?.count, 3)
     }

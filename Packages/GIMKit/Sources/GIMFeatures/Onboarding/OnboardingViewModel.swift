@@ -187,11 +187,12 @@ public struct OnboardingContext {
 @MainActor
 public enum IdentityStage {
     case recoveryKit(RecoveryKitViewModel)
+    /// No longer produced: onboarding asks for the display name only. Kept until gim-mac drops its username step.
     case claimHandle(ClaimHandleViewModel)
 }
 
 /// Drives onboarding: the server address, the choice between creating, linking and restoring an identity, and the
-/// create flow (display name, recovery kit, optional handle). Creates the client for the typed server URL (the URL
+/// create flow (display name, recovery kit). Creates the client for the typed server URL (the URL
 /// is part of `ClientConfig`) and reports the signed-in client.
 @MainActor
 @Observable
@@ -294,26 +295,23 @@ public final class OnboardingViewModel {
         self.context = context
         createIdentity =
             route == .createIdentity
-            ? CreateIdentityViewModel(context: context) { [weak self] client, userId, recoveryCode in
-                self?.identityCreated(client: client, context: context, userId: userId, recoveryCode: recoveryCode)
+            ? CreateIdentityViewModel(context: context) { [weak self] client, session, recoveryCode in
+                self?.identityCreated(client: client, context: context, session: session, recoveryCode: recoveryCode)
             } : nil
         path = [route]
     }
 
     private func identityCreated(
-        client: any GimClientAPI, context: OnboardingContext, userId: String, recoveryCode: String?
+        client: any GimClientAPI, context: OnboardingContext, session: Session, recoveryCode: String?
     ) {
-        let claimHandle = ClaimHandleViewModel(client: client) {
-            guard let session = try await client.session() else { throw GimError.NotRegistered }
-            context.onRegistered(Registration(client: client, config: context.config, session: session))
-        }
+        let registration = Registration(client: client, config: context.config, session: session)
         guard let recoveryCode else {
-            stage = .claimHandle(claimHandle)
+            context.onRegistered(registration)
             return
         }
         stage = .recoveryKit(
-            RecoveryKitViewModel(userId: userId, code: recoveryCode, recoveryKit: context.recoveryKit) { [weak self] in
-                self?.stage = .claimHandle(claimHandle)
+            RecoveryKitViewModel(userId: session.userId, code: recoveryCode, recoveryKit: context.recoveryKit) {
+                context.onRegistered(registration)
             })
     }
 

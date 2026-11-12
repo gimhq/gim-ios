@@ -198,7 +198,7 @@ public final class AppModel {
             activeUrl: keepServerUrl)
     }
 
-    /// Re-reads the session, e.g. after claiming a handle in Settings.
+    /// Re-reads the session, e.g. after changing the name in Settings.
     public func refreshSession() async {
         guard let client, let session = try? await client.session(), client === self.client else { return }
         self.session = session

@@ -41,12 +41,12 @@ final class ErrorPresenterKindTests: XCTestCase {
             (.contactNotAdmitted(names: []), "This person doesn't accept messages from you."),
             (.contactNotAdmitted(names: ["Ana Kovač"]), "Ana Kovač doesn't accept messages from you."),
             (
-                .contactNotAdmitted(names: ["Ana Kovač", "@lars"]),
-                "Ana Kovač and @lars don't accept messages from you."
+                .contactNotAdmitted(names: ["Ana Kovač", "Lars"]),
+                "Ana Kovač and Lars don't accept messages from you."
             ),
             (
-                .contactNotAdmitted(names: ["Ana Kovač", "@lars", "u-x"]),
-                "Ana Kovač, @lars and u-x don't accept messages from you."
+                .contactNotAdmitted(names: ["Ana Kovač", "Lars", "u-x"]),
+                "Ana Kovač, Lars and u-x don't accept messages from you."
             ),
         ]
         for (kind, text) in cases {
@@ -140,7 +140,7 @@ final class ErrorPresenterKindTests: XCTestCase {
         ]
         XCTAssertEqual(
             ErrorPresenter.contactNotAdmittedKind(userIds: ["u-ana", "u-lars", "u-x", "u-new"], profiles: profiles),
-            .contactNotAdmitted(names: ["Ana Kovač", "@lars", "u-x", "u-new"]))
+            .contactNotAdmitted(names: ["Ana Kovač", "u-lars", "u-x", "u-new"]))
         XCTAssertEqual(
             ErrorPresenter.contactNotAdmittedKind(userIds: [], profiles: profiles), .contactNotAdmitted(names: []))
     }

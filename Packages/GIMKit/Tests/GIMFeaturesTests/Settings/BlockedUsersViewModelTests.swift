@@ -17,8 +17,8 @@ final class BlockedUsersViewModelTests: XCTestCase {
         XCTAssertEqual(
             viewModel.rows,
             [
-                BlockedUsersViewModel.Row(userId: "user-luca", name: "Luca Bianchi", detail: "@luca"),
-                BlockedUsersViewModel.Row(userId: "user-sofia", name: "Sofia Marin", detail: "@sofia"),
+                BlockedUsersViewModel.Row(userId: "user-luca", name: "Luca Bianchi", detail: "user-luc…"),
+                BlockedUsersViewModel.Row(userId: "user-sofia", name: "Sofia Marin", detail: "user-sof…"),
                 BlockedUsersViewModel.Row(userId: "user-unknown", name: nil, detail: nil),
             ])
         XCTAssertTrue(viewModel.isLoaded)

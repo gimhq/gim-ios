@@ -26,7 +26,7 @@ final class IdentitySmokeTests: E2ETestCase {
         summary.start("create")
         let recoveryCode = try XCTContext.runActivity(named: "create: app creates an identity") { _ in
             try launchToOnboarding(app, "create")
-            return try createIdentity(displayName: "Ida \(suffix)", handle: "ida_\(suffix)", "create", app)
+            return try createIdentity(displayName: "Ida \(suffix)", "create", app).recoveryCode
         }
         summary.finish("create")
 

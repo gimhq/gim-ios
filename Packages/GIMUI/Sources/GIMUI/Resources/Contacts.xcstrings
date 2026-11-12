@@ -85,30 +85,30 @@
         }
       }
     },
-    "Add by username" : {
+    "Add by Account ID" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Add by username"
+            "value" : "Add by Account ID"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Añadir por nombre de usuario"
+            "value" : "Añadir por ID de cuenta"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "通过用户名添加"
+            "value" : "通过账号 ID 添加"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "透過使用者名稱新增"
+            "value" : "透過帳號 ID 新增"
           }
         }
       }
@@ -533,34 +533,6 @@
         }
       }
     },
-    "No one has this username." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No one has this username."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nadie tiene este nombre de usuario."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "没有人使用这个用户名。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "沒有人使用這個使用者名稱。"
-          }
-        }
-      }
-    },
     "Open settings" : {
       "localizations" : {
         "en" : {
@@ -585,6 +557,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "開啟設定"
+          }
+        }
+      }
+    },
+    "Paste your friend's Account ID. They find it, and their QR code, in Settings." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paste your friend's Account ID. They find it, and their QR code, in Settings."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pega el ID de cuenta de tu amigo. Lo encuentra, junto con su código QR, en Ajustes."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "粘贴好友的账号 ID。对方可以在“设置”中找到它和自己的二维码。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "貼上好友的帳號 ID。對方可以在「設定」中找到它和自己的 QR 碼。"
           }
         }
       }
@@ -701,34 +701,6 @@
         }
       }
     },
-    "Searching…" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Searching…"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Buscando…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在搜索…"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在搜尋…"
-          }
-        }
-      }
-    },
     "Start chat" : {
       "localizations" : {
         "en" : {
@@ -781,62 +753,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "這個碼不是 gim 帳號 ID。"
-          }
-        }
-      }
-    },
-    "Type your friend's exact username." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Type your friend's exact username."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Escribe el nombre de usuario exacto de tu amigo."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "输入好友完整的用户名。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "輸入朋友完整的使用者名稱。"
-          }
-        }
-      }
-    },
-    "Username" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Username"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nombre de usuario"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "用户名"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "使用者名稱"
           }
         }
       }

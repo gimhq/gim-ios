@@ -2,7 +2,8 @@ import GIMClientKit
 import GIMFeatures
 import SwiftUI
 
-/// Finds someone by exact handle and opens a direct chat; links to group creation. Shown inside a navigation stack.
+/// Opens a direct chat with someone by Account ID, scanned from their QR code or pasted; links to group creation.
+/// Shown inside a navigation stack.
 public struct NewChatScreen: View {
     private let client: any GimClientAPI
     private let onOpen: (String) -> Void
@@ -10,6 +11,8 @@ public struct NewChatScreen: View {
     @State private var viewModel: NewChatViewModel
     @State private var isScanning = false
     @State private var scanError: String?
+    @State private var accountId = ""
+    @State private var accountIdError: String?
     @Environment(\.dismiss) private var dismiss
 
     /// - Parameter onOpen: called with the direct or group chat that was created.
@@ -45,19 +48,38 @@ public struct NewChatScreen: View {
                 .accessibilityIdentifier("newChat.scan")
             }
             Section {
-                result
+                HStack {
+                    TextField(text: $accountId) {
+                        Text("Account ID", tableName: "Contacts", bundle: .module)
+                    }
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .submitLabel(.go)
+                    .onSubmit(startChatWithAccountId)
+                    .accessibilityIdentifier("newChat.accountId")
+                    if viewModel.isStarting && !isScanning {
+                        ProgressView()
+                    } else {
+                        Button(
+                            String(localized: "Start chat", table: "Contacts", bundle: .module),
+                            action: startChatWithAccountId
+                        )
+                        .disabled(accountId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .accessibilityIdentifier("newChat.start")
+                    }
+                }
             } footer: {
-                if let error = viewModel.startError {
-                    Text(error).foregroundStyle(.red)
+                if let accountIdError {
+                    Text(accountIdError)
+                        .foregroundStyle(.red)
+                        .accessibilityIdentifier("newChat.error")
+                } else {
+                    Text(
+                        "Paste your friend's Account ID. They find it, and their QR code, in Settings.",
+                        tableName: "Contacts", bundle: .module)
                 }
             }
         }
-        .searchable(
-            text: $viewModel.query, placement: .navigationBarDrawer(displayMode: .always),
-            prompt: Text("Username", tableName: "Contacts", bundle: .module)
-        )
-        .textInputAutocapitalization(.never)
-        .autocorrectionDisabled()
         .navigationTitle(Text("New chat", tableName: "Contacts", bundle: .module))
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $isScanning) {
@@ -79,53 +101,34 @@ public struct NewChatScreen: View {
                 isScanning = false
                 onOpen(chatId)
             case .noUserId:
-                scanError = String(localized: "This code is not a gim Account ID.", table: "Contacts", bundle: .module)
+                scanError = Self.notAnAccountId
             case .failed(let message):
                 scanError = message
             }
         }
     }
 
-    @ViewBuilder
-    private var result: some View {
-        switch viewModel.state {
-        case .idle:
-            Text("Type your friend's exact username.", tableName: "Contacts", bundle: .module)
-                .foregroundStyle(.secondary)
-        case .searching:
-            HStack {
-                ProgressView()
-                Text("Searching…", tableName: "Contacts", bundle: .module).foregroundStyle(.secondary)
+    private func startChatWithAccountId() {
+        guard !viewModel.isStarting, !accountId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        accountIdError = nil
+        Task {
+            switch await viewModel.startChat(scanned: accountId) {
+            case .started(let chatId):
+                onOpen(chatId)
+            case .noUserId:
+                accountIdError = Self.notAnAccountId
+            case .failed(let message):
+                accountIdError = message
             }
-        case .found(let user):
-            Button {
-                Task {
-                    if let chatId = await viewModel.startChat() { onOpen(chatId) }
-                }
-            } label: {
-                HStack(spacing: 12) {
-                    UserRow(user: user)
-                    Spacer()
-                    if viewModel.isStarting { ProgressView() }
-                }
-            }
-            .disabled(viewModel.isStarting)
-        case .notFound:
-            Label {
-                Text("No one has this username.", tableName: "Contacts", bundle: .module)
-            } icon: {
-                Image(systemName: "person.crop.circle.badge.questionmark")
-            }
-            .foregroundStyle(.secondary)
-        case .error(let message):
-            Label(message, systemImage: "exclamationmark.triangle")
-                .foregroundStyle(.red)
         }
+    }
+
+    private static var notAnAccountId: String {
+        String(localized: "This code is not a gim Account ID.", table: "Contacts", bundle: .module)
     }
 }
 
-/// Avatar, name and handle of one user. A user without a handle (remote users may have none) shows the short user
-/// id instead.
+/// Avatar, name and short Account ID of one user.
 struct UserRow: View {
     let user: UserProfile
     var detail: String?

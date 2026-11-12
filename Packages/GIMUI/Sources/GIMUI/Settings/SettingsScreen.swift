@@ -10,7 +10,7 @@ import UIKit
 struct SettingsScreen: View {
     let client: any GimClientAPI
     let session: Session?
-    /// Re-reads the session after the name or the handle changed.
+    /// Re-reads the session after the name changed.
     let refreshSession: @MainActor () async -> Void
     let signOut: () async -> String?
     let deleteAccount: () async -> String?
@@ -27,10 +27,6 @@ struct SettingsScreen: View {
     @State private var isSigningOut = false
     @State private var confirmsSignOut = false
     @State private var errorMessage: String?
-    @State private var claimHandle: ClaimHandleViewModel?
-    @State private var showsClaimHandle = false
-    @State private var showsHandleActions = false
-    @State private var confirmsRemoveHandle = false
     @State private var copiedUserId = false
     @State private var recoveryKeyRotation: RecoveryKeyRotationViewModel
 
@@ -141,11 +137,6 @@ struct SettingsScreen: View {
                 }
             }
         }
-        .navigationDestination(isPresented: $showsClaimHandle) {
-            if let claimHandle {
-                ClaimHandleScreen(viewModel: claimHandle, allowsSkip: false)
-            }
-        }
         .navigationDestination(isPresented: showsNewRecoveryKit) {
             if let kit = recoveryKeyRotation.kit {
                 RecoveryKitScreen(viewModel: kit)
@@ -195,20 +186,11 @@ struct SettingsScreen: View {
                 HStack(spacing: 12) {
                     AvatarView(
                         id: session.userId, name: session.displayName, avatarPath: profilePhoto.photoPath, size: 56)
-                    VStack(alignment: .leading) {
-                        Text(session.displayName).font(.headline)
-                        if session.handle.isEmpty {
-                            Text("No username yet", tableName: "Settings", bundle: .module)
-                                .foregroundStyle(.secondary)
-                        } else {
-                            Text(verbatim: "@" + session.handle).foregroundStyle(.secondary)
-                        }
-                    }
+                    Text(session.displayName).font(.headline)
                 }
             }
             .accessibilityIdentifier("settings.profile")
             profilePhotoRow
-            usernameRow(session)
             Button {
                 copy(session.userId)
             } label: {
@@ -286,64 +268,6 @@ struct SettingsScreen: View {
             }
         } message: {
             Text("People in your chats will see your initials instead.", tableName: "Settings", bundle: .module)
-        }
-    }
-
-    @ViewBuilder
-    private func usernameRow(_ session: Session) -> some View {
-        if session.handle.isEmpty {
-            Button {
-                chooseHandle()
-            } label: {
-                HStack {
-                    Text("Choose a username", tableName: "Settings", bundle: .module)
-                    Spacer()
-                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
-                }
-            }
-            .foregroundStyle(.primary)
-            .accessibilityIdentifier("settings.username")
-        } else {
-            Button {
-                showsHandleActions = true
-            } label: {
-                LabeledContent {
-                    Text(verbatim: "@" + session.handle)
-                } label: {
-                    Text("Username", tableName: "Settings", bundle: .module)
-                }
-            }
-            .foregroundStyle(.primary)
-            .disabled(profile.isSaving)
-            .accessibilityIdentifier("settings.username")
-            .confirmationDialog(
-                Text("Username", tableName: "Settings", bundle: .module), isPresented: $showsHandleActions
-            ) {
-                Button {
-                    chooseHandle()
-                } label: {
-                    Text("Change username", tableName: "Settings", bundle: .module)
-                }
-                Button(role: .destructive) {
-                    confirmsRemoveHandle = true
-                } label: {
-                    Text("Remove username", tableName: "Settings", bundle: .module)
-                }
-            }
-            .confirmationDialog(
-                Text("Remove your username?", tableName: "Settings", bundle: .module),
-                isPresented: $confirmsRemoveHandle, titleVisibility: .visible
-            ) {
-                Button(role: .destructive) {
-                    Task { await profile.removeHandle() }
-                } label: {
-                    Text("Remove", tableName: "Common", bundle: .module)
-                }
-            } message: {
-                Text(
-                    "Friends can no longer find you by it. Your Account ID still works.", tableName: "Settings",
-                    bundle: .module)
-            }
         }
     }
 
@@ -482,14 +406,6 @@ struct SettingsScreen: View {
     private func open(_ urlString: String) {
         guard let url = URL(string: urlString) else { return }
         UIApplication.shared.open(url)
-    }
-
-    private func chooseHandle() {
-        claimHandle = ClaimHandleViewModel(client: client) {
-            await refreshSession()
-            showsClaimHandle = false
-        }
-        showsClaimHandle = true
     }
 
     /// Prepares the picked image off the main thread and sets it as the profile photo.

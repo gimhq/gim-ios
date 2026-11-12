@@ -51,6 +51,39 @@ final class NewGroupViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.members.map(\.handle), ["sofia"])
     }
 
+    private static let kaiId = "u" + String(repeating: "k", count: 54) + "a"
+
+    @MainActor
+    func testAddMemberByAccountIdAddsAChipWithoutALookup() async {
+        let (client, _) = await connected(makeDemoClient())
+        let viewModel = NewGroupViewModel(client: client)
+
+        viewModel.memberAccountId = " \(Self.kaiId.uppercased())\n"
+        await viewModel.addMemberByAccountId()
+        viewModel.memberAccountId = Self.kaiId
+        await viewModel.addMemberByAccountId()
+
+        XCTAssertNil(viewModel.memberError)
+        XCTAssertEqual(viewModel.memberAccountId, "")
+        XCTAssertEqual(viewModel.members, [UserProfile(userId: Self.kaiId, handle: "", displayName: "")])
+    }
+
+    @MainActor
+    func testAddMemberByAccountIdRejectsInvalidIdsAndSelf() async {
+        let session = Session(userId: Self.kaiId, deviceId: "device-1", handle: "", displayName: "Kai")
+        let viewModel = NewGroupViewModel(client: FakeGimClient(session: session))
+
+        viewModel.memberAccountId = "sofia"
+        await viewModel.addMemberByAccountId()
+        XCTAssertEqual(viewModel.memberError, "This isn't a gim Account ID.")
+        XCTAssertEqual(viewModel.memberAccountId, "sofia")
+
+        viewModel.memberAccountId = Self.kaiId
+        await viewModel.addMemberByAccountId()
+        XCTAssertEqual(viewModel.memberError, "You're in your own groups automatically.")
+        XCTAssertTrue(viewModel.members.isEmpty)
+    }
+
     @MainActor
     func testRemoveMemberChip() async {
         let (client, _) = await connected(makeDemoClient())
@@ -112,7 +145,7 @@ final class NewGroupViewModelTests: XCTestCase {
         let created = await viewModel.create()
 
         XCTAssertNil(created)
-        XCTAssertEqual(viewModel.errorMessage, "Couldn't find anyone with these usernames.")
+        XCTAssertEqual(viewModel.errorMessage, "Couldn't find anyone with these Account IDs.")
     }
 
     @MainActor

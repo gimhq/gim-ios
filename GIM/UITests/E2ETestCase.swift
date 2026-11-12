@@ -78,11 +78,17 @@ class E2ETestCase: XCTestCase {
         try require(createVisible(), "\(step): Create account button fully visible", app)
     }
 
-    /// Creates an account from onboarding (display name, recovery key, its last 4 characters, username) and waits
-    /// for the chat list. Returns the recovery code as shown, groups separated by `-`.
+    /// An account created by `createIdentity`: the recovery code as shown, groups separated by `-`, and the user ID.
+    struct CreatedAccount {
+        let recoveryCode: String
+        let userId: String
+    }
+
+    /// Creates an account from onboarding (display name, recovery key, its last 4 characters) and waits for the chat
+    /// list.
     @MainActor
     @discardableResult
-    func createIdentity(displayName: String, handle: String, _ step: String, _ app: XCUIApplication) throws -> String {
+    func createIdentity(displayName: String, _ step: String, _ app: XCUIApplication) throws -> CreatedAccount {
         try revealAndTap(app.buttons["onboarding.create"], "\(step): Create account button", app)
         // Return submits the form, like the Create button that the keyboard may cover.
         try revealAndType(
@@ -101,17 +107,15 @@ class E2ETestCase: XCTestCase {
         let ending = String(recoveryCode.replacingOccurrences(of: "-", with: "").suffix(4))
         try revealAndType(ending, into: endingField, "\(step): last 4 characters field", app)
         try revealAndTap(app.buttons["recovery.confirm"], "\(step): Confirm button", app)
-        try revealAndType(handle, into: app.textFields["handle.field"], "\(step): handle field", app)
-        try revealAndTap(app.buttons["handle.claim"], "\(step): Save username button", app)
         let signedIn = app.buttons["chatList.newChat"].waitForExistence(timeout: networkTimeout)
         try require(
             signedIn,
             signedIn
                 ? ""
-                : "\(step): chat list visible after claiming the handle (onboarding errors: \(onboardingErrors(app)))",
+                : "\(step): chat list visible after the recovery kit (onboarding errors: \(onboardingErrors(app)))",
             app)
         allowNotificationsIfAsked()
-        return recoveryCode
+        return CreatedAccount(recoveryCode: recoveryCode, userId: userId)
     }
 
     /// Taps Allow when the notification authorization alert, which the app shows after its first sign-in on a
@@ -126,27 +130,21 @@ class E2ETestCase: XCTestCase {
         return true
     }
 
-    /// Creates a group from the chat list with `members` (added by handle) and waits for its conversation.
+    /// Creates a group from the chat list with `members` (added by Account ID) and waits for its conversation.
     @MainActor
     func createGroup(_ name: String, members: [Session], _ step: String, _ app: XCUIApplication) throws {
         try tap(app.buttons["chatList.newChat"], "\(step): New Chat button", app)
         try tap(app.buttons["newChat.newGroup"], "\(step): New Group row", app)
         try type(name, into: app.textFields["newGroup.name"], "\(step): group name field", app)
         for member in members {
-            try type(member.handle, into: app.textFields["newGroup.memberHandle"], "\(step): member handle field", app)
-            try tap(app.buttons["newGroup.addMember"], "\(step): Add button for \(member.handle)", app)
-            // The chip shows the display name (the hub directory may report the handle as the display name), or
-            // @handle when the directory has no display name.
-            let chip = app.buttons
-                .matching(
-                    NSPredicate(
-                        format: "label IN %@",
-                        ["Remove \(member.displayName)", "Remove \(member.handle)", "Remove @\(member.handle)"])
-                )
-                .firstMatch
+            try type(
+                member.userId, into: app.textFields["newGroup.memberAccountId"], "\(step): member Account ID field", app)
+            try tap(app.buttons["newGroup.addMember"], "\(step): Add button for \(member.displayName)", app)
+            // The chip shows the short Account ID: members are not looked up before the group is created.
+            let chip = app.buttons["Remove \(member.userId.dropFirst().prefix(8))…"]
             try require(
                 chip.waitForExistence(timeout: networkTimeout),
-                "\(step): \(member.handle) added as member chip (footer: \(footerTexts(app)))", app)
+                "\(step): \(member.displayName) added as member chip (footer: \(footerTexts(app)))", app)
         }
         try tap(app.buttons["newGroup.create"], "\(step): Create button (footer: \(footerTexts(app)))", app)
         try require(

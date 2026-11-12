@@ -4,7 +4,7 @@ import GIMPlatform
 import SwiftUI
 
 /// Onboarding: a short intro, the choice between creating, linking and restoring an account, and the server
-/// address; after the identity was created, the recovery kit and handle steps.
+/// address; after the identity was created, the recovery kit step.
 public struct OnboardingScreen: View {
     @Bindable private var viewModel: OnboardingViewModel
     @FocusState private var focusesServerUrl: Bool
@@ -17,9 +17,7 @@ public struct OnboardingScreen: View {
         switch viewModel.stage {
         case .recoveryKit(let recoveryKit):
             NavigationStack { RecoveryKitScreen(viewModel: recoveryKit) }
-        case .claimHandle(let claimHandle):
-            NavigationStack { ClaimHandleScreen(viewModel: claimHandle, allowsSkip: true) }
-        case nil:
+        case .claimHandle, nil:
             start
         }
     }
@@ -44,6 +42,14 @@ public struct OnboardingScreen: View {
                 }
 
                 Section {
+                    Image("GimGlyph", bundle: .module)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 64, height: 64)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 8)
+                        .accessibilityHidden(true)
+                        .listRowSeparator(.hidden)
                     TabView {
                         ForEach(IntroPage.all) { page in
                             VStack(spacing: 12) {

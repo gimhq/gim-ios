@@ -37,7 +37,7 @@ public enum ErrorPresenter {
         case notAdmittedByPeer
         /// `UserNotAdmitted` on onboarding and Add Hub: that hub refused the registration.
         case hubRefused
-        /// `ContactNotAdmitted`, with the users' names (display name, else `@handle`, else user id); empty when unknown.
+        /// `ContactNotAdmitted`, with the users' names (display name, else user id); empty when unknown.
         case contactNotAdmitted(names: [String])
     }
 
@@ -149,7 +149,7 @@ public enum ErrorPresenter {
     }
 
     /// "<names> doesn't/don't accept messages from you." for `ContactNotAdmitted`: each user is named by the display
-    /// name of its profile in `profiles`, else its handle, else its user id.
+    /// name of its profile in `profiles`, else its user id.
     public static func contactNotAdmittedMessage(userIds: [String], profiles: [UserProfile]) -> String {
         text(for: contactNotAdmittedKind(userIds: userIds, profiles: profiles))
     }
@@ -158,9 +158,9 @@ public enum ErrorPresenter {
     public static func contactNotAdmittedKind(userIds: [String], profiles: [UserProfile]) -> Kind {
         .contactNotAdmitted(
             names: userIds.map { userId in
-                guard let profile = profiles.first(where: { $0.userId == userId }) else { return userId }
-                if !profile.displayName.isEmpty { return profile.displayName }
-                return profile.handle.isEmpty ? userId : "@\(profile.handle)"
+                guard let profile = profiles.first(where: { $0.userId == userId }), !profile.displayName.isEmpty
+                else { return userId }
+                return profile.displayName
             })
     }
 

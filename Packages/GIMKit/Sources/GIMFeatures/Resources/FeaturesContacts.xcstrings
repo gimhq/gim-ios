@@ -29,30 +29,30 @@
         }
       }
     },
-    "Couldn't find anyone with these usernames." : {
+    "Couldn't find anyone with these Account IDs." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't find anyone with these usernames."
+            "value" : "Couldn't find anyone with these Account IDs."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No se encontró a nadie con estos nombres de usuario."
+            "value" : "No se encontró a nadie con estos ID de cuenta."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "找不到使用这些用户名的人。"
+            "value" : "找不到使用这些账号 ID 的人。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "找不到使用這些使用者名稱的人。"
+            "value" : "找不到使用這些帳號 ID 的人。"
           }
         }
       }
@@ -113,30 +113,58 @@
         }
       }
     },
-    "No one has this username." : {
+    "No one uses this Account ID." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No one has this username."
+            "value" : "No one uses this Account ID."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nadie tiene este nombre de usuario."
+            "value" : "Nadie usa este ID de cuenta."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "没有人使用这个用户名。"
+            "value" : "没有人使用这个账号 ID。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "沒有人使用這個使用者名稱。"
+            "value" : "沒有人使用這個帳號 ID。"
+          }
+        }
+      }
+    },
+    "This isn't a gim Account ID." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This isn't a gim Account ID."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esto no es un ID de cuenta de gim."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这不是 gim 账号 ID。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這不是 gim 帳號 ID。"
           }
         }
       }

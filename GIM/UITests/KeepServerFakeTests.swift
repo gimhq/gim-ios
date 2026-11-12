@@ -21,7 +21,7 @@ final class KeepServerFakeTests: E2ETestCase {
         try XCTContext.runActivity(named: "step a: demo client onboarding, open Keep server, it is off") { _ in
             app.launchArguments += ["-GIMUseFakeCore", "YES"]
             try launchToOnboarding(app, "step a")
-            try createIdentity(displayName: "Alex \(suffix)", handle: "alex_\(suffix)", "step a", app)
+            try createIdentity(displayName: "Alex \(suffix)", "step a", app)
             try tap(app.buttons["chatList.settings"], "step a: Settings button", app)
             try revealAndTap(app.buttons["settings.keepServer"], "step a: Keep server row", app)
             try require(

@@ -74,23 +74,6 @@ final class ProfileViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testRemoveHandleEmptiesTheHandleAndNotifies() async throws {
-        let (client, _) = await connected(makeDemoClient())
-        let (viewModel, changes) = makeViewModel(client: client)
-        await viewModel.load()
-
-        let removed = await viewModel.removeHandle()
-
-        XCTAssertTrue(removed)
-        XCTAssertFalse(viewModel.isSaving)
-        XCTAssertNil(viewModel.errorMessage)
-        XCTAssertEqual(changes.count, 1)
-        let session = try await client.session()
-        XCTAssertEqual(session?.handle, "")
-        XCTAssertEqual(viewModel.session?.handle, "")
-    }
-
-    @MainActor
     func testSaveNameWithoutASessionFails() async {
         let (viewModel, changes) = makeViewModel(client: FakeGimClient())
         viewModel.name = "Alex"

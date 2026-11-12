@@ -304,7 +304,7 @@ final class AppModelTests: XCTestCase {
         ) { hooks }
     }
 
-    /// Runs the create flow: display name, recovery kit ending check and handle `alex`.
+    /// Runs the create flow: display name `Alex` and the recovery kit ending check.
     @MainActor
     private func register(_ onboarding: OnboardingViewModel) async throws {
         onboarding.choose(.createIdentity)
@@ -317,11 +317,6 @@ final class AppModelTests: XCTestCase {
         recovery.continueToCheck()
         recovery.endingInput = CoreRecoveryKitFunctions().recoveryKeyEnding(recoveryCode: recovery.groupedCode)
         recovery.confirm()
-        guard case .claimHandle(let claim) = onboarding.stage else {
-            return XCTFail("expected the handle step, got \(String(describing: onboarding.stage))")
-        }
-        claim.handle = "alex"
-        await claim.claim()
     }
 
     func testDefaultFactoryIsTheRealCore() {
@@ -379,7 +374,7 @@ final class AppModelTests: XCTestCase {
 
         guard case .ready = model.phase else { return XCTFail("expected ready, got \(model.phase)") }
         XCTAssertEqual(factory.configs, [ClientConfig(serverUrl: "http://192.168.1.20:8080")])
-        XCTAssertEqual(model.session?.handle, "alex")
+        XCTAssertEqual(model.session?.displayName, "Alex")
         XCTAssertEqual(model.serverUrl, "http://192.168.1.20:8080")
         XCTAssertEqual(defaults.string(forKey: AppModel.serverUrlKey), "http://192.168.1.20:8080")
     }
@@ -881,18 +876,18 @@ final class AppModelTests: XCTestCase {
     }
 
     @MainActor
-    func testRefreshSessionPicksUpAClaimedHandle() async throws {
-        let unnamed = Session(userId: "user-alex", deviceId: "device-1", handle: "", displayName: "Alex")
-        let client = FakeGimClient(session: unnamed)
+    func testRefreshSessionPicksUpAChangedName() async throws {
+        let alex = Session(userId: "user-alex", deviceId: "device-1", handle: "", displayName: "Alex")
+        let client = FakeGimClient(session: alex)
         let defaults = makeDefaults()
         defaults.set("https://gim.example.eu", forKey: AppModel.serverUrlKey)
         let model = makeModel(factory: ClientFactory(client), defaults: defaults)
         await model.start()
-        XCTAssertEqual(model.session?.handle, "")
+        XCTAssertEqual(model.session?.displayName, "Alex")
 
-        try await client.claimHandle(handle: "alex")
+        try await client.setDisplayName(name: "Alex M.")
         await model.refreshSession()
 
-        XCTAssertEqual(model.session?.handle, "alex")
+        XCTAssertEqual(model.session?.displayName, "Alex M.")
     }
 }

@@ -6,7 +6,7 @@ import XCTest
 final class CreateIdentityViewModelTests: XCTestCase {
     @MainActor
     private final class Created {
-        var results: [(client: any GimClientAPI, userId: String, recoveryCode: String?)] = []
+        var results: [(client: any GimClientAPI, session: Session, recoveryCode: String?)] = []
     }
 
     @MainActor
@@ -61,7 +61,7 @@ final class CreateIdentityViewModelTests: XCTestCase {
         XCTAssertEqual(code.count, 39 + 9, "39 symbols in ten groups")
         let session = try await client.session()
         XCTAssertEqual(session?.displayName, "Sofia Marin")
-        XCTAssertEqual(result.userId, session?.userId, "the user ID of the new session")
+        XCTAssertEqual(result.session, session, "the new session")
         XCTAssertNil(viewModel.errorMessage)
         XCTAssertFalse(viewModel.isSubmitting)
     }

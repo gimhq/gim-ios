@@ -197,34 +197,6 @@
         }
       }
     },
-    "Choose a username" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Choose a username"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Elige un nombre de usuario"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选择一个用户名"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "選擇一個使用者名稱"
-          }
-        }
-      }
-    },
     "Confirm" : {
       "localizations" : {
         "en" : {
@@ -417,34 +389,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "分開輸入"
-          }
-        }
-      }
-    },
-    "Friends can find you with it. It's optional. You can add one later. 3 to 32 characters: a–z, 0–9, _ and ." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Friends can find you with it. It's optional. You can add one later. 3 to 32 characters: a–z, 0–9, _ and ."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tus amigos pueden encontrarte con él. Es opcional. Puedes añadirlo más tarde. De 3 a 32 caracteres: a–z, 0–9, _ y ."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "朋友可以用它找到你。这是可选的，你可以以后再设置。3 到 32 个字符：a–z、0–9、_ 和 ."
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "朋友可以用它找到你。這是選填的，你可以之後再設定。3 到 32 個字元：a–z、0–9、_ 和 ."
           }
         }
       }
@@ -813,34 +757,6 @@
         }
       }
     },
-    "Save username" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Save username"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Guardar nombre de usuario"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "保存用户名"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "儲存使用者名稱"
-          }
-        }
-      }
-    },
     "Server" : {
       "localizations" : {
         "en" : {
@@ -893,34 +809,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "再次顯示復原資料"
-          }
-        }
-      }
-    },
-    "Skip for now" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Skip for now"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Omitir por ahora"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "暂时跳过"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "暫時略過"
           }
         }
       }
@@ -1033,34 +921,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "使用其他伺服器"
-          }
-        }
-      }
-    },
-    "Username" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Username"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nombre de usuario"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "用户名"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "使用者名稱"
           }
         }
       }

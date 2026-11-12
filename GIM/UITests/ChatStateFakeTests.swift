@@ -23,7 +23,7 @@ final class ChatStateFakeTests: E2ETestCase {
         try XCTContext.runActivity(named: "step a: demo client onboarding") { _ in
             app.launchArguments += ["-GIMUseFakeCore", "YES", "-GIMFakeRejectFirstSend", "YES"]
             try launchToOnboarding(app, "step a")
-            try createIdentity(displayName: "Alex \(suffix)", handle: "alex_\(suffix)", "step a", app)
+            try createIdentity(displayName: "Alex \(suffix)", "step a", app)
             try tap(chatRow(groupName, in: app), "step a: \(groupName) row", app)
         }
         summary.finish("a")

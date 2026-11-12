@@ -23,7 +23,7 @@ final class HubsFakeTests: E2ETestCase {
         try XCTContext.runActivity(named: "step a: demo client onboarding, open Hubs") { _ in
             app.launchArguments += ["-GIMUseFakeCore", "YES"]
             try launchToOnboarding(app, "step a")
-            try createIdentity(displayName: "Alex \(suffix)", handle: "alex_\(suffix)", "step a", app)
+            try createIdentity(displayName: "Alex \(suffix)", "step a", app)
             try openHubs("step a", app)
         }
         summary.finish("a")

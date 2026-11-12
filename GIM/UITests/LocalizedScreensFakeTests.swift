@@ -38,7 +38,7 @@ final class LocalizedScreensFakeTests: E2ETestCase {
             app.buttons["onboarding.create"].waitForExistence(timeout: networkTimeout), "\(language): onboarding", app)
         attachScreenshot("\(language)-01-onboarding", app)
 
-        try createIdentity(displayName: "Alex \(suffix)", handle: "alex_\(suffix)", language, app)
+        try createIdentity(displayName: "Alex \(suffix)", language, app)
         allowNotificationsInAnyLanguage()
         try require(
             app.buttons["chatList.newChat"].waitForExistence(timeout: networkTimeout), "\(language): chat list", app)

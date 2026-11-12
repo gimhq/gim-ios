@@ -225,34 +225,6 @@
         }
       }
     },
-    "Change username" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Change username"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cambiar nombre de usuario"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "更改用户名"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "變更使用者名稱"
-          }
-        }
-      }
-    },
     "Changes apply the next time you open gim." : {
       "localizations" : {
         "en" : {
@@ -277,34 +249,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "變更會在你下次開啟 gim 時生效。"
-          }
-        }
-      }
-    },
-    "Choose a username" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Choose a username"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Elige un nombre de usuario"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "设置用户名"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "設定使用者名稱"
           }
         }
       }
@@ -645,34 +589,6 @@
         }
       }
     },
-    "Friends can no longer find you by it. Your Account ID still works." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Friends can no longer find you by it. Your Account ID still works."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tus amigos ya no podrán encontrarte con él. Tu ID de cuenta sigue funcionando."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "朋友将无法再通过它找到你。你的账号 ID 仍然可用。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "朋友將無法再透過它找到你。你的帳號 ID 仍然可以使用。"
-          }
-        }
-      }
-    },
     "Friends scan this to start a chat with you." : {
       "localizations" : {
         "en" : {
@@ -981,34 +897,6 @@
         }
       }
     },
-    "No username yet" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No username yet"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aún no tienes nombre de usuario"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "还没有用户名"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "還沒有使用者名稱"
-          }
-        }
-      }
-    },
     "Notification settings" : {
       "localizations" : {
         "en" : {
@@ -1289,34 +1177,6 @@
         }
       }
     },
-    "Remove username" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Remove username"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Quitar nombre de usuario"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "移除用户名"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "移除使用者名稱"
-          }
-        }
-      }
-    },
     "Remove your profile photo?" : {
       "localizations" : {
         "en" : {
@@ -1341,34 +1201,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "要移除你的大頭貼照嗎？"
-          }
-        }
-      }
-    },
-    "Remove your username?" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Remove your username?"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "¿Quitar tu nombre de usuario?"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "移除你的用户名？"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "移除你的使用者名稱？"
           }
         }
       }
@@ -1789,34 +1621,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "使用預設 Keep 伺服器"
-          }
-        }
-      }
-    },
-    "Username" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Username"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nombre de usuario"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "用户名"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "使用者名稱"
           }
         }
       }

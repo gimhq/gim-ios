@@ -141,7 +141,8 @@ public struct GroupInfoScreen: View {
         Section(String(localized: "Add member", table: "Contacts", bundle: .module)) {
             HStack {
                 TextField(
-                    String(localized: "Username", table: "Contacts", bundle: .module), text: $viewModel.memberHandle
+                    String(localized: "Account ID", table: "Contacts", bundle: .module),
+                    text: $viewModel.memberAccountId
                 )
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
@@ -151,7 +152,7 @@ public struct GroupInfoScreen: View {
                     ProgressView()
                 } else {
                     Button(String(localized: "Add", table: "Common", bundle: .module), action: addMember)
-                        .disabled(viewModel.memberHandle.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .disabled(viewModel.memberAccountId.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
         }
@@ -168,7 +169,7 @@ public struct GroupInfoScreen: View {
     }
 
     private func addMember() {
-        Task { await viewModel.addMember() }
+        Task { await viewModel.addMemberByAccountId() }
     }
 
     private func saveName() {

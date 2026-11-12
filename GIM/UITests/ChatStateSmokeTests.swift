@@ -31,17 +31,15 @@ final class ChatStateSmokeTests: E2ETestCase {
         summary.start("a")
         let (peer, bystander) = try XCTContext.runActivity(named: "step a: peers register, app onboarding") { _ in
             let peer = try waitForPeer("step a: peer registers as peer_\(suffix)", app) {
-                try await ScriptedPeer.register(
-                    serverUrl: serverUrl, handle: "peer_\(suffix)", displayName: "Peer \(suffix)")
+                try await ScriptedPeer.register(serverUrl: serverUrl, displayName: "Peer \(suffix)")
             }
             addTeardownBlock { await peer.shutdown() }
             let bystander = try waitForPeer("step a: bystander registers as bystander_\(suffix)", app) {
-                try await ScriptedPeer.register(
-                    serverUrl: serverUrl, handle: "bystander_\(suffix)", displayName: "Bystander \(suffix)")
+                try await ScriptedPeer.register(serverUrl: serverUrl, displayName: "Bystander \(suffix)")
             }
             addTeardownBlock { await bystander.shutdown() }
             try launchToOnboarding(app, "step a")
-            try createIdentity(displayName: "Alice \(suffix)", handle: "alice_\(suffix)", "step a", app)
+            try createIdentity(displayName: "Alice \(suffix)", "step a", app)
             return (peer, bystander)
         }
         summary.finish("a")
@@ -60,7 +58,7 @@ final class ChatStateSmokeTests: E2ETestCase {
         try XCTContext.runActivity(named: "step c: app leaves, conversation shows Leaving…") { _ in
             // gim-core members commit a leave Proposal during sync; with both peers paused the app stays leaving.
             for member in [peer, bystander] {
-                try waitForPeer("step c: \(member.session.handle) pauses sync", app) { try await member.pauseSync() }
+                try waitForPeer("step c: \(member.session.displayName) pauses sync", app) { try await member.pauseSync() }
             }
             try leaveGroup("step c", app)
             try waitForLabel(readOnlyBanner(app), containing: "Leaving…", "step c: Leaving… banner", app)
@@ -72,7 +70,7 @@ final class ChatStateSmokeTests: E2ETestCase {
         summary.start("d")
         try XCTContext.runActivity(named: "step d: a peer commits the removal, the chat is left") { _ in
             for member in [peer, bystander] {
-                try waitForPeer("step d: \(member.session.handle) resumes sync", app) { try await member.resumeSync() }
+                try waitForPeer("step d: \(member.session.displayName) resumes sync", app) { try await member.resumeSync() }
             }
             try waitForLabel(
                 readOnlyBanner(app), containing: "You can no longer send messages in this chat.",

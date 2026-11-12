@@ -237,7 +237,7 @@ final class OnboardingViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testCreateFlowShowsTheKitChecksTheEndingClaimsTheHandleAndRegisters() async throws {
+    func testCreateFlowShowsTheKitChecksTheEndingAndRegistersWithoutAHandle() async throws {
         let client = FakeGimClient()
         let factory = RecordingFactory { _ in client }
         let (viewModel, registrations) = makeViewModel(factory: factory, serverUrl: "https://gim.example.eu/")
@@ -260,37 +260,13 @@ final class OnboardingViewModelTests: XCTestCase {
         recovery.confirm()
 
         XCTAssertNil(recovery.code, "the code is dropped after confirmation")
-        guard case .claimHandle(let claim) = viewModel.stage else {
-            return XCTFail("expected the handle step, got \(String(describing: viewModel.stage))")
-        }
-        claim.handle = " Sofia_M "
-        await claim.claim()
-
         let result = try XCTUnwrap(registrations.results.first)
         XCTAssertTrue(result.client === client)
         XCTAssertEqual(result.config, ClientConfig(serverUrl: "https://gim.example.eu"))
-        XCTAssertEqual(result.session.handle, "sofia_m")
+        XCTAssertEqual(result.session.handle, "")
         XCTAssertEqual(result.session.displayName, "Sofia Marin")
         let session = try await client.session()
         XCTAssertEqual(session, result.session)
-    }
-
-    @MainActor
-    func testSkippingTheHandleRegistersWithoutOne() async throws {
-        let (viewModel, registrations) = makeViewModel(serverUrl: "https://gim.example.eu")
-        viewModel.choose(.createIdentity)
-        let create = try XCTUnwrap(viewModel.createIdentity)
-        create.displayName = "Sofia"
-        await create.submit()
-        guard case .recoveryKit(let recovery) = viewModel.stage else { return XCTFail("expected the recovery kit") }
-        recovery.continueToCheck()
-        recovery.endingInput = FakeRecoveryKitFunctions().recoveryKeyEnding(recoveryCode: recovery.groupedCode)
-        recovery.confirm()
-        guard case .claimHandle(let claim) = viewModel.stage else { return XCTFail("expected the handle step") }
-
-        await claim.skip()
-
-        XCTAssertEqual(registrations.results.first?.session.handle, "")
     }
 
     @MainActor

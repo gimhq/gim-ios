@@ -42,7 +42,6 @@ final class PushSmokeTests: E2ETestCase {
         continueAfterFailure = false
         let serverUrl = serverUrl
         let suffix = UUID().uuidString.prefix(8).lowercased()
-        let appHandle = "alice_\(suffix)"
         let peerName = "Peer \(suffix)"
         let app = XCUIApplication()
         print("[e2e] app and peer use server \(serverUrl), push mock \(pushMockUrl)")
@@ -53,32 +52,34 @@ final class PushSmokeTests: E2ETestCase {
         }
 
         summary.start("a")
-        let peer = try XCTContext.runActivity(named: "step a: peer registers, app onboards and allows notifications") {
+        let (peer, appUserId) = try XCTContext.runActivity(
+            named: "step a: peer registers, app onboards and allows notifications"
+        ) {
             _ in
             let peer = try waitForPeer("step a: peer registers as peer_\(suffix)", app) {
-                try await ScriptedPeer.register(serverUrl: serverUrl, handle: "peer_\(suffix)", displayName: peerName)
+                try await ScriptedPeer.register(serverUrl: serverUrl, displayName: peerName)
             }
             addTeardownBlock { await peer.shutdown() }
             try launchToOnboarding(app, "step a")
             // Allows the authorization alert if this is the first sign-in on the simulator.
-            try createIdentity(displayName: "Alice \(suffix)", handle: appHandle, "step a", app)
+            let account = try createIdentity(displayName: "Alice \(suffix)", "step a", app)
             try require(!springboard.alerts.firstMatch.exists, "step a: no system alert left over the app", app)
-            return peer
+            return (peer, account.userId)
         }
         summary.finish("a")
 
         summary.start("b")
         let (chatId, peerRow) = try XCTContext.runActivity(named: "step b: peer opens a direct chat with the app") {
             _ in
-            let chatId = try waitForPeer("step b: peer opens a direct chat with \(appHandle)", app) {
-                try await peer.openDirectChat(handle: appHandle)
+            let chatId = try waitForPeer("step b: peer opens a direct chat with \(appUserId)", app) {
+                try await peer.openDirectChat(userId: appUserId)
             }
-            // The directory may report the handle as the display name.
+            // The chat is named by the short Account ID until the peer's profile is known.
             let row = app.buttons
                 .matching(
                     NSPredicate(
                         format: "identifier == 'chatList.row' AND (label BEGINSWITH %@ OR label BEGINSWITH %@)",
-                        peerName, "peer_\(suffix)")
+                        peerName, String(peer.session.userId.dropFirst().prefix(8)))
                 )
                 .firstMatch
             try require(row.waitForExistence(timeout: networkTimeout), "step b: the chat with the peer appears", app)
@@ -171,8 +172,7 @@ final class PushSmokeTests: E2ETestCase {
         try XCTContext.runActivity(named: "step g: peer adds the app to \(groupName), the push shows the invitation") {
             _ in
             let bystander = try waitForPeer("step g: bystander registers as bystander_\(suffix)", app) {
-                try await ScriptedPeer.register(
-                    serverUrl: serverUrl, handle: "bystander_\(suffix)", displayName: "Bystander \(suffix)")
+                try await ScriptedPeer.register(serverUrl: serverUrl, displayName: "Bystander \(suffix)")
             }
             addTeardownBlock { await bystander.shutdown() }
             let done = app.buttons["debug.push.done"]
@@ -186,7 +186,7 @@ final class PushSmokeTests: E2ETestCase {
                 try await Self.deliveries(pushMockUrl, since: nil).next
             }
             _ = try waitForPeer("step g: peer creates \(groupName) with the app and the bystander", app) {
-                try await peer.createGroup(name: groupName, handles: [appHandle, "bystander_\(suffix)"])
+                try await peer.createGroup(name: groupName, userIds: [appUserId, bystander.session.userId])
             }
             let delivery = try eventually("step g: mock-ios-sim delivery to im.g.apps after the group", app) {
                 try await Self.deliveries(pushMockUrl, since: since).deliveries.first {
@@ -210,10 +210,11 @@ final class PushSmokeTests: E2ETestCase {
                 app)
             let title = app.staticTexts["debug.push.title"].label
             try require(title == groupName, "step g: debug.push.title \"\(groupName)\" (found \"\(title)\")", app)
-            // gim-core names the inviter by handle until the peer's profile announcement is known.
+            // The inviter is named by Account ID until the peer's profile announcement is known.
             let body = app.staticTexts["debug.push.body"].label
+            let peerId = peer.session.userId
             try require(
-                [peerName, "peer_\(suffix)"].map { "\($0) added you" }.contains(body),
+                [peerName, peerId, "\(peerId.dropFirst().prefix(8))…"].map { "\($0) added you" }.contains(body),
                 "step g: debug.push.body names the inviter (found \"\(body)\")", app)
             let released = XCTNSPredicateExpectation(
                 predicate: NSPredicate(format: "exists == false"), object: app.staticTexts["debug.sync.held"])

@@ -1,21 +1,20 @@
 import GIMClientKit
 
-/// How users are labelled. Remote users may have no handle, and gim-core shows a user as its raw user id until the
-/// directory lookup of its profile succeeds; neither should reach the screen as is.
+/// How users are labelled. Users are identified by their user ID (Account ID) only; gim-core shows a user as its raw
+/// user id until the directory lookup of its profile succeeds, which should not reach the screen as is.
 public enum UserLabel {
     /// Characters of the user id shown by `shortUserId(_:)`.
     static let shortIdLength = 8
 
-    /// The display name, else `@handle`, else the short user id.
+    /// The display name, else the short user id.
     public static func name(for user: UserProfile) -> String {
         if !user.displayName.isEmpty, user.displayName != user.userId { return name(user.displayName) }
-        if !user.handle.isEmpty { return "@\(user.handle)" }
         return shortUserId(user.userId)
     }
 
-    /// The line under the name: `@handle`, else the short user id.
+    /// The line under the name: the short user id.
     public static func detail(for user: UserProfile) -> String {
-        user.handle.isEmpty ? shortUserId(user.userId) : "@\(user.handle)"
+        shortUserId(user.userId)
     }
 
     /// A name gim-core rendered (chat names, message senders, membership changes): a raw user id becomes its short

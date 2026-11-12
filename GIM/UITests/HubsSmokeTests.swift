@@ -37,18 +37,16 @@ final class HubsSmokeTests: E2ETestCase {
         summary.start("a")
         let (peer, bystander) = try XCTContext.runActivity(named: "step a: peers register on A, app onboarding") { _ in
             let peer = try waitForPeer("step a: peer registers as peer_\(suffix)", app) {
-                try await ScriptedPeer.register(
-                    serverUrl: serverUrl, handle: "peer_\(suffix)", displayName: "Peer \(suffix)")
+                try await ScriptedPeer.register(serverUrl: serverUrl, displayName: "Peer \(suffix)")
             }
             addTeardownBlock { await peer.shutdown() }
             // New groups need at least two members besides the creator.
             let bystander = try waitForPeer("step a: bystander registers as bystander_\(suffix)", app) {
-                try await ScriptedPeer.register(
-                    serverUrl: serverUrl, handle: "bystander_\(suffix)", displayName: "Bystander \(suffix)")
+                try await ScriptedPeer.register(serverUrl: serverUrl, displayName: "Bystander \(suffix)")
             }
             addTeardownBlock { await bystander.shutdown() }
             try launchToOnboarding(app, "step a")
-            try createIdentity(displayName: "Alice \(suffix)", handle: "alice_\(suffix)", "step a", app)
+            try createIdentity(displayName: "Alice \(suffix)", "step a", app)
             return (peer, bystander)
         }
         summary.finish("a")

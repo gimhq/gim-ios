@@ -2,7 +2,7 @@ import Foundation
 import GIMClientKit
 import Observation
 
-/// The profile screen: edits the display name and removes the claimed handle.
+/// The profile screen: edits the display name.
 @MainActor
 @Observable
 public final class ProfileViewModel {
@@ -16,7 +16,7 @@ public final class ProfileViewModel {
     /// The display name draft, seeded from the session by `load()`.
     public var name = ""
     public private(set) var isSaving = false
-    /// Error from the last failed load, save or removal, already localized by `ErrorPresenter`.
+    /// Error from the last failed load or save, already localized by `ErrorPresenter`.
     public private(set) var errorMessage: String?
 
     private let client: any GimClientAPI
@@ -55,13 +55,6 @@ public final class ProfileViewModel {
         return await change {
             try await client.setDisplayName(name: OnboardingValidation.normalizedDisplayName(name))
         }
-    }
-
-    /// Releases the claimed handle; `false` when it was not released.
-    @discardableResult
-    public func removeHandle() async -> Bool {
-        guard !isSaving else { return false }
-        return await change { try await client.releaseHandle() }
     }
 
     /// Runs `operation`, re-reads the session and notifies `onChanged`; presents the error otherwise.

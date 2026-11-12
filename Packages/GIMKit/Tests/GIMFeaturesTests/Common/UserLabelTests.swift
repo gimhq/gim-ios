@@ -7,17 +7,17 @@ final class UserLabelTests: XCTestCase {
     /// A gim-core user id: "u" and 55 base32 characters.
     private let coreId = "u" + "abcdefgh" + String(repeating: "2", count: 47)
 
-    func testNamePrefersDisplayNameThenHandleThenShortId() {
+    func testNamePrefersDisplayNameThenShortIdIgnoringTheHandle() {
         XCTAssertEqual(UserLabel.name(for: UserProfile(userId: coreId, handle: "sofia", displayName: "Sofia")), "Sofia")
-        XCTAssertEqual(UserLabel.name(for: UserProfile(userId: coreId, handle: "sofia", displayName: "")), "@sofia")
+        XCTAssertEqual(UserLabel.name(for: UserProfile(userId: coreId, handle: "sofia", displayName: "")), "abcdefgh…")
         XCTAssertEqual(UserLabel.name(for: UserProfile(userId: coreId, handle: "", displayName: "")), "abcdefgh…")
         // gim-core shows the user id as the name until the profile lookup succeeds.
         XCTAssertEqual(UserLabel.name(for: UserProfile(userId: coreId, handle: "", displayName: coreId)), "abcdefgh…")
     }
 
-    func testDetailIsHandleElseShortId() {
+    func testDetailIsTheShortIdIgnoringTheHandle() {
         XCTAssertEqual(
-            UserLabel.detail(for: UserProfile(userId: coreId, handle: "sofia", displayName: "Sofia")), "@sofia")
+            UserLabel.detail(for: UserProfile(userId: coreId, handle: "sofia", displayName: "Sofia")), "abcdefgh…")
         XCTAssertEqual(
             UserLabel.detail(for: UserProfile(userId: coreId, handle: "", displayName: "Marta")), "abcdefgh…")
     }

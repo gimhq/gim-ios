@@ -23,7 +23,7 @@ final class AccessibilityFakeTests: E2ETestCase {
                 "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
             ]
             try launchToOnboarding(app, "step a")
-            try createIdentity(displayName: "Alex \(suffix)", handle: "alex_\(suffix)", "step a", app)
+            try createIdentity(displayName: "Alex \(suffix)", "step a", app)
             let newChat = app.buttons["chatList.newChat"]
             try require(newChat.exists && newChat.isHittable, "step a: New Chat button hittable", app)
             let firstRow = app.buttons.matching(identifier: "chatList.row").firstMatch
@@ -79,7 +79,7 @@ final class AccessibilityFakeTests: E2ETestCase {
             // The demo client keeps no state across launches, so onboarding comes again.
             app.launchArguments = ["-GIMUseFakeCore", "YES"]
             try launchToOnboarding(app, "step c")
-            try createIdentity(displayName: "Alex \(suffix)", handle: "alex_\(suffix)", "step c", app)
+            try createIdentity(displayName: "Alex \(suffix)", "step c", app)
             try revealAndTap(chatRow(groupName, in: app), "step c: \(groupName) row", app)
             let text = app.textViews["composer.text"]
             try require(text.waitForExistence(timeout: networkTimeout), "step c: composer text view visible", app)

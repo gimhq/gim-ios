@@ -17,11 +17,10 @@ final class ScriptedPeer: Sendable {
         self.directory = directory
     }
 
-    /// Creates an identity on `serverUrl`, claims `handle`, starts syncing and follows the chat list.
-    static func register(serverUrl: String, handle: String, displayName: String) async throws -> ScriptedPeer {
+    /// Creates an identity on `serverUrl`, starts syncing and follows the chat list.
+    static func register(serverUrl: String, displayName: String) async throws -> ScriptedPeer {
         let (client, directory) = try await makeClient(serverUrl: serverUrl)
         _ = try await client.createIdentity(displayName: displayName)
-        try await client.claimHandle(handle: handle)
         guard let session = try await client.session() else { throw GimError.NotRegistered }
         try await client.startSync()
         let peer = ScriptedPeer(session: session, client: client, directory: directory)
@@ -57,24 +56,14 @@ final class ScriptedPeer: Sendable {
         try await client.sendText(chatId: chatId, body: body, replyTo: replyTo)
     }
 
-    /// Opens a direct chat with the user of `handle` and returns its id.
-    func openDirectChat(handle: String) async throws -> String {
-        guard let user = try await client.findUser(handle: handle) else {
-            throw GimError.NotFound(reason: "no user with handle \(handle)")
-        }
-        return try await client.createDirectChat(userId: user.userId)
+    /// Opens a direct chat with `userId` and returns its id.
+    func openDirectChat(userId: String) async throws -> String {
+        try await client.createDirectChat(userId: userId)
     }
 
-    /// Creates the group `name` with the users of `handles` and returns its id.
-    func createGroup(name: String, handles: [String]) async throws -> String {
-        var userIds: [String] = []
-        for handle in handles {
-            guard let user = try await client.findUser(handle: handle) else {
-                throw GimError.NotFound(reason: "no user with handle \(handle)")
-            }
-            userIds.append(user.userId)
-        }
-        return try await client.createGroupChat(name: name, memberUserIds: userIds)
+    /// Creates the group `name` with `userIds` and returns its id.
+    func createGroup(name: String, userIds: [String]) async throws -> String {
+        try await client.createGroupChat(name: name, memberUserIds: userIds)
     }
 
     /// Sends a small generated PNG.

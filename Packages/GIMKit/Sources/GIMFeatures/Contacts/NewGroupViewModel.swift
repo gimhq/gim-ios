@@ -2,7 +2,7 @@ import Foundation
 import GIMClientKit
 import Observation
 
-/// Collects a group name and members (added by exact handle) and creates the group.
+/// Collects a group name and members (added by Account ID) and creates the group.
 @MainActor
 @Observable
 public final class NewGroupViewModel {
@@ -12,11 +12,13 @@ public final class NewGroupViewModel {
     /// `ContactNotAdmitted` when one of them refused this user). Some skipped invitees do not fail the call; the
     /// timeline reports each as removed.
     public static let noneFoundMessage = NSLocalizedString(
-        "Couldn't find anyone with these usernames.", tableName: "FeaturesContacts",
-        bundle: FeaturesLocalization.bundle, value: "Couldn't find anyone with these usernames.", comment: "")
+        "Couldn't find anyone with these Account IDs.", tableName: "FeaturesContacts",
+        bundle: FeaturesLocalization.bundle, value: "Couldn't find anyone with these Account IDs.", comment: "")
 
     public var name = ""
-    /// Handle typed into the "add member" field.
+    /// Account ID typed or pasted into the "add member" field.
+    public var memberAccountId = ""
+    /// Handle typed into the "add member" field of gim-mac; removed once gim-mac adds members by Account ID.
     public var memberHandle = ""
     public private(set) var members: [UserProfile] = []
     public private(set) var isAddingMember = false
@@ -50,7 +52,33 @@ public final class NewGroupViewModel {
 
     public var canCreate: Bool { validationMessage == nil && !isCreating }
 
-    /// Looks up `memberHandle` and adds the user as a chip.
+    /// Adds the user of the first Account ID in `memberAccountId` as a chip. The ID is not looked up: an unknown user
+    /// fails `create()` with `NotFound`, or is reported as removed in the timeline.
+    public func addMemberByAccountId() async {
+        guard !isAddingMember, !memberAccountId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        memberError = nil
+        guard let userId = UserID.firstValid(in: memberAccountId) else {
+            memberError = ContactsText.notAnAccountId
+            return
+        }
+        isAddingMember = true
+        defer { isAddingMember = false }
+        do {
+            if try await client.session()?.userId == userId {
+                memberError = ContactsText.ownGroup
+                return
+            }
+        } catch {
+            memberError = await ErrorPresenter.message(for: error, client: client)
+            return
+        }
+        if !members.contains(where: { $0.userId == userId }) {
+            members.append(UserProfile(userId: userId, handle: "", displayName: ""))
+        }
+        memberAccountId = ""
+    }
+
+    /// Looks up `memberHandle` and adds the user as a chip (gim-mac; removed with the SDK's handle APIs).
     public func addMember() async {
         let handle = OnboardingValidation.normalizedHandle(memberHandle)
         guard !handle.isEmpty, !isAddingMember else { return }
@@ -66,10 +94,7 @@ public final class NewGroupViewModel {
                 return
             }
             if try await client.session()?.userId == user.userId {
-                memberError = NSLocalizedString(
-                    "You're in your own groups automatically.", tableName: "FeaturesContacts",
-                    bundle: FeaturesLocalization.bundle, value: "You're in your own groups automatically.",
-                    comment: "")
+                memberError = ContactsText.ownGroup
                 return
             }
             if !members.contains(where: { $0.userId == user.userId }) { members.append(user) }
@@ -103,4 +128,14 @@ public final class NewGroupViewModel {
             return nil
         }
     }
+}
+
+/// Messages of the `FeaturesContacts` table shared by the contact view models.
+enum ContactsText {
+    static let notAnAccountId = NSLocalizedString(
+        "This isn't a gim Account ID.", tableName: "FeaturesContacts", bundle: FeaturesLocalization.bundle,
+        value: "This isn't a gim Account ID.", comment: "")
+    static let ownGroup = NSLocalizedString(
+        "You're in your own groups automatically.", tableName: "FeaturesContacts",
+        bundle: FeaturesLocalization.bundle, value: "You're in your own groups automatically.", comment: "")
 }
