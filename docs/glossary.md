@@ -7,15 +7,15 @@ screen.
 | Old term (code, logs, SDK) | User-facing word | What it means |
 |---|---|---|
 | Hub | Server | The computer that passes your messages on. It can't read them. |
-| Handle | Username | A name friends can type to find you. |
-| User ID | Account ID | A long code that is your account's real address. |
+| Handle | — | Not shown: usernames were removed. People find each other by Account ID only. |
+| User ID | Account ID | A long code that is your account's real address, and the only way to find someone. |
 | Recovery code | Recovery key | A spare key that brings your account back on a new phone. |
 | Revoke device | Remove device | Sign a phone or tablet out of your account. |
 | Verified hub | Connected | The app reached this server and it answered. |
 | Unverified hub | Not checked | The app has not reached this server yet. |
 | Home hub / Primary hub | Main server | The server your account lives on. |
 
-Plurals follow the same mapping (hubs → servers, handles → usernames).
+Plurals follow the same mapping (hubs → servers).
 
 ## Account safety and chat actions
 
@@ -84,7 +84,6 @@ usage, Spanish uses neutral informal tú, and the product name is never translat
 |---|---|---|---|
 | Server / servers | 服务器 | 伺服器 | servidor / servidores |
 | Main server | 主服务器 | 主要伺服器 | servidor principal |
-| Username | 用户名 | 使用者名稱 | nombre de usuario |
 | Account ID | 账号 ID | 帳號 ID | ID de cuenta |
 | Account | 账号 | 帳號 | cuenta |
 | Recovery key | 恢复密钥 | 復原金鑰 | clave de recuperación |
